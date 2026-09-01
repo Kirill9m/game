@@ -6,8 +6,6 @@ import spring.backend.game.dto.MoveRequest;
 import spring.backend.game.dto.MoveResponse;
 import spring.backend.game.service.MovementService;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/players")
 @RequiredArgsConstructor
@@ -16,7 +14,7 @@ public class MovementController {
     private final MovementService movementService;
 
     @PatchMapping("/{playerId}/move")
-    public MoveResponse move(@PathVariable UUID playerId, @RequestBody MoveRequest request) {
+    public MoveResponse move(@PathVariable String playerId, @RequestBody MoveRequest request) {
         return movementService.movePlayer(playerId, request);
     }
 }

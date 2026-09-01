@@ -3,12 +3,16 @@ import { PlayerEntity, MoveResponse } from "@/types/game";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export const playerApi = {
-  async getPlayer(playerId: string): Promise<PlayerEntity> {
-    const res = await `${API_URL}/api/v1/players/${playerId}`;
-    const response = await fetch(res);
-    if (!response.ok) {
-      throw new Error("Player not found");
-    }
+  async loginPlayer(githubId: string, username: string, avatarUrl: string) {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/players/login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ githubId, username, avatarUrl }),
+      },
+    );
+    if (!response.ok) throw new Error("Failed to login player");
     return response.json();
   },
 
@@ -28,6 +32,17 @@ export const playerApi = {
       throw new Error(errorText || "Movement failed");
     }
 
+    return response.json();
+  },
+  async attack(attackerId: string, targetId: string) {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/attack?attackerId=${encodeURIComponent(attackerId)}&targetId=${encodeURIComponent(targetId)}`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "Attack failed");
+    }
     return response.json();
   },
 };

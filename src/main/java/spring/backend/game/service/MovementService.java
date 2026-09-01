@@ -9,8 +9,9 @@ import spring.backend.game.dto.PlayerInfo;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -18,9 +19,16 @@ public class MovementService {
     private final PlayerRepository playerRepository;
 
     @Transactional
-    public MoveResponse movePlayer(UUID playerId, MoveRequest request) {
+    public MoveResponse movePlayer(String playerId, MoveRequest request) {
         PlayerEntity player = playerRepository.findById(playerId)
                 .orElseThrow(() -> new IllegalArgumentException("Player not found"));
+
+        Instant now = Instant.now();
+
+        if (player.getCooldown() != null && player.getCooldown().isAfter(now)) {
+            long secondsLeft = Duration.between(now, player.getCooldown()).toSeconds();
+            throw new IllegalStateException("Cooldown is active. Wait " + secondsLeft + "s.");
+        }
 
         int currentX = player.getPositionX();
         int currentY = player.getPositionY();
@@ -30,13 +38,15 @@ public class MovementService {
         int deltaX = Math.abs(targetX - currentX);
         int deltaY = Math.abs(targetY - currentY);
 
-        boolean isAdjacent = (deltaY + deltaX == 1);
+        boolean isAdjacent = (deltaY + deltaX == 1) || (deltaX == 1 && deltaY == 1);
         if (!isAdjacent) {
             throw new IllegalArgumentException("You can move only one coordinate at the same time");
         }
 
         player.setPositionX(targetX);
         player.setPositionY(targetY);
+        Instant newCooldown = now.plusSeconds(3);
+        player.setCooldown(newCooldown);
         playerRepository.save(player);
 
         List<PlayerEntity> playersOnSameTile = playerRepository.findByPositionXAndPositionY(targetX, targetY);
@@ -44,13 +54,14 @@ public class MovementService {
         List<PlayerInfo> playerInfos = playersOnSameTile.stream()
                 .map(p -> PlayerInfo.builder()
                         .playerId(p.getId())
-                        .userId(p.getUserId())
+                        .username(p.getUsername()) // Since id is now the unique string identifier (GitHub/Guest ID)
                         .build())
                 .toList();
 
         return MoveResponse.builder()
                 .positionX(targetX)
                 .positionY(targetY)
+                .cooldown(newCooldown)
                 .playersOnTile(playerInfos)
                 .build();
     }

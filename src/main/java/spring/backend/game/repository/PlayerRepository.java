@@ -5,9 +5,8 @@ import org.springframework.stereotype.Repository;
 import spring.backend.game.entity.PlayerEntity;
 
 import java.util.List;
-import java.util.UUID;
 
 @Repository
-public interface PlayerRepository extends JpaRepository<PlayerEntity, UUID> {
+public interface PlayerRepository extends JpaRepository<PlayerEntity, String> {
     List<PlayerEntity> findByPositionXAndPositionY(int positionX, int positionY);
 }

@@ -26,8 +26,7 @@ public class GameService {
         GameEntity savedGame = gameRepository.save(game);
 
         PlayerEntity player = PlayerEntity.builder()
-                .gameId(savedGame.getId())
-                .userId(request.getUserId())
+                .id(String.valueOf(request.getUserId()))
                 .positionX(0)
                 .positionY(0)
                 .turnOrder(1)

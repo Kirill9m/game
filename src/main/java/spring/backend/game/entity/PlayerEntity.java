@@ -1,10 +1,9 @@
 package spring.backend.game.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
-import java.util.UUID;
+import java.time.Instant;
 
 @Entity
 @Getter
@@ -12,18 +11,16 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "players")
 public class PlayerEntity {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @Column(name = "player_id", unique = true, nullable = false)
+    private String id;
 
-    @NotNull
-    @Column(name = "game_id", nullable = false)
-    private UUID gameId;
+    private String username;
 
-    @NotNull
-    @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    private String avatarUrl;
 
     @Column(name = "position_x", nullable = false)
     private int positionX;
@@ -33,4 +30,6 @@ public class PlayerEntity {
 
     @Column(name = "turn_order", nullable = false)
     private int turnOrder;
+
+    private Instant cooldown;
 }

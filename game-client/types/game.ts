@@ -7,6 +7,7 @@ export interface MoveResponse {
   positionX: number;
   positionY: number;
   playersOnTile: PlayerInfo[];
+  cooldown: string;
 }
 
 export interface PlayerEntity {

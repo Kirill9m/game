@@ -8,6 +8,6 @@ import java.util.UUID;
 @Getter
 @Builder
 public class PlayerInfo {
-    private UUID playerId;
-    private UUID userId;
+    private String playerId;
+    private String username;
 }
