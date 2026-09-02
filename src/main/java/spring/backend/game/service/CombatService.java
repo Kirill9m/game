@@ -15,8 +15,13 @@ import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.entity.EnemyTypeEntity;
+import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.dto.CombatPlanRequest;
 import spring.backend.game.repository.CombatRepository;
+import spring.backend.game.repository.EnemyTypeRepository;
+import spring.backend.game.repository.ItemRepository;
+import spring.backend.game.repository.PlayerInventoryRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -24,11 +29,7 @@ public class CombatService {
     private static final int BOARD_SIZE = 10;
     private static final int MAX_SHOT_DISTANCE = 3;
     private static final int SHOT_DAMAGE = 25;
-    private static final String WOLF_ID = "bot_wolf";
-    private static final int WOLF_SHOT_DISTANCE = 1;
-    private static final int WOLF_SHOT_DAMAGE = 20;
-    private static final int WOLF_HEALTH = 500;
-    private static final int WOLF_ACTION_POINTS = 5;
+    private static final String DEFAULT_ENEMY_CODE = "WOLF";
     private static final String STANDING = "STANDING";
     private static final String CROUCHING = "CROUCHING";
     private static final String PRONE = "PRONE";
@@ -36,12 +37,17 @@ public class CombatService {
     private static final Set<String> WALLS = Set.of("3:3", "3:4", "3:5", "6:6", "7:6");
 
     private final CombatRepository combatRepository;
+    private final EnemyTypeRepository enemyTypeRepository;
+    private final ItemRepository itemRepository;
+    private final PlayerInventoryRepository playerInventoryRepository;
 
     @Transactional
     public CombatSessionEntity startCombat(String attackerId, String targetId) {
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(attackerId)
                 .player2Id(targetId)
+                .p1EquippedItemCode("PISTOL")
+                .p2EquippedItemCode("PISTOL")
                 .currentTurnPlayerId("")
                 .actionPoints(3)
                 .p1X(1)
@@ -54,16 +60,25 @@ public class CombatService {
 
     @Transactional
     public CombatSessionEntity startBotCombat(String playerId) {
+        return startBotCombat(playerId, DEFAULT_ENEMY_CODE);
+    }
+
+    @Transactional
+    public CombatSessionEntity startBotCombat(String playerId, String enemyCode) {
+        EnemyTypeEntity enemy = enemyTypeRepository.findByCodeIgnoreCase(enemyCode)
+                .orElseThrow(() -> new RuntimeException("Enemy type not found: " + enemyCode));
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(playerId)
-                .player2Id(WOLF_ID)
+                .player2Id("bot_" + enemy.getCode().toLowerCase())
+                .p1EquippedItemCode("PISTOL")
+                .enemyType(enemy)
                 .currentTurnPlayerId(playerId)
-                .actionPoints(WOLF_ACTION_POINTS)
+                .actionPoints(enemy.getActionPoints())
                 .p1X(1)
                 .p1Y(5)
                 .p2X(8)
                 .p2Y(5)
-                .p2Health(WOLF_HEALTH)
+                .p2Health(enemy.getMaxHealth())
                 .build();
         return combatRepository.save(combat);
     }
@@ -71,6 +86,10 @@ public class CombatService {
     public CombatSessionEntity getCombat(UUID combatId) {
         return combatRepository.findById(combatId)
                 .orElseThrow(() -> new RuntimeException("Combat not found"));
+    }
+
+    public List<EnemyTypeEntity> getEnemyTypes() {
+        return enemyTypeRepository.findAllByOrderByNameAsc();
     }
 
     @Transactional
@@ -96,9 +115,8 @@ public class CombatService {
             combat.setP2Plan(plan);
             combat.setP2Ready(true);
         }
-        if (WOLF_ID.equals(combat.getPlayer2Id()) && playerId.equals(combat.getPlayer1Id())) {
-            String wolfPlan = createWolfPlan(combat);
-            combat.setP2Plan(wolfPlan);
+        if (isBotCombat(combat) && playerId.equals(combat.getPlayer1Id())) {
+            combat.setP2Plan(createBotPlan(combat));
             combat.setP2Ready(true);
         }
         if (combat.isP1Ready() && combat.isP2Ready()) {
@@ -107,14 +125,16 @@ public class CombatService {
         return combatRepository.save(combat);
     }
 
-    private String createWolfPlan(CombatSessionEntity combat) {
+    private String createBotPlan(CombatSessionEntity combat) {
+        EnemyTypeEntity enemy = combat.getEnemyType();
         List<String> plan = new ArrayList<>();
         int wolfX = combat.getP2X();
         int wolfY = combat.getP2Y();
-        List<int[]> path = findMovementPath(wolfX, wolfY, combat.getP1X(), combat.getP1Y(), BOARD_SIZE * BOARD_SIZE);
-        int maxMoves = WOLF_ACTION_POINTS;
+        int movementLimit = Math.min(enemy.getMovementRange(), enemy.getActionPoints());
+        List<int[]> path = findMovementPath(wolfX, wolfY, combat.getP1X(), combat.getP1Y(), movementLimit);
+        int maxMoves = enemy.getActionPoints();
         if (path != null && path.size() > 1) {
-            maxMoves = Math.min(WOLF_ACTION_POINTS, path.size() - 1);
+            maxMoves = Math.min(enemy.getActionPoints(), path.size() - 1);
             for (int index = 1; index < path.size() && plan.size() < maxMoves; index++) {
                 int[] previous = path.get(index - 1);
                 int[] current = path.get(index);
@@ -122,7 +142,7 @@ public class CombatService {
                 wolfX = current[0];
                 wolfY = current[1];
                 int distance = Math.max(Math.abs(combat.getP1X() - wolfX), Math.abs(combat.getP1Y() - wolfY));
-                if (distance <= WOLF_SHOT_DISTANCE && plan.size() < WOLF_ACTION_POINTS
+                if (distance <= enemy.getAttackRange() && plan.size() < enemy.getActionPoints()
                         && !isShotBlocked(wolfX, wolfY, combat.getP1X(), combat.getP1Y())) {
                     plan.add("A:" + combat.getP1X() + ":" + combat.getP1Y());
                     break;
@@ -190,6 +210,9 @@ public class CombatService {
             if ("POSTURE".equalsIgnoreCase(action.type())) {
                 return "P:" + normalizePosture(action.posture());
             }
+            if ("EQUIP".equalsIgnoreCase(action.type())) {
+                return "E:" + requiredText(action.itemCode(), "itemCode");
+            }
             throw new RuntimeException("Unknown combat action: " + action.type());
         }).reduce((left, right) -> left + ";" + right).orElse("");
     }
@@ -199,6 +222,13 @@ public class CombatService {
             throw new RuntimeException("Missing action field: " + name);
         }
         return value;
+    }
+
+    private String requiredText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new RuntimeException("Missing action field: " + name);
+        }
+        return value.toUpperCase();
     }
 
     private void validatePlan(CombatSessionEntity combat, String playerId, String plan) {
@@ -213,6 +243,10 @@ public class CombatService {
             String[] parts = action.split(":");
             if ("P".equals(parts[0])) {
                 posture = normalizePosture(parts[1]);
+            } else if ("E".equals(parts[0])) {
+                if (parts.length != 2 || !player1HasItem(playerId, parts[1])) {
+                    throw new RuntimeException("You do not have this item");
+                }
             } else if ("M".equals(parts[0])) {
                 int dx = Integer.parseInt(parts[1]);
                 int dy = Integer.parseInt(parts[2]);
@@ -262,7 +296,7 @@ public class CombatService {
         combat.setP2Plan(null);
         combat.setP1Ready(false);
         combat.setP2Ready(false);
-        combat.setActionPoints(WOLF_ID.equals(combat.getPlayer2Id()) ? WOLF_ACTION_POINTS : 3);
+        combat.setActionPoints(isBotCombat(combat) ? combat.getEnemyType().getActionPoints() : 3);
     }
 
     private String[] actions(String plan) {
@@ -311,6 +345,12 @@ public class CombatService {
             else combat.setP2Posture(posture);
             return 0;
         }
+        if (action.startsWith("E:")) {
+            String itemCode = action.substring(2).toUpperCase();
+            if (player1) combat.setP1EquippedItemCode(itemCode);
+            else combat.setP2EquippedItemCode(itemCode);
+            return 0;
+        }
         if (action.startsWith("M:")) {
             applyMovement(combat, player1, action);
             return 0;
@@ -336,12 +376,10 @@ public class CombatService {
         int attackerY = player1 ? combat.getP1Y() : combat.getP2Y();
         int actualTargetX = player1 ? combat.getP2X() : combat.getP1X();
         int actualTargetY = player1 ? combat.getP2Y() : combat.getP1Y();
-        int maxShotDistance = !player1 && WOLF_ID.equals(combat.getPlayer2Id())
-            ? WOLF_SHOT_DISTANCE
-            : MAX_SHOT_DISTANCE;
-        int shotDamage = !player1 && WOLF_ID.equals(combat.getPlayer2Id())
-            ? WOLF_SHOT_DAMAGE
-            : SHOT_DAMAGE;
+        EnemyTypeEntity enemy = !player1 ? combat.getEnemyType() : null;
+        ItemEntity weapon = player1 || enemy == null ? getWeapon(combat, player1) : null;
+        int maxShotDistance = enemy != null ? enemy.getAttackRange() : weapon.getAttackRange();
+        int shotDamage = enemy != null ? enemy.getDamage() : weapon.getDamage();
         if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > maxShotDistance
             || isShotBlocked(attackerX, attackerY, actualTargetX, actualTargetY)) return 0;
         String targetPosture = player1 ? combat.getP2Posture() : combat.getP1Posture();
@@ -440,6 +478,20 @@ public class CombatService {
         if (!playerId.equals(combat.getPlayer1Id()) && !playerId.equals(combat.getPlayer2Id())) {
             throw new RuntimeException("Player is not part of this combat");
         }
+    }
+
+    private boolean isBotCombat(CombatSessionEntity combat) {
+        return combat.getEnemyType() != null;
+    }
+
+    private boolean player1HasItem(String playerId, String itemCode) {
+        return playerInventoryRepository.existsByPlayerIdAndItemCodeIgnoreCase(playerId, itemCode);
+    }
+
+    private ItemEntity getWeapon(CombatSessionEntity combat, boolean player1) {
+        String itemCode = player1 ? combat.getP1EquippedItemCode() : combat.getP2EquippedItemCode();
+        return itemRepository.findByCodeIgnoreCase(itemCode == null ? "PISTOL" : itemCode)
+                .orElseThrow(() -> new RuntimeException("Equipped item not found"));
     }
 
     public CombatSessionEntity getActiveCombatForPlayer(String playerId) {

@@ -8,6 +8,8 @@ import spring.backend.game.dto.PlayerLoginRequest;
 import spring.backend.game.dto.PlayerLoginResponse;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
+import spring.backend.game.service.InventoryService;
+import spring.backend.game.dto.InventoryItemResponse;
 
 import java.util.List;
 
@@ -18,6 +20,7 @@ import java.util.List;
 public class PlayerController {
 
     private final PlayerRepository playerRepository;
+    private final InventoryService inventoryService;
 
     @PostMapping("/login")
     public ResponseEntity<PlayerLoginResponse> loginOrCreate(@RequestBody PlayerLoginRequest request) {
@@ -30,6 +33,8 @@ public class PlayerController {
             newPlayer.setPositionY(0);
             return playerRepository.save(newPlayer);
         });
+
+        inventoryService.ensureStarterItems(player.getId());
 
         List<PlayerInfo> playersOnTile = playerRepository
                 .findByPositionXAndPositionY(player.getPositionX(), player.getPositionY())
@@ -48,5 +53,10 @@ public class PlayerController {
                 .positionY(player.getPositionY())
                 .playersOnTile(playersOnTile)
                 .build());
+    }
+
+    @GetMapping("/{playerId}/inventory")
+    public ResponseEntity<List<InventoryItemResponse>> getInventory(@PathVariable String playerId) {
+        return ResponseEntity.ok(inventoryService.getInventory(playerId));
     }
 }

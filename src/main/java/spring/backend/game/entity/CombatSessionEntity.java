@@ -4,12 +4,15 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.JoinColumn;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,6 +33,17 @@ public class CombatSessionEntity {
 
     private String player1Id;
     private String player2Id;
+
+    @Column(name = "p1_equipped_item_code", length = 50)
+    private String p1EquippedItemCode;
+
+    @Column(name = "p2_equipped_item_code", length = 50)
+    private String p2EquippedItemCode;
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "enemy_type_id")
+    private EnemyTypeEntity enemyType;
 
     private String currentTurnPlayerId;
 
@@ -95,5 +109,15 @@ public class CombatSessionEntity {
     public void setLastRoundActions(String[] actions) {
         lastRoundActions = actions == null ? new String[0] : actions;
         lastRoundActionsData = String.join("\n", lastRoundActions);
+    }
+
+    @Transient
+    public String getEnemyTypeCode() {
+        return enemyType == null ? null : enemyType.getCode();
+    }
+
+    @Transient
+    public String getEnemyName() {
+        return enemyType == null ? null : enemyType.getName();
     }
 }

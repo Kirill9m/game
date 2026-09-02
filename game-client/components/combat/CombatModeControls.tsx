@@ -1,3 +1,4 @@
+import { InventoryItem } from "@/types/game";
 import { PlannedAction, Posture } from "./types";
 
 type CombatMode = "move" | "shoot";
@@ -11,6 +12,9 @@ interface CombatModeControlsProps {
   isReplaying: boolean;
   onModeChange: (mode: CombatMode) => void;
   onPostureChange: (posture: Posture) => void;
+  inventory: InventoryItem[];
+  equippedItemCode: string;
+  onEquip: (itemCode: string) => void;
 }
 
 export function CombatModeControls({
@@ -22,6 +26,9 @@ export function CombatModeControls({
   isReplaying,
   onModeChange,
   onPostureChange,
+  inventory,
+  equippedItemCode,
+  onEquip,
 }: CombatModeControlsProps) {
   return (
     <>
@@ -61,6 +68,20 @@ export function CombatModeControls({
                   ? "CROUCH"
                   : "PRONE"}
             </span>
+          </button>
+        ))}
+      </div>
+      <div className="grid w-full grid-cols-2 gap-2">
+        {inventory.map((item) => (
+          <button
+            key={item.code}
+            type="button"
+            disabled={!isMyTurn || isReplaying || item.code === equippedItemCode || plannedActions.length >= actionPoints}
+            onClick={() => onEquip(item.code)}
+            className={`rounded-lg border p-2 text-left ${item.code === equippedItemCode ? "border-cyan-300 bg-cyan-900/70" : "border-gray-600 bg-gray-700 text-gray-300"} disabled:cursor-not-allowed disabled:opacity-45`}
+          >
+            <span className="block text-sm font-semibold">{item.name}</span>
+            <span className="block text-xs opacity-75">{item.damage} damage | range {item.attackRange}</span>
           </button>
         ))}
       </div>

@@ -1,10 +1,12 @@
 package spring.backend.game.controller;
 
 import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.dto.CombatPlanRequest;
 import spring.backend.game.service.CombatService;
 
 import java.util.UUID;
+import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -33,8 +35,15 @@ public class CombatController {
     }
 
     @PostMapping("/start-bot")
-    public ResponseEntity<CombatSessionEntity> startBotCombat(@RequestParam String playerId) {
-        return ResponseEntity.ok(combatService.startBotCombat(playerId));
+    public ResponseEntity<CombatSessionEntity> startBotCombat(
+            @RequestParam String playerId,
+            @RequestParam(defaultValue = "WOLF") String enemyCode) {
+        return ResponseEntity.ok(combatService.startBotCombat(playerId, enemyCode));
+    }
+
+    @GetMapping("/enemy-types")
+    public ResponseEntity<List<EnemyTypeEntity>> getEnemyTypes() {
+        return ResponseEntity.ok(combatService.getEnemyTypes());
     }
 
     @GetMapping("/{combatId}")

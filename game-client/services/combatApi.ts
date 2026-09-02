@@ -1,5 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
-import { CombatSession } from "@/types/game";
+import { CombatSession, EnemyType } from "@/types/game";
 
 export const combatApi = {
   async startCombat(attackerId: string, targetId: string): Promise<CombatSession> {
@@ -14,15 +14,21 @@ export const combatApi = {
     return res.json();
   },
 
-  async startBotCombat(playerId: string): Promise<CombatSession> {
+  async startBotCombat(playerId: string, enemyCode = "WOLF"): Promise<CombatSession> {
     const res = await fetch(
-      `${API_URL}/api/v1/combat/start-bot?playerId=${encodeURIComponent(playerId)}`,
+      `${API_URL}/api/v1/combat/start-bot?playerId=${encodeURIComponent(playerId)}&enemyCode=${encodeURIComponent(enemyCode)}`,
       { method: "POST" },
     );
     if (!res.ok) {
       const text = await res.text();
       throw new Error(text || "Failed to start wolf hunt");
     }
+    return res.json();
+  },
+
+  async getEnemyTypes(): Promise<EnemyType[]> {
+    const res = await fetch(`${API_URL}/api/v1/combat/enemy-types`);
+    if (!res.ok) throw new Error("Failed to load enemy types");
     return res.json();
   },
 

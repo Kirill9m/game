@@ -33,6 +33,7 @@ export default function CombatArena({
   combatId,
   playerId,
   initialCombat,
+  inventory,
   onCombatUpdate,
   onCombatFinished,
 }: CombatArenaProps) {
@@ -78,6 +79,16 @@ export default function CombatArena({
   const enemyY = isPlayer1 ? combat.p2Y : combat.p1Y;
   const myHealth = isPlayer1 ? displayHealth.p1 : displayHealth.p2;
   const enemyHealth = isPlayer1 ? displayHealth.p2 : displayHealth.p1;
+  const equippedItemCode = isPlayer1
+    ? combat.p1EquippedItemCode || "PISTOL"
+    : combat.p2EquippedItemCode || "PISTOL";
+  const plannedEquipment =
+    [...plannedActions]
+      .reverse()
+      .find(
+        (action): action is Extract<PlannedAction, { type: "EQUIP" }> =>
+          action.type === "EQUIP",
+      )?.itemCode || equippedItemCode;
   const isWolf = combat.player2Id === "bot_wolf";
   const myPosture: Posture = isPlayer1
     ? combat.p1Posture || "STANDING"
@@ -545,6 +556,8 @@ export default function CombatArena({
       >((result, action) => {
         if (action.type === "POSTURE")
           result.push({ type: "POSTURE", posture: action.posture });
+        else if (action.type === "EQUIP")
+          result.push({ type: "EQUIP", itemCode: action.itemCode });
         else if (action.type === "MOVE") {
           result.push({
             type: "MOVE",
@@ -616,6 +629,11 @@ export default function CombatArena({
             ...actions,
             { type: "POSTURE", posture },
           ])
+        }
+        inventory={inventory}
+        equippedItemCode={plannedEquipment}
+        onEquip={(itemCode) =>
+          setPlannedActions((actions) => [...actions, { type: "EQUIP", itemCode }])
         }
       />
       <CombatGrid

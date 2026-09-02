@@ -4,6 +4,15 @@ export interface PlayerInfo {
   username?: string;
 }
 
+export interface InventoryItem {
+  code: string;
+  name: string;
+  type: string;
+  damage: number;
+  attackRange: number;
+  quantity: number;
+}
+
 export interface MoveResponse {
   positionX: number;
   positionY: number;
@@ -39,4 +48,18 @@ export interface CombatSession {
   winnerId?: string | null;
   status: "IN_PROGRESS" | "FINISHED";
   lastRoundActions?: string[];
+  enemyTypeCode?: string | null;
+  enemyName?: string | null;
+  p1EquippedItemCode?: string | null;
+  p2EquippedItemCode?: string | null;
+}
+
+export interface EnemyType {
+  code: string;
+  name: string;
+  maxHealth: number;
+  damage: number;
+  attackRange: number;
+  actionPoints: number;
+  movementRange: number;
 }

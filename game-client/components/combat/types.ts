@@ -1,11 +1,12 @@
-import { CombatSession } from "@/types/game";
+import { CombatSession, InventoryItem } from "@/types/game";
 
 export type Posture = "STANDING" | "CROUCHING" | "PRONE";
 
 export type PlannedAction =
   | { type: "MOVE"; x: number; y: number }
   | { type: "ATTACK"; x: number; y: number }
-  | { type: "POSTURE"; posture: Posture };
+  | { type: "POSTURE"; posture: Posture }
+  | { type: "EQUIP"; itemCode: string };
 
 export type ShotAnimation = {
   id: string;
@@ -30,6 +31,7 @@ export interface CombatArenaProps {
   combatId: string;
   playerId: string;
   initialCombat: CombatSession;
+  inventory: InventoryItem[];
   onCombatUpdate: (combat: CombatSession) => void;
   onCombatFinished: () => void;
 }

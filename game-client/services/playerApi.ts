@@ -1,4 +1,4 @@
-import { MoveResponse } from "@/types/game";
+import { InventoryItem, MoveResponse } from "@/types/game";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -43,6 +43,14 @@ export const playerApi = {
       const errorText = await response.text();
       throw new Error(errorText || "Attack failed");
     }
+    return response.json();
+  },
+
+  async getInventory(playerId: string): Promise<InventoryItem[]> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/inventory`,
+    );
+    if (!response.ok) throw new Error("Failed to load inventory");
     return response.json();
   },
 };

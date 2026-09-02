@@ -3,11 +3,12 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
 import { playerApi } from "@/services/playerApi";
-import { CombatSession, PlayerInfo } from "@/types/game";
+import { CombatSession, EnemyType, InventoryItem, PlayerInfo } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
 import PlayersList from "@/components/PlayersList";
 import CombatArena from "@/components/CombatArena";
 import { combatApi } from "@/services/combatApi";
+import InventoryPanel from "@/components/InventoryPanel";
 
 export default function GameMapPage() {
   const { data: session, status } = useSession();
@@ -17,6 +18,9 @@ export default function GameMapPage() {
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState<string | null>(null);
   const [combatSession, setCombatSession] = useState<CombatSession | null>(null);
+  const [enemyTypes, setEnemyTypes] = useState<EnemyType[]>([]);
+  const [selectedEnemyCode, setSelectedEnemyCode] = useState("WOLF");
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
   const sessionUser = session?.user as
     | { githubId?: string; username?: string; image?: string }
@@ -51,10 +55,10 @@ export default function GameMapPage() {
     }
   };
 
-  const handleCheckTerritory = async () => {
+  const handleCheckTerritory = async (enemyCode: string) => {
     try {
       setError("");
-      const session = await combatApi.startBotCombat(playerId);
+      const session = await combatApi.startBotCombat(playerId, enemyCode);
       setCombatSession(session);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start wolf hunt");
@@ -72,6 +76,13 @@ export default function GameMapPage() {
     }
   }, [session]);
 
+  useEffect(() => {
+    void combatApi
+      .getEnemyTypes()
+      .then(setEnemyTypes)
+      .catch(() => setError("Failed to load enemy types"));
+  }, []);
+
   const playerId = sessionUser?.githubId || guestData?.id || "";
   const playerName = sessionUser?.username || guestData?.username || "Player";
   const playerAvatar = sessionUser?.image || "/default-avatar.png";
@@ -80,16 +91,16 @@ export default function GameMapPage() {
     if (!playerId) return;
     try {
       setError("");
-      const player = await playerApi.loginPlayer(
-        playerId,
-        playerName,
-        playerAvatar,
-      );
+      const [player, playerInventory] = await Promise.all([
+        playerApi.loginPlayer(playerId, playerName, playerAvatar),
+        playerApi.getInventory(playerId),
+      ]);
       setPositionX(player.positionX);
       setPositionY(player.positionY);
       if (player.playersOnTile) {
         setPlayersOnTile(player.playersOnTile);
       }
+      setInventory(playerInventory);
     } catch {
       setError("Failed to load player data from backend");
     }
@@ -224,29 +235,50 @@ export default function GameMapPage() {
                 combatId={combatSession.id}
                 playerId={playerId}
                 initialCombat={combatSession}
+                inventory={inventory}
                 onCombatUpdate={(updated) => setCombatSession(updated)}
                 onCombatFinished={() => setCombatSession(null)}
               />
             ) : (
               <>
+                <InventoryPanel items={inventory} />
+
                 <MovementPad
                   onMove={handleMove}
                   currentCell={`[${positionX}/${positionY}]`}
                   cooldown={cooldown}
                 />
 
-                <button
-                  type="button"
-                  onClick={handleCheckTerritory}
-                  className="w-full rounded-lg border border-amber-600/70 bg-amber-900/40 px-4 py-3 text-left transition hover:border-amber-400 hover:bg-amber-800/60"
-                >
-                  <span className="block font-semibold text-amber-200">
-                    Check territory
-                  </span>
-                  <span className="mt-1 block text-xs text-amber-100/70">
-                    Search the nearby woods. Something is moving there.
-                  </span>
-                </button>
+                <div className="w-full rounded-lg border border-amber-600/70 bg-amber-900/40 p-3">
+                  <div className="mb-2">
+                    <span className="block font-semibold text-amber-200">
+                      Check territory
+                    </span>
+                    <span className="mt-1 block text-xs text-amber-100/70">
+                      Choose an enemy in the nearby woods.
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {enemyTypes.map((enemy) => (
+                      <button
+                        key={enemy.code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedEnemyCode(enemy.code);
+                          void handleCheckTerritory(enemy.code);
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-left transition ${selectedEnemyCode === enemy.code ? "border-amber-300 bg-amber-700/70" : "border-amber-700/60 bg-black/20 hover:border-amber-400"}`}
+                      >
+                        <span className="block font-semibold text-amber-100">
+                          {enemy.name}
+                        </span>
+                        <span className="block text-xs text-amber-100/70">
+                          {enemy.maxHealth} HP | {enemy.damage} damage | range {enemy.attackRange} | {enemy.actionPoints} AP
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <PlayersList
                   players={playersOnTile}

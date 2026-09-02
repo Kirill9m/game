@@ -7,6 +7,6 @@ public record CombatPlanRequest(List<CombatActionRequest> actions) {
         actions = actions == null ? List.of() : List.copyOf(actions);
     }
 
-    public record CombatActionRequest(String type, Integer dx, Integer dy, Integer targetX, Integer targetY, String posture) {
+    public record CombatActionRequest(String type, Integer dx, Integer dy, Integer targetX, Integer targetY, String posture, String itemCode) {
     }
 }
