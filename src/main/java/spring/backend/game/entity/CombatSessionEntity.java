@@ -33,10 +33,25 @@ public class CombatSessionEntity {
     @Builder.Default
     private int actionPoints = 3;
 
+    @Builder.Default
     private int p1X = 0;
+
+    @Builder.Default
     private int p1Y = 0;
+
+    @Builder.Default
     private int p2X = 5;
+
+    @Builder.Default
     private int p2Y = 5;
+
+    @Builder.Default
+    private int p1Health = 100;
+
+    @Builder.Default
+    private int p2Health = 100;
+
+    private String winnerId;
 
     @Builder.Default
     private String status = "IN_PROGRESS";

@@ -3,7 +3,7 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
 import { playerApi } from "@/services/playerApi";
-import { PlayerInfo } from "@/types/game";
+import { CombatSession, PlayerInfo } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
 import PlayersList from "@/components/PlayersList";
 import CombatArena from "@/components/CombatArena";
@@ -16,7 +16,7 @@ export default function GameMapPage() {
   const [playersOnTile, setPlayersOnTile] = useState<PlayerInfo[]>([]);
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState<string | null>(null);
-  const [combatSession, setCombatSession] = useState<any | null>(null);
+  const [combatSession, setCombatSession] = useState<CombatSession | null>(null);
 
   const sessionUser = session?.user as
     | { githubId?: string; username?: string; image?: string }
@@ -215,6 +215,7 @@ export default function GameMapPage() {
                 playerId={playerId}
                 initialCombat={combatSession}
                 onCombatUpdate={(updated) => setCombatSession(updated)}
+                onCombatFinished={() => setCombatSession(null)}
               />
             ) : (
               <>

@@ -4,7 +4,7 @@ import { PlayerInfo } from "@/types/game";
 interface PlayersListProps {
   players: PlayerInfo[];
   currentId: string;
-  onAttack: (targetId: string) => void; // Добавлено пропс для старта боя
+  onAttack: (targetId: string) => void;
 }
 
 export default function PlayersList({
@@ -38,7 +38,7 @@ export default function PlayersList({
               </span>
               {!isSelf && (
                 <button
-                  onClick={() => onAttack(p.playerId)} // Передаем корректный playerId вместо username
+                  onClick={() => onAttack(p.playerId)}
                   className="bg-red-700 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition"
                 >
                   Attack

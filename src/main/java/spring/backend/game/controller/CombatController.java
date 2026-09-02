@@ -52,6 +52,20 @@ public class CombatController {
         return ResponseEntity.ok(combatService.endTurn(combatId, playerId));
     }
 
+    @PostMapping("/{combatId}/attack")
+    public ResponseEntity<CombatSessionEntity> attack(
+            @PathVariable UUID combatId,
+            @RequestParam String playerId) {
+        return ResponseEntity.ok(combatService.attack(combatId, playerId));
+    }
+
+    @PostMapping("/{combatId}/finish")
+    public ResponseEntity<CombatSessionEntity> finishCombat(
+            @PathVariable UUID combatId,
+            @RequestParam String playerId) {
+        return ResponseEntity.ok(combatService.finishCombat(combatId, playerId));
+    }
+
     @GetMapping("/active")
     public ResponseEntity<CombatSessionEntity> getActiveCombat(@RequestParam String playerId) {
         CombatSessionEntity activeCombat = combatService.getActiveCombatForPlayer(playerId);
