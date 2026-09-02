@@ -10,6 +10,7 @@ import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.service.InventoryService;
 import spring.backend.game.dto.InventoryItemResponse;
+import spring.backend.game.service.NpcService;
 
 import java.util.List;
 
@@ -21,6 +22,7 @@ public class PlayerController {
 
     private final PlayerRepository playerRepository;
     private final InventoryService inventoryService;
+    private final NpcService npcService;
 
     @PostMapping("/login")
     public ResponseEntity<PlayerLoginResponse> loginOrCreate(@RequestBody PlayerLoginRequest request) {
@@ -36,6 +38,17 @@ public class PlayerController {
 
         inventoryService.ensureStarterItems(player.getId());
 
+        return ResponseEntity.ok(toPlayerResponse(player));
+    }
+
+    @GetMapping("/{playerId}/state")
+    public ResponseEntity<PlayerLoginResponse> getState(@PathVariable String playerId) {
+        PlayerEntity player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new IllegalArgumentException("Player not found"));
+        return ResponseEntity.ok(toPlayerResponse(player));
+    }
+
+    private PlayerLoginResponse toPlayerResponse(PlayerEntity player) {
         List<PlayerInfo> playersOnTile = playerRepository
                 .findByPositionXAndPositionY(player.getPositionX(), player.getPositionY())
                 .stream()
@@ -45,18 +58,34 @@ public class PlayerController {
                         .build())
                 .toList();
 
-        return ResponseEntity.ok(PlayerLoginResponse.builder()
+        return PlayerLoginResponse.builder()
                 .id(player.getId())
                 .username(player.getUsername())
                 .avatarUrl(player.getAvatarUrl())
                 .positionX(player.getPositionX())
                 .positionY(player.getPositionY())
                 .playersOnTile(playersOnTile)
-                .build());
+                .npcs(npcService.getNpcsAt(player.getPositionX(), player.getPositionY()))
+                .build();
     }
 
     @GetMapping("/{playerId}/inventory")
     public ResponseEntity<List<InventoryItemResponse>> getInventory(@PathVariable String playerId) {
         return ResponseEntity.ok(inventoryService.getInventory(playerId));
+    }
+
+    @PatchMapping("/{playerId}/inventory/{itemCode}/equip")
+    public ResponseEntity<List<InventoryItemResponse>> equipItem(
+            @PathVariable String playerId, @PathVariable String itemCode) {
+        return ResponseEntity.ok(inventoryService.equipItem(playerId, itemCode));
+    }
+
+    @PatchMapping("/{playerId}/inventory/{itemCode}/position")
+    public ResponseEntity<List<InventoryItemResponse>> moveItem(
+            @PathVariable String playerId,
+            @PathVariable String itemCode,
+            @RequestParam int gridX,
+            @RequestParam int gridY) {
+        return ResponseEntity.ok(inventoryService.moveItem(playerId, itemCode, gridX, gridY));
     }
 }

@@ -3,12 +3,15 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
 import { playerApi } from "@/services/playerApi";
-import { CombatSession, EnemyType, InventoryItem, PlayerInfo } from "@/types/game";
+import { CombatSession, EnemyType, InventoryItem, PlayerInfo, WorldZone } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
 import PlayersList from "@/components/PlayersList";
+import WorldMap from "@/components/WorldMap";
 import CombatArena from "@/components/CombatArena";
 import { combatApi } from "@/services/combatApi";
 import InventoryPanel from "@/components/InventoryPanel";
+import NpcDialog from "@/components/NpcDialog";
+import { NpcInfo } from "@/types/npc";
 
 export default function GameMapPage() {
   const { data: session, status } = useSession();
@@ -21,6 +24,10 @@ export default function GameMapPage() {
   const [enemyTypes, setEnemyTypes] = useState<EnemyType[]>([]);
   const [selectedEnemyCode, setSelectedEnemyCode] = useState("WOLF");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [npcs, setNpcs] = useState<NpcInfo[]>([]);
+  const [activeNpc, setActiveNpc] = useState<NpcInfo | null>(null);
+  const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
+  const [isMapOpen, setIsMapOpen] = useState(false);
 
   const sessionUser = session?.user as
     | { githubId?: string; username?: string; image?: string }
@@ -83,6 +90,13 @@ export default function GameMapPage() {
       .catch(() => setError("Failed to load enemy types"));
   }, []);
 
+  useEffect(() => {
+    void playerApi
+      .getSafeZone()
+      .then(setSafeZone)
+      .catch(() => setError("Failed to load world zone"));
+  }, []);
+
   const playerId = sessionUser?.githubId || guestData?.id || "";
   const playerName = sessionUser?.username || guestData?.username || "Player";
   const playerAvatar = sessionUser?.image || "/default-avatar.png";
@@ -100,6 +114,7 @@ export default function GameMapPage() {
       if (player.playersOnTile) {
         setPlayersOnTile(player.playersOnTile);
       }
+      setNpcs(player.npcs || []);
       setInventory(playerInventory);
     } catch {
       setError("Failed to load player data from backend");
@@ -128,6 +143,27 @@ export default function GameMapPage() {
     return () => clearInterval(interval);
   }, [playerId, combatSession]);
 
+  useEffect(() => {
+    if (!playerId || combatSession) return;
+
+    const refreshPlayerState = async () => {
+      try {
+        const player = await playerApi.getPlayerState(playerId);
+        setPositionX(player.positionX);
+        setPositionY(player.positionY);
+        setPlayersOnTile(player.playersOnTile || []);
+        setNpcs(player.npcs || []);
+      } catch {
+      }
+    };
+
+    const interval = setInterval(() => {
+      void refreshPlayerState();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [playerId, combatSession]);
+
   const handleMove = async (deltaX: number, deltaY: number) => {
     const targetX = positionX + deltaX;
     const targetY = positionY + deltaY;
@@ -138,7 +174,9 @@ export default function GameMapPage() {
       setPositionX(data.positionX);
       setPositionY(data.positionY);
       setPlayersOnTile(data.playersOnTile || []);
+      setNpcs(data.npcs || []);
       setCooldown(data.cooldown);
+      setActiveNpc(null);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -162,7 +200,7 @@ export default function GameMapPage() {
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-900 text-white p-4">
       <div className="bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-md space-y-6 border border-gray-700">
         <h1 className="text-2xl font-bold text-center text-blue-400">
-          RPG Open World
+          JN RPG
         </h1>
 
         {isGuestMode && !sessionUser && !playerId ? (
@@ -241,7 +279,28 @@ export default function GameMapPage() {
               />
             ) : (
               <>
-                <InventoryPanel items={inventory} />
+                <InventoryPanel
+                  items={inventory}
+                  playerId={playerId}
+                  onItemsChange={setInventory}
+                  onOpenMap={() => setIsMapOpen(true)}
+                />
+                {safeZone && isMapOpen && (
+                  <section className="relative w-full">
+                    <button
+                      type="button"
+                      onClick={() => setIsMapOpen(false)}
+                      className="absolute right-2 top-2 z-20 rounded bg-gray-900/80 px-2 py-1 text-xs text-white"
+                    >
+                      Close map
+                    </button>
+                  <WorldMap
+                    positionX={positionX}
+                    positionY={positionY}
+                    zone={safeZone}
+                  />
+                  </section>
+                )}
 
                 <MovementPad
                   onMove={handleMove}
@@ -284,8 +343,17 @@ export default function GameMapPage() {
                   players={playersOnTile}
                   currentId={playerId}
                   onAttack={handleStartCombat}
+                  npcs={npcs}
+                  onTalk={setActiveNpc}
                 />
               </>
+            )}
+            {activeNpc && (
+              <NpcDialog
+                npc={activeNpc}
+                playerId={playerId}
+                onClose={() => setActiveNpc(null)}
+              />
             )}
           </>
         )}

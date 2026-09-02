@@ -1,5 +1,6 @@
 package spring.backend.game.entity;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Entity;
@@ -9,9 +10,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Column;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,8 +25,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "player_inventory", uniqueConstraints = @UniqueConstraint(columnNames = { "player_id", "item_id" }))
-public class PlayerInventoryEntity {
+@Table(name = "player_quests", uniqueConstraints = @UniqueConstraint(columnNames = { "player_id", "quest_id" }))
+public class PlayerQuestEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -35,18 +36,12 @@ public class PlayerInventoryEntity {
     private PlayerEntity player;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "item_id", nullable = false)
-    private ItemEntity item;
+    @JoinColumn(name = "quest_id", nullable = false)
+    private QuestEntity quest;
 
-    @Column(nullable = false)
-    private int quantity;
+    @Builder.Default
+    private String status = "ACTIVE";
 
-    @Column(name = "grid_x", nullable = false)
-    private int gridX;
-
-    @Column(name = "grid_y", nullable = false)
-    private int gridY;
-
-    @Column(nullable = false)
-    private boolean equipped;
+    @Column(name = "completed_at")
+    private Instant completedAt;
 }

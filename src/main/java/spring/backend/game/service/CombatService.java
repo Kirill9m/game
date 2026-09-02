@@ -22,6 +22,7 @@ import spring.backend.game.repository.CombatRepository;
 import spring.backend.game.repository.EnemyTypeRepository;
 import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.PlayerInventoryRepository;
+import spring.backend.game.repository.PlayerRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -40,9 +41,20 @@ public class CombatService {
     private final EnemyTypeRepository enemyTypeRepository;
     private final ItemRepository itemRepository;
     private final PlayerInventoryRepository playerInventoryRepository;
+    private final PlayerRepository playerRepository;
+    private final WorldZoneService worldZoneService;
 
     @Transactional
     public CombatSessionEntity startCombat(String attackerId, String targetId) {
+        var attacker = playerRepository.findById(attackerId)
+                .orElseThrow(() -> new RuntimeException("Attacking player not found"));
+        var target = playerRepository.findById(targetId)
+                .orElseThrow(() -> new RuntimeException("Target player not found"));
+        if (worldZoneService.isInsideSafeZone(attacker.getPositionX(), attacker.getPositionY())
+            || worldZoneService.isInsideSafeZone(target.getPositionX(), target.getPositionY())) {
+            throw new RuntimeException("PvP attacks are disabled inside the safe zone");
+        }
+
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(attackerId)
                 .player2Id(targetId)

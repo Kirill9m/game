@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "JN MMORGPG",
+  title: "JN RPG",
   description: "next app",
 };
 

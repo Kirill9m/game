@@ -12,4 +12,9 @@ public class InventoryItemResponse {
     private int damage;
     private int attackRange;
     private int quantity;
+    private int width;
+    private int height;
+    private int gridX;
+    private int gridY;
+    private boolean equipped;
 }

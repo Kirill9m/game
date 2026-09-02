@@ -1,3 +1,5 @@
+import { NpcInfo } from "@/types/npc";
+
 export interface PlayerInfo {
   playerId: string;
   userId: string;
@@ -11,13 +13,33 @@ export interface InventoryItem {
   damage: number;
   attackRange: number;
   quantity: number;
+  width: number;
+  height: number;
+  gridX: number;
+  gridY: number;
+  equipped: boolean;
 }
 
 export interface MoveResponse {
   positionX: number;
   positionY: number;
   playersOnTile: PlayerInfo[];
+  npcs: NpcInfo[];
   cooldown: string;
+}
+
+export interface WorldZone {
+  name: string;
+  centerX: number;
+  centerY: number;
+  radius: number;
+}
+
+export interface PlayerStateResponse {
+  positionX: number;
+  positionY: number;
+  playersOnTile: PlayerInfo[];
+  npcs: NpcInfo[];
 }
 
 export interface PlayerEntity {

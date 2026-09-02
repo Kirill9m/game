@@ -20,8 +20,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "enemy_types")
-public class EnemyTypeEntity {
+@Table(name = "quests")
+public class QuestEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -29,21 +29,15 @@ public class EnemyTypeEntity {
     @Column(nullable = false, unique = true, length = 50)
     private String code;
 
+    @Column(nullable = false, length = 150)
+    private String title;
+
+    @Column(nullable = false, length = 1000)
+    private String description;
+
     @Column(nullable = false, length = 100)
-    private String name;
+    private String reward;
 
-    @Column(name = "max_health", nullable = false)
-    private int maxHealth;
-
-    @Column(nullable = false)
-    private int damage;
-
-    @Column(name = "attack_range", nullable = false)
-    private int attackRange;
-
-    @Column(name = "action_points", nullable = false)
-    private int actionPoints;
-
-    @Column(name = "movement_range", nullable = false)
-    private int movementRange;
+    @Column(name = "giver_npc_code", nullable = false, length = 50)
+    private String giverNpcCode;
 }

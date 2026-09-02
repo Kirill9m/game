@@ -1,4 +1,9 @@
-import { InventoryItem, MoveResponse } from "@/types/game";
+import {
+  InventoryItem,
+  MoveResponse,
+  PlayerStateResponse,
+  WorldZone,
+} from "@/types/game";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -34,6 +39,13 @@ export const playerApi = {
 
     return response.json();
   },
+  async getPlayerState(playerId: string): Promise<PlayerStateResponse> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/state`,
+    );
+    if (!response.ok) throw new Error("Failed to load player state");
+    return response.json();
+  },
   async attack(attackerId: string, targetId: string) {
     const response = await fetch(
       `${API_URL}/api/v1/players/attack?attackerId=${encodeURIComponent(attackerId)}&targetId=${encodeURIComponent(targetId)}`,
@@ -51,6 +63,35 @@ export const playerApi = {
       `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/inventory`,
     );
     if (!response.ok) throw new Error("Failed to load inventory");
+    return response.json();
+  },
+
+  async equipItem(playerId: string, itemCode: string): Promise<InventoryItem[]> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/inventory/${encodeURIComponent(itemCode)}/equip`,
+      { method: "PATCH" },
+    );
+    if (!response.ok) throw new Error("Failed to equip item");
+    return response.json();
+  },
+
+  async moveInventoryItem(
+    playerId: string,
+    itemCode: string,
+    gridX: number,
+    gridY: number,
+  ): Promise<InventoryItem[]> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/inventory/${encodeURIComponent(itemCode)}/position?gridX=${gridX}&gridY=${gridY}`,
+      { method: "PATCH" },
+    );
+    if (!response.ok) throw new Error("Failed to move item");
+    return response.json();
+  },
+
+  async getSafeZone(): Promise<WorldZone> {
+    const response = await fetch(`${API_URL}/api/v1/world/safe-zone`);
+    if (!response.ok) throw new Error("Failed to load safe zone");
     return response.json();
   },
 };

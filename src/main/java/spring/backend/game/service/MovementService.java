@@ -17,6 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MovementService {
     private final PlayerRepository playerRepository;
+    private final NpcService npcService;
 
     @Transactional
     public MoveResponse movePlayer(String playerId, MoveRequest request) {
@@ -63,6 +64,7 @@ public class MovementService {
                 .positionY(targetY)
                 .cooldown(newCooldown)
                 .playersOnTile(playerInfos)
+                .npcs(npcService.getNpcsAt(targetX, targetY))
                 .build();
     }
 }

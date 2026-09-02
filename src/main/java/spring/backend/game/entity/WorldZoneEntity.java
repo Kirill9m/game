@@ -1,7 +1,5 @@
 package spring.backend.game.entity;
 
-import java.util.UUID;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -20,30 +18,21 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "items")
-public class ItemEntity {
+@Table(name = "world_zones")
+public class WorldZoneEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-
-    @Column(nullable = false, unique = true, length = 50)
-    private String code;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = 30)
-    private String type;
+    @Column(name = "center_x", nullable = false)
+    private int centerX;
+
+    @Column(name = "center_y", nullable = false)
+    private int centerY;
 
     @Column(nullable = false)
-    private int damage;
-
-    @Column(name = "attack_range", nullable = false)
-    private int attackRange;
-
-    @Column(nullable = false)
-    private int width;
-
-    @Column(nullable = false)
-    private int height;
+    private int radius;
 }

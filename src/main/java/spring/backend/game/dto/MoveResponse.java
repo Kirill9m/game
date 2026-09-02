@@ -12,5 +12,6 @@ public class MoveResponse {
     private int positionX;
     private int positionY;
     private List<PlayerInfo> playersOnTile;
+    private List<NpcInfoResponse> npcs;
     private Instant cooldown;
 }

@@ -17,7 +17,7 @@ import spring.backend.game.repository.PlayerRepository;
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
-    private static final List<String> STARTER_ITEMS = List.of("KNIFE", "PISTOL");
+    private static final List<String> STARTER_ITEMS = List.of("KNIFE", "PISTOL", "WORLD_MAP");
 
     private final ItemRepository itemRepository;
     private final PlayerInventoryRepository inventoryRepository;
@@ -33,10 +33,13 @@ public class InventoryService {
             }
             ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode)
                     .orElseThrow(() -> new RuntimeException("Item not found: " + itemCode));
-            inventoryRepository.save(PlayerInventoryEntity.builder()
+                inventoryRepository.save(PlayerInventoryEntity.builder()
                     .player(player)
                     .item(item)
                     .quantity(1)
+                    .gridX(gridXFor(item.getCode()))
+                    .gridY(gridYFor(item.getCode()))
+                    .equipped(false)
                     .build());
         }
     }
@@ -52,7 +55,47 @@ public class InventoryService {
                         .damage(entry.getItem().getDamage())
                         .attackRange(entry.getItem().getAttackRange())
                         .quantity(entry.getQuantity())
+                        .width(entry.getItem().getWidth())
+                        .height(entry.getItem().getHeight())
+                        .gridX(entry.getGridX())
+                        .gridY(entry.getGridY())
+                        .equipped(entry.isEquipped())
                         .build())
                 .toList();
+    }
+
+    @Transactional
+    public List<InventoryItemResponse> equipItem(String playerId, String itemCode) {
+        PlayerInventoryEntity selected = inventoryRepository
+                .findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(entry -> entry.getItem().getCode().equalsIgnoreCase(itemCode))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+        inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId)
+                .forEach(entry -> entry.setEquipped(entry == selected));
+        return getInventory(playerId);
+    }
+
+    @Transactional
+    public List<InventoryItemResponse> moveItem(String playerId, String itemCode, int gridX, int gridY) {
+        PlayerInventoryEntity item = inventoryRepository
+                .findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(entry -> entry.getItem().getCode().equalsIgnoreCase(itemCode))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+        if (gridX < 0 || gridY < 0 || gridX + item.getItem().getWidth() > 8 || gridY + item.getItem().getHeight() > 6) {
+            throw new IllegalArgumentException("Item does not fit in inventory");
+        }
+        item.setGridX(gridX);
+        item.setGridY(gridY);
+        return getInventory(playerId);
+    }
+
+    private int gridXFor(String itemCode) {
+        return "PISTOL".equalsIgnoreCase(itemCode) ? 2 : "WORLD_MAP".equalsIgnoreCase(itemCode) ? 5 : 0;
+    }
+
+    private int gridYFor(String itemCode) {
+        return 0;
     }
 }
