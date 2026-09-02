@@ -78,18 +78,37 @@ public class InventoryService {
 
     @Transactional
     public List<InventoryItemResponse> moveItem(String playerId, String itemCode, int gridX, int gridY) {
-        PlayerInventoryEntity item = inventoryRepository
+        List<PlayerInventoryEntity> inventory = inventoryRepository
                 .findByPlayerIdOrderByItemNameAsc(playerId).stream()
                 .filter(entry -> entry.getItem().getCode().equalsIgnoreCase(itemCode))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+            .toList();
+        PlayerInventoryEntity item = inventory.stream()
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
         if (gridX < 0 || gridY < 0 || gridX + item.getItem().getWidth() > 8 || gridY + item.getItem().getHeight() > 6) {
             throw new IllegalArgumentException("Item does not fit in inventory");
+        }
+        boolean overlaps = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+            .filter(other -> other != item)
+            .anyMatch(other -> rectanglesOverlap(
+                gridX, gridY, item.getItem().getWidth(), item.getItem().getHeight(),
+                other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
+        if (overlaps) {
+            throw new IllegalArgumentException("That inventory space is occupied");
         }
         item.setGridX(gridX);
         item.setGridY(gridY);
         return getInventory(playerId);
     }
+
+        private boolean rectanglesOverlap(
+            int firstX, int firstY, int firstWidth, int firstHeight,
+            int secondX, int secondY, int secondWidth, int secondHeight) {
+        return firstX < secondX + secondWidth
+            && firstX + firstWidth > secondX
+            && firstY < secondY + secondHeight
+            && firstY + firstHeight > secondY;
+        }
 
     private int gridXFor(String itemCode) {
         return "PISTOL".equalsIgnoreCase(itemCode) ? 2 : "WORLD_MAP".equalsIgnoreCase(itemCode) ? 5 : 0;
