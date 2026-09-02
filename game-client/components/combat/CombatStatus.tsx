@@ -10,6 +10,7 @@ interface CombatStatusProps {
   roundResolved: boolean;
   replayAction: ReplayAction | null;
   isPlayer1: boolean;
+  enemyName?: string;
 }
 
 export function CombatStatus({
@@ -22,6 +23,7 @@ export function CombatStatus({
   roundResolved,
   replayAction,
   isPlayer1,
+  enemyName = "Enemy",
 }: CombatStatusProps) {
   return (
     <>
@@ -35,7 +37,7 @@ export function CombatStatus({
         </div>
         <div className="text-right">
           <div className="text-green-300">You: {myHealth} HP</div>
-          <div className="text-red-300">Enemy: {enemyHealth} HP</div>
+          <div className="text-red-300">{enemyName}: {enemyHealth} HP</div>
           <span className={isMyTurn ? "text-green-400 font-bold animate-pulse" : "text-red-400"}>
             {isMyTurn ? "Plan your actions" : "Waiting for the enemy"}
           </span>

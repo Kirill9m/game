@@ -51,6 +51,16 @@ export default function GameMapPage() {
     }
   };
 
+  const handleCheckTerritory = async () => {
+    try {
+      setError("");
+      const session = await combatApi.startBotCombat(playerId);
+      setCombatSession(session);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to start wolf hunt");
+    }
+  };
+
   const [guestData, setGuestData] = useState<{
     id: string;
     username: string;
@@ -224,6 +234,19 @@ export default function GameMapPage() {
                   currentCell={`[${positionX}/${positionY}]`}
                   cooldown={cooldown}
                 />
+
+                <button
+                  type="button"
+                  onClick={handleCheckTerritory}
+                  className="w-full rounded-lg border border-amber-600/70 bg-amber-900/40 px-4 py-3 text-left transition hover:border-amber-400 hover:bg-amber-800/60"
+                >
+                  <span className="block font-semibold text-amber-200">
+                    Check territory
+                  </span>
+                  <span className="mt-1 block text-xs text-amber-100/70">
+                    Search the nearby woods. Something is moving there.
+                  </span>
+                </button>
 
                 <PlayersList
                   players={playersOnTile}

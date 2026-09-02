@@ -14,6 +14,18 @@ export const combatApi = {
     return res.json();
   },
 
+  async startBotCombat(playerId: string): Promise<CombatSession> {
+    const res = await fetch(
+      `${API_URL}/api/v1/combat/start-bot?playerId=${encodeURIComponent(playerId)}`,
+      { method: "POST" },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Failed to start wolf hunt");
+    }
+    return res.json();
+  },
+
   async getCombat(combatId: string): Promise<CombatSession> {
     const res = await fetch(`${API_URL}/api/v1/combat/${combatId}`);
     if (!res.ok) throw new Error("Failed to load combat");

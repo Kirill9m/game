@@ -32,6 +32,11 @@ public class CombatController {
         return ResponseEntity.ok(combatService.startCombat(attackerId, targetId));
     }
 
+    @PostMapping("/start-bot")
+    public ResponseEntity<CombatSessionEntity> startBotCombat(@RequestParam String playerId) {
+        return ResponseEntity.ok(combatService.startBotCombat(playerId));
+    }
+
     @GetMapping("/{combatId}")
     public ResponseEntity<CombatSessionEntity> getCombat(@PathVariable UUID combatId) {
         return ResponseEntity.ok(combatService.getCombat(combatId));

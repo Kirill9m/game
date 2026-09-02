@@ -24,6 +24,11 @@ public class CombatService {
     private static final int BOARD_SIZE = 10;
     private static final int MAX_SHOT_DISTANCE = 3;
     private static final int SHOT_DAMAGE = 25;
+    private static final String WOLF_ID = "bot_wolf";
+    private static final int WOLF_SHOT_DISTANCE = 1;
+    private static final int WOLF_SHOT_DAMAGE = 20;
+    private static final int WOLF_HEALTH = 500;
+    private static final int WOLF_ACTION_POINTS = 5;
     private static final String STANDING = "STANDING";
     private static final String CROUCHING = "CROUCHING";
     private static final String PRONE = "PRONE";
@@ -43,6 +48,22 @@ public class CombatService {
                 .p1Y(5)
                 .p2X(8)
                 .p2Y(5)
+                .build();
+        return combatRepository.save(combat);
+    }
+
+    @Transactional
+    public CombatSessionEntity startBotCombat(String playerId) {
+        CombatSessionEntity combat = CombatSessionEntity.builder()
+                .player1Id(playerId)
+                .player2Id(WOLF_ID)
+                .currentTurnPlayerId(playerId)
+                .actionPoints(WOLF_ACTION_POINTS)
+                .p1X(1)
+                .p1Y(5)
+                .p2X(8)
+                .p2Y(5)
+                .p2Health(WOLF_HEALTH)
                 .build();
         return combatRepository.save(combat);
     }
@@ -75,10 +96,43 @@ public class CombatService {
             combat.setP2Plan(plan);
             combat.setP2Ready(true);
         }
+        if (WOLF_ID.equals(combat.getPlayer2Id()) && playerId.equals(combat.getPlayer1Id())) {
+            String wolfPlan = createWolfPlan(combat);
+            combat.setP2Plan(wolfPlan);
+            combat.setP2Ready(true);
+        }
         if (combat.isP1Ready() && combat.isP2Ready()) {
             resolveRound(combat);
         }
         return combatRepository.save(combat);
+    }
+
+    private String createWolfPlan(CombatSessionEntity combat) {
+        List<String> plan = new ArrayList<>();
+        int wolfX = combat.getP2X();
+        int wolfY = combat.getP2Y();
+        List<int[]> path = findMovementPath(wolfX, wolfY, combat.getP1X(), combat.getP1Y(), BOARD_SIZE * BOARD_SIZE);
+        int maxMoves = WOLF_ACTION_POINTS;
+        if (path != null && path.size() > 1) {
+            maxMoves = Math.min(WOLF_ACTION_POINTS, path.size() - 1);
+            for (int index = 1; index < path.size() && plan.size() < maxMoves; index++) {
+                int[] previous = path.get(index - 1);
+                int[] current = path.get(index);
+                plan.add("M:" + (current[0] - previous[0]) + ":" + (current[1] - previous[1]));
+                wolfX = current[0];
+                wolfY = current[1];
+                int distance = Math.max(Math.abs(combat.getP1X() - wolfX), Math.abs(combat.getP1Y() - wolfY));
+                if (distance <= WOLF_SHOT_DISTANCE && plan.size() < WOLF_ACTION_POINTS
+                        && !isShotBlocked(wolfX, wolfY, combat.getP1X(), combat.getP1Y())) {
+                    plan.add("A:" + combat.getP1X() + ":" + combat.getP1Y());
+                    break;
+                }
+            }
+        }
+        if (plan.isEmpty()) {
+            plan.add("A:" + combat.getP1X() + ":" + combat.getP1Y());
+        }
+        return String.join(";", plan);
     }
 
     @Transactional
@@ -153,7 +207,7 @@ public class CombatService {
         String posture = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Posture() : combat.getP2Posture();
         String[] actions = plan == null || plan.isBlank() ? new String[0] : plan.split(";");
         if (actions.length > combat.getActionPoints()) {
-            throw new RuntimeException("A plan cannot use more than 3 action points");
+            throw new RuntimeException("A plan cannot use more than " + combat.getActionPoints() + " action points");
         }
         for (String action : actions) {
             String[] parts = action.split(":");
@@ -208,7 +262,7 @@ public class CombatService {
         combat.setP2Plan(null);
         combat.setP1Ready(false);
         combat.setP2Ready(false);
-        combat.setActionPoints(3);
+        combat.setActionPoints(WOLF_ID.equals(combat.getPlayer2Id()) ? WOLF_ACTION_POINTS : 3);
     }
 
     private String[] actions(String plan) {
@@ -282,13 +336,19 @@ public class CombatService {
         int attackerY = player1 ? combat.getP1Y() : combat.getP2Y();
         int actualTargetX = player1 ? combat.getP2X() : combat.getP1X();
         int actualTargetY = player1 ? combat.getP2Y() : combat.getP1Y();
-        if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > MAX_SHOT_DISTANCE
+        int maxShotDistance = !player1 && WOLF_ID.equals(combat.getPlayer2Id())
+            ? WOLF_SHOT_DISTANCE
+            : MAX_SHOT_DISTANCE;
+        int shotDamage = !player1 && WOLF_ID.equals(combat.getPlayer2Id())
+            ? WOLF_SHOT_DAMAGE
+            : SHOT_DAMAGE;
+        if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > maxShotDistance
             || isShotBlocked(attackerX, attackerY, actualTargetX, actualTargetY)) return 0;
         String targetPosture = player1 ? combat.getP2Posture() : combat.getP1Posture();
         if (ThreadLocalRandom.current().nextInt(100) >= hitChance(targetPosture)) return 0;
-        if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - SHOT_DAMAGE));
-        else combat.setP1Health(Math.max(0, combat.getP1Health() - SHOT_DAMAGE));
-        return SHOT_DAMAGE;
+        if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - shotDamage));
+        else combat.setP1Health(Math.max(0, combat.getP1Health() - shotDamage));
+        return shotDamage;
     }
 
     private int movementRange(String posture) {
