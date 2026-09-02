@@ -2,7 +2,12 @@ package spring.backend.game.service;
 
 import java.util.UUID;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -70,7 +75,6 @@ public class CombatService {
             combat.setP2Plan(plan);
             combat.setP2Ready(true);
         }
-        combat.setLastRoundActions(new String[0]);
         if (combat.isP1Ready() && combat.isP2Ready()) {
             resolveRound(combat);
         }
@@ -167,7 +171,7 @@ public class CombatService {
                 if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
                     throw new RuntimeException("You cannot leave the combat board");
                 }
-                validateMovementPath(x - dx, y - dy, dx, dy);
+                validateMovementPath(x - dx, y - dy, x, y, movementRange(posture));
             } else if (!"A".equals(parts[0]) || parts.length != 3) {
                 throw new RuntimeException("Invalid combat plan");
             }
@@ -230,11 +234,14 @@ public class CombatService {
         String[] parts = action.split(":");
         int dx = Integer.parseInt(parts[1]);
         int dy = Integer.parseInt(parts[2]);
-        for (int step = 0; step < Math.abs(dx); step++) {
-            replay.add((player1 ? "P1:M:" : "P2:M:") + Integer.signum(dx) + ":0:0");
-        }
-        for (int step = 0; step < Math.abs(dy); step++) {
-            replay.add((player1 ? "P1:M:" : "P2:M:") + "0:" + Integer.signum(dy) + ":0");
+        int endX = player1 ? combat.getP1X() : combat.getP2X();
+        int endY = player1 ? combat.getP1Y() : combat.getP2Y();
+        List<int[]> path = findMovementPath(endX - dx, endY - dy, endX, endY, BOARD_SIZE * BOARD_SIZE);
+        if (path == null) return;
+        for (int index = 1; index < path.size(); index++) {
+            int[] previous = path.get(index - 1);
+            int[] current = path.get(index);
+            replay.add((player1 ? "P1:M:" : "P2:M:") + (current[0] - previous[0]) + ":" + (current[1] - previous[1]) + ":0");
         }
     }
 
@@ -288,19 +295,48 @@ public class CombatService {
         return STANDING.equals(posture) ? 3 : CROUCHING.equals(posture) ? 2 : 1;
     }
 
-    private void validateMovementPath(int startX, int startY, int dx, int dy) {
-        int x = startX;
-        int y = startY;
-        int horizontal = Integer.signum(dx);
-        for (int step = 0; step < Math.abs(dx); step++) {
-            x += horizontal;
-            if (isObstacle(x, y)) throw new RuntimeException("This cell is blocked by terrain");
+    private void validateMovementPath(int startX, int startY, int targetX, int targetY, int maxSteps) {
+        if (findMovementPath(startX, startY, targetX, targetY, maxSteps) == null) {
+            throw new RuntimeException("This cell is blocked by terrain");
         }
-        int vertical = Integer.signum(dy);
-        for (int step = 0; step < Math.abs(dy); step++) {
-            y += vertical;
-            if (isObstacle(x, y)) throw new RuntimeException("This cell is blocked by terrain");
+    }
+
+    private List<int[]> findMovementPath(int startX, int startY, int targetX, int targetY, int maxSteps) {
+        ArrayDeque<int[]> queue = new ArrayDeque<>();
+        ArrayDeque<Integer> distances = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        Map<String, String> parents = new HashMap<>();
+        queue.add(new int[] { startX, startY });
+        distances.add(0);
+        visited.add(cell(startX, startY));
+        while (!queue.isEmpty()) {
+            int[] current = queue.remove();
+            int distance = distances.remove();
+            if (current[0] == targetX && current[1] == targetY) {
+                List<int[]> path = new ArrayList<>();
+                String currentCell = cell(targetX, targetY);
+                while (currentCell != null) {
+                    String[] coordinates = currentCell.split(":");
+                    path.add(new int[] { Integer.parseInt(coordinates[0]), Integer.parseInt(coordinates[1]) });
+                    currentCell = parents.get(currentCell);
+                }
+                Collections.reverse(path);
+                return path;
+            }
+            if (distance >= maxSteps) continue;
+            for (int[] direction : new int[][] { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) {
+                int nextX = current[0] + direction[0];
+                int nextY = current[1] + direction[1];
+                String nextCell = cell(nextX, nextY);
+                if (nextX < 0 || nextX >= BOARD_SIZE || nextY < 0 || nextY >= BOARD_SIZE
+                        || visited.contains(nextCell) || isObstacle(nextX, nextY)) continue;
+                visited.add(nextCell);
+                parents.put(nextCell, cell(current[0], current[1]));
+                queue.add(new int[] { nextX, nextY });
+                distances.add(distance + 1);
+            }
         }
+        return null;
     }
 
     private int hitChance(String posture) {
@@ -325,7 +361,7 @@ public class CombatService {
         for (int step = 1; step < steps; step++) {
             int x = fromX + Math.round((toX - fromX) * step / (float) steps);
             int y = fromY + Math.round((toY - fromY) * step / (float) steps);
-            if (isObstacle(x, y)) return true;
+            if (WALLS.contains(cell(x, y))) return true;
         }
         return false;
     }

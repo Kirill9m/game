@@ -34,7 +34,7 @@ type Posture = "STANDING" | "CROUCHING" | "PRONE";
 const WATER_CELLS = new Set(["1:6", "2:6", "1:7", "2:7", "1:8", "2:8"]);
 const WALL_CELLS = new Set(["3:3", "3:4", "3:5", "6:6", "7:6"]);
 
-const isTerrainBlocked = (x: number, y: number) => WATER_CELLS.has(`${x}:${y}`) || WALL_CELLS.has(`${x}:${y}`);
+const isMovementBlocked = (x: number, y: number) => WATER_CELLS.has(`${x}:${y}`) || WALL_CELLS.has(`${x}:${y}`);
 const postureMovement = (posture: Posture) => posture === "STANDING" ? 3 : posture === "CROUCHING" ? 2 : 1;
 
 const getReachableCells = (startX: number, startY: number, maxSteps: number) => {
@@ -48,7 +48,7 @@ const getReachableCells = (startX: number, startY: number, maxSteps: number) => 
       const x = current.x + dx;
       const y = current.y + dy;
       const key = `${x}:${y}`;
-      if (x < 0 || x >= 10 || y < 0 || y >= 10 || visited.has(key) || isTerrainBlocked(x, y)) continue;
+      if (x < 0 || x >= 10 || y < 0 || y >= 10 || visited.has(key) || isMovementBlocked(x, y)) continue;
       visited.add(key);
       reachable.add(key);
       queue.push({ x, y, steps: current.steps + 1 });
@@ -86,6 +86,7 @@ export default function CombatArena({
     p2: initialCombat.p2Posture || "STANDING",
   });
   const isReplayingRef = useRef(false);
+  const replayedRoundRef = useRef<string | null>(null);
   const replayTimersRef = useRef<number[]>([]);
   const previousCombatRef = useRef(initialCombat);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -114,8 +115,14 @@ export default function CombatArena({
     const movedP2 = previous.p2X !== combat.p2X || previous.p2Y !== combat.p2Y;
     const damagedP1 = previous.p1Health > combat.p1Health;
     const damagedP2 = previous.p2Health > combat.p2Health;
+    const roundActions = combat.lastRoundActions;
 
-    if (combat.lastRoundActions?.length) {
+    const roundKey = roundActions?.length
+      ? `${roundActions.join("|")}:${combat.p1X}:${combat.p1Y}:${combat.p2X}:${combat.p2Y}:${combat.p1Health}:${combat.p2Health}`
+      : null;
+
+    if (roundKey && roundActions && roundKey !== replayedRoundRef.current) {
+      replayedRoundRef.current = roundKey;
       replayTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       let positions = {
         p1: { x: previous.p1X, y: previous.p1Y },
@@ -127,7 +134,7 @@ export default function CombatArena({
       setReplayAction(null);
       setDamagePopup(null);
 
-      combat.lastRoundActions.forEach((encodedAction, index) => {
+      roundActions.forEach((encodedAction, index) => {
         const timer = window.setTimeout(() => {
           const [actor, type, first, second] = encodedAction.split(":");
           const actorKey = actor === "P1" ? "p1" : "p2";
@@ -167,7 +174,7 @@ export default function CombatArena({
         setIsReplaying(false);
         isReplayingRef.current = false;
         replayTimersRef.current = [];
-      }, combat.lastRoundActions.length * 700 + 500));
+      }, roundActions.length * 700 + 500));
       const roundEvents = [
         ...(movedP1 ? ["Player 1 moved"] : []),
         ...(movedP2 ? ["Player 2 moved"] : []),
@@ -325,7 +332,8 @@ export default function CombatArena({
           ? reachableCells.has(`${x}:${y}`)
           : distance <= 3 && distance > 0;
         if (available) {
-          if (isTerrainBlocked(x, y)) continue;
+          if (mode === "move" && isMovementBlocked(x, y)) continue;
+          if (mode === "shoot" && WALL_CELLS.has(`${x}:${y}`)) continue;
           features.push({
             type: "Feature" as const,
             properties: {},
@@ -367,7 +375,7 @@ export default function CombatArena({
       const dx = targetX - myX;
       const dy = targetY - myY;
 
-      if (mode === "move" && isTerrainBlocked(targetX, targetY)) {
+      if (mode === "move" && isMovementBlocked(targetX, targetY)) {
         setError("This cell is blocked by terrain");
         return;
       }

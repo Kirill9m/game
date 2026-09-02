@@ -9,7 +9,7 @@ import spring.backend.game.service.MovementService;
 @RestController
 @RequestMapping("/api/v1/players")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"http://localhost:3000", "http://192.168.8.96:3000"})
 public class MovementController {
     private final MovementService movementService;
 

@@ -1,6 +1,6 @@
 import { MoveResponse } from "@/types/game";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export const playerApi = {
   async loginPlayer(githubId: string, username: string, avatarUrl: string) {

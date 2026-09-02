@@ -4,6 +4,8 @@
 	pointer-events: none;
 	transform: translate(-50%, -50%);
 	width: 44px;
+	left: 50%;
+	top: 50%;
 }
 
 .combat-marker-you {

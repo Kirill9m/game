@@ -2,6 +2,7 @@ package spring.backend.game.entity;
 
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -76,7 +77,23 @@ public class CombatSessionEntity {
     @Builder.Default
     private String p2Posture = "STANDING";
 
+    @Column(length = 4000)
+    @JsonIgnore
+    private String lastRoundActionsData;
+
     @Transient
     @Builder.Default
     private String[] lastRoundActions = new String[0];
+
+    public String[] getLastRoundActions() {
+        if (lastRoundActions.length == 0 && lastRoundActionsData != null && !lastRoundActionsData.isBlank()) {
+            lastRoundActions = lastRoundActionsData.split("\\n", -1);
+        }
+        return lastRoundActions;
+    }
+
+    public void setLastRoundActions(String[] actions) {
+        lastRoundActions = actions == null ? new String[0] : actions;
+        lastRoundActionsData = String.join("\n", lastRoundActions);
+    }
 }
