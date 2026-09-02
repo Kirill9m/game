@@ -1,6 +1,7 @@
 export interface PlayerInfo {
   playerId: string;
   userId: string;
+  username?: string;
 }
 
 export interface MoveResponse {

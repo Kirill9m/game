@@ -1,1 +1,15 @@
+ .combat-marker {
+	align-items: center;
+	border: 2px solid rgba(255, 255, 255, 0.9);
+	border-radius: 9999px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+	color: white;
+	display: flex;
+	font-size: 10px;
+	font-weight: 700;
+	height: 34px;
+	justify-content: center;
+	pointer-events: none;
+	width: 34px;
+}
 @import "tailwindcss";

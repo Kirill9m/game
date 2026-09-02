@@ -1,32 +1,18 @@
-import { playerApi } from "@/services/playerApi";
 import { useState } from "react";
-
-interface PlayerInfo {
-  playerId: string;
-  username: string;
-}
+import { PlayerInfo } from "@/types/game";
 
 interface PlayersListProps {
   players: PlayerInfo[];
   currentId: string;
+  onAttack: (targetId: string) => void; // Добавлено пропс для старта боя
 }
 
-export default function PlayersList({ players, currentId }: PlayersListProps) {
+export default function PlayersList({
+  players,
+  currentId,
+  onAttack,
+}: PlayersListProps) {
   const [message, setMessage] = useState("");
-
-  const handleAttack = async (targetId: string) => {
-    try {
-      setMessage("");
-      const data = await playerApi.attack(currentId, targetId);
-      setMessage(data.message || "Attack successful!");
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setMessage(err.message);
-      } else {
-        setMessage("Attack failed");
-      }
-    }
-  };
 
   return (
     <div className="space-y-2 bg-gray-900 p-3 rounded-lg border border-gray-700">
@@ -40,7 +26,7 @@ export default function PlayersList({ players, currentId }: PlayersListProps) {
           const isSelf = p.playerId === currentId;
           return (
             <li
-              key={identifier}
+              key={p.playerId}
               className="flex justify-between items-center text-sm py-1"
             >
               <span
@@ -52,7 +38,7 @@ export default function PlayersList({ players, currentId }: PlayersListProps) {
               </span>
               {!isSelf && (
                 <button
-                  onClick={() => handleAttack(identifier)}
+                  onClick={() => onAttack(p.playerId)} // Передаем корректный playerId вместо username
                   className="bg-red-700 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition"
                 >
                   Attack

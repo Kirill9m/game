@@ -6,6 +6,8 @@ import { playerApi } from "@/services/playerApi";
 import { PlayerInfo } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
 import PlayersList from "@/components/PlayersList";
+import CombatArena from "@/components/CombatArena";
+import { combatApi } from "@/services/combatApi";
 
 export default function GameMapPage() {
   const { data: session, status } = useSession();
@@ -14,6 +16,7 @@ export default function GameMapPage() {
   const [playersOnTile, setPlayersOnTile] = useState<PlayerInfo[]>([]);
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState<string | null>(null);
+  const [combatSession, setCombatSession] = useState<any | null>(null);
 
   const sessionUser = session?.user as
     | { githubId?: string; username?: string; image?: string }
@@ -32,6 +35,20 @@ export default function GameMapPage() {
       localStorage.setItem("rpg_guest_name", guestName);
     }
     return { id: guestId, username: guestName || "Guest" };
+  };
+
+  const handleStartCombat = async (targetId: string) => {
+    try {
+      setError("");
+      const session = await combatApi.startCombat(playerId, targetId);
+      setCombatSession(session);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to start combat");
+      }
+    }
   };
 
   const [guestData, setGuestData] = useState<{
@@ -73,6 +90,22 @@ export default function GameMapPage() {
       handleLoginPlayer();
     }
   }, [playerId, handleLoginPlayer]);
+
+  useEffect(() => {
+    if (!playerId || combatSession) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const activeCombat = await combatApi.getActiveCombatForPlayer(playerId);
+        if (activeCombat && activeCombat.id) {
+          setCombatSession(activeCombat);
+        }
+      } catch (e) {
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [playerId, combatSession]);
 
   const handleMove = async (deltaX: number, deltaY: number) => {
     const targetX = positionX + deltaX;
@@ -176,13 +209,28 @@ export default function GameMapPage() {
               </div>
             )}
 
-            <MovementPad
-              onMove={handleMove}
-              currentCell={`[${positionX}/${positionY}]`}
-              cooldown={cooldown}
-            />
+            {combatSession ? (
+              <CombatArena
+                combatId={combatSession.id}
+                playerId={playerId}
+                initialCombat={combatSession}
+                onCombatUpdate={(updated) => setCombatSession(updated)}
+              />
+            ) : (
+              <>
+                <MovementPad
+                  onMove={handleMove}
+                  currentCell={`[${positionX}/${positionY}]`}
+                  cooldown={cooldown}
+                />
 
-            <PlayersList players={playersOnTile} currentId={playerId} />
+                <PlayersList
+                  players={playersOnTile}
+                  currentId={playerId}
+                  onAttack={handleStartCombat}
+                />
+              </>
+            )}
           </>
         )}
       </div>
