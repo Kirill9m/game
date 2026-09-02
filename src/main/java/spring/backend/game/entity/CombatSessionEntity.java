@@ -6,7 +6,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,6 +31,18 @@ public class CombatSessionEntity {
     private String player2Id;
 
     private String currentTurnPlayerId;
+
+    @Column(length = 4000)
+    private String p1Plan;
+
+    @Column(length = 4000)
+    private String p2Plan;
+
+    @Builder.Default
+    private boolean p1Ready = false;
+
+    @Builder.Default
+    private boolean p2Ready = false;
 
     @Builder.Default
     private int actionPoints = 3;
@@ -55,4 +69,14 @@ public class CombatSessionEntity {
 
     @Builder.Default
     private String status = "IN_PROGRESS";
+
+    @Builder.Default
+    private String p1Posture = "STANDING";
+
+    @Builder.Default
+    private String p2Posture = "STANDING";
+
+    @Transient
+    @Builder.Default
+    private String[] lastRoundActions = new String[0];
 }

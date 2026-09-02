@@ -1,11 +1,11 @@
-import { PlayerEntity, MoveResponse } from "@/types/game";
+import { MoveResponse } from "@/types/game";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export const playerApi = {
   async loginPlayer(githubId: string, username: string, avatarUrl: string) {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/players/login`,
+      `${API_URL}/api/v1/players/login`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

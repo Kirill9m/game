@@ -1,19 +1,29 @@
 package spring.backend.game.service;
 
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.dto.CombatPlanRequest;
 import spring.backend.game.repository.CombatRepository;
 
 @Service
 @RequiredArgsConstructor
 public class CombatService {
     private static final int BOARD_SIZE = 10;
-    private static final int MAX_SHOT_DISTANCE = 2;
+    private static final int MAX_SHOT_DISTANCE = 3;
     private static final int SHOT_DAMAGE = 25;
+    private static final String STANDING = "STANDING";
+    private static final String CROUCHING = "CROUCHING";
+    private static final String PRONE = "PRONE";
+    private static final Set<String> WATER = Set.of("1:6", "2:6", "1:7", "2:7", "1:8", "2:8");
+    private static final Set<String> WALLS = Set.of("3:3", "3:4", "3:5", "6:6", "7:6");
 
     private final CombatRepository combatRepository;
 
@@ -22,11 +32,11 @@ public class CombatService {
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(attackerId)
                 .player2Id(targetId)
-                .currentTurnPlayerId(attackerId)
+                .currentTurnPlayerId("")
                 .actionPoints(3)
-                .p1X(0)
-                .p1Y(0)
-                .p2X(5)
+                .p1X(1)
+                .p1Y(5)
+                .p2X(8)
                 .p2Y(5)
                 .build();
         return combatRepository.save(combat);
@@ -39,104 +49,289 @@ public class CombatService {
 
     @Transactional
     public CombatSessionEntity moveInCombat(UUID combatId, String playerId, int dx, int dy) {
-        CombatSessionEntity combat = getCombat(combatId);
-
-        ensureInProgress(combat);
-        ensureParticipant(combat, playerId);
-
-        if (!combat.getCurrentTurnPlayerId().equals(playerId)) {
-            throw new RuntimeException("Not your turn");
-        }
-        if (combat.getActionPoints() <= 0) {
-            throw new RuntimeException("No action points left!");
-        }
+        CombatSessionEntity combat = getCombatForUpdate(combatId);
         if (Math.abs(dx) + Math.abs(dy) != 1) {
             throw new RuntimeException("You can move only one tile at a time");
         }
-
-        int currentX = playerId.equals(combat.getPlayer1Id()) ? combat.getP1X() : combat.getP2X();
-        int currentY = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Y() : combat.getP2Y();
-        int nextX = currentX + dx;
-        int nextY = currentY + dy;
-        if (nextX < 0 || nextX >= BOARD_SIZE || nextY < 0 || nextY >= BOARD_SIZE) {
-            throw new RuntimeException("You cannot leave the combat board");
-        }
-
-        if (playerId.equals(combat.getPlayer1Id())) {
-            combat.setP1X(nextX);
-            combat.setP1Y(nextY);
-        } else if (playerId.equals(combat.getPlayer2Id())) {
-            combat.setP2X(nextX);
-            combat.setP2Y(nextY);
-        }
-
-        combat.setActionPoints(combat.getActionPoints() - 1);
-        return combatRepository.save(combat);
+        return appendAction(combat, playerId, "M:" + dx + ":" + dy);
     }
 
     @Transactional
-    public CombatSessionEntity endTurn(UUID combatId, String playerId) {
-        CombatSessionEntity combat = getCombat(combatId);
-
+    public CombatSessionEntity endTurn(UUID combatId, String playerId, CombatPlanRequest request) {
+        CombatSessionEntity combat = getCombatForUpdate(combatId);
         ensureInProgress(combat);
         ensureParticipant(combat, playerId);
-
-        if (!combat.getCurrentTurnPlayerId().equals(playerId)) {
-            throw new RuntimeException("Not your turn!");
+        String plan = encodePlan(request);
+        validatePlan(combat, playerId, plan);
+        if (playerId.equals(combat.getPlayer1Id())) {
+            combat.setP1Plan(plan);
+            combat.setP1Ready(true);
+        } else {
+            combat.setP2Plan(plan);
+            combat.setP2Ready(true);
         }
-
-        String nextTurn = playerId.equals(combat.getPlayer1Id()) ? combat.getPlayer2Id() : combat.getPlayer1Id();
-        combat.setCurrentTurnPlayerId(nextTurn);
-        combat.setActionPoints(3);
-
+        combat.setLastRoundActions(new String[0]);
+        if (combat.isP1Ready() && combat.isP2Ready()) {
+            resolveRound(combat);
+        }
         return combatRepository.save(combat);
     }
 
     @Transactional
     public CombatSessionEntity attack(UUID combatId, String playerId) {
-        CombatSessionEntity combat = getCombat(combatId);
-        ensureInProgress(combat);
-        ensureParticipant(combat, playerId);
-
-        if (!combat.getCurrentTurnPlayerId().equals(playerId)) {
-            throw new RuntimeException("Not your turn");
-        }
-        if (combat.getActionPoints() <= 0) {
-            throw new RuntimeException("No action points left!");
-        }
-
-        int attackerX = playerId.equals(combat.getPlayer1Id()) ? combat.getP1X() : combat.getP2X();
-        int attackerY = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Y() : combat.getP2Y();
+        CombatSessionEntity combat = getCombatForUpdate(combatId);
         int targetX = playerId.equals(combat.getPlayer1Id()) ? combat.getP2X() : combat.getP1X();
         int targetY = playerId.equals(combat.getPlayer1Id()) ? combat.getP2Y() : combat.getP1Y();
-        if (Math.max(Math.abs(attackerX - targetX), Math.abs(attackerY - targetY)) > MAX_SHOT_DISTANCE) {
-            throw new RuntimeException("Target must be closer than 3 tiles");
-        }
-
-        if (playerId.equals(combat.getPlayer1Id())) {
-            combat.setP2Health(Math.max(0, combat.getP2Health() - SHOT_DAMAGE));
-        } else {
-            combat.setP1Health(Math.max(0, combat.getP1Health() - SHOT_DAMAGE));
-        }
-        combat.setActionPoints(combat.getActionPoints() - 1);
-
-        int targetHealth = playerId.equals(combat.getPlayer1Id()) ? combat.getP2Health() : combat.getP1Health();
-        if (targetHealth == 0) {
-            combat.setStatus("FINISHED");
-            combat.setWinnerId(playerId);
-        }
-        return combatRepository.save(combat);
+        return appendAction(combat, playerId, "A:" + targetX + ":" + targetY);
     }
 
     @Transactional
     public CombatSessionEntity finishCombat(UUID combatId, String playerId) {
-        CombatSessionEntity combat = getCombat(combatId);
+        CombatSessionEntity combat = getCombatForUpdate(combatId);
         ensureInProgress(combat);
         ensureParticipant(combat, playerId);
         String winnerId = playerId.equals(combat.getPlayer1Id()) ? combat.getPlayer2Id() : combat.getPlayer1Id();
         combat.setWinnerId(winnerId);
         combat.setStatus("FINISHED");
         return combatRepository.save(combat);
+    }
+
+    private CombatSessionEntity appendAction(CombatSessionEntity combat, String playerId, String action) {
+        ensureInProgress(combat);
+        ensureParticipant(combat, playerId);
+        String plan = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Plan() : combat.getP2Plan();
+        if (countActions(plan) >= combat.getActionPoints()) {
+            throw new RuntimeException("No action points left!");
+        }
+        String updatedPlan = plan == null || plan.isBlank() ? action : plan + ";" + action;
+        validatePlan(combat, playerId, updatedPlan);
+        if (playerId.equals(combat.getPlayer1Id())) {
+            combat.setP1Plan(updatedPlan);
+        } else {
+            combat.setP2Plan(updatedPlan);
+        }
+        return combatRepository.save(combat);
+    }
+
+    private CombatSessionEntity getCombatForUpdate(UUID combatId) {
+        return combatRepository.findByIdForUpdate(combatId)
+                .orElseThrow(() -> new RuntimeException("Combat not found"));
+    }
+
+    private String encodePlan(CombatPlanRequest request) {
+        if (request == null) {
+            return "";
+        }
+        return request.actions().stream().map(action -> {
+            if ("MOVE".equalsIgnoreCase(action.type())) {
+                return "M:" + required(action.dx(), "dx") + ":" + required(action.dy(), "dy");
+            }
+            if ("ATTACK".equalsIgnoreCase(action.type())) {
+                return "A:" + required(action.targetX(), "targetX") + ":" + required(action.targetY(), "targetY");
+            }
+            if ("POSTURE".equalsIgnoreCase(action.type())) {
+                return "P:" + normalizePosture(action.posture());
+            }
+            throw new RuntimeException("Unknown combat action: " + action.type());
+        }).reduce((left, right) -> left + ";" + right).orElse("");
+    }
+
+    private int required(Integer value, String name) {
+        if (value == null) {
+            throw new RuntimeException("Missing action field: " + name);
+        }
+        return value;
+    }
+
+    private void validatePlan(CombatSessionEntity combat, String playerId, String plan) {
+        int x = playerId.equals(combat.getPlayer1Id()) ? combat.getP1X() : combat.getP2X();
+        int y = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Y() : combat.getP2Y();
+        String posture = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Posture() : combat.getP2Posture();
+        String[] actions = plan == null || plan.isBlank() ? new String[0] : plan.split(";");
+        if (actions.length > combat.getActionPoints()) {
+            throw new RuntimeException("A plan cannot use more than 3 action points");
+        }
+        for (String action : actions) {
+            String[] parts = action.split(":");
+            if ("P".equals(parts[0])) {
+                posture = normalizePosture(parts[1]);
+            } else if ("M".equals(parts[0])) {
+                int dx = Integer.parseInt(parts[1]);
+                int dy = Integer.parseInt(parts[2]);
+                int distance = Math.abs(dx) + Math.abs(dy);
+                if (distance < 1 || distance > movementRange(posture)) {
+                    throw new RuntimeException("This posture allows moving up to " + movementRange(posture) + " cells per action");
+                }
+                x += dx;
+                y += dy;
+                if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+                    throw new RuntimeException("You cannot leave the combat board");
+                }
+                validateMovementPath(x - dx, y - dy, dx, dy);
+            } else if (!"A".equals(parts[0]) || parts.length != 3) {
+                throw new RuntimeException("Invalid combat plan");
+            }
+        }
+    }
+
+    private int countActions(String plan) {
+        return plan == null || plan.isBlank() ? 0 : plan.split(";").length;
+    }
+
+    private void resolveRound(CombatSessionEntity combat) {
+        String[] p1Actions = actions(combat.getP1Plan());
+        String[] p2Actions = actions(combat.getP2Plan());
+        List<String> roundActions = new ArrayList<>();
+        for (int index = 0; index < Math.max(p1Actions.length, p2Actions.length); index++) {
+            String p1Action = actionAt(p1Actions, index);
+            String p2Action = actionAt(p2Actions, index);
+            if (p1Action != null && isAlive(combat, true)) {
+                int damage = applyAction(combat, true, p1Action);
+                addReplayActions(roundActions, combat, true, p1Action, damage);
+            }
+            if (p2Action != null && isAlive(combat, false)) {
+                int damage = applyAction(combat, false, p2Action);
+                addReplayActions(roundActions, combat, false, p2Action, damage);
+            }
+        }
+        combat.setLastRoundActions(roundActions.toArray(String[]::new));
+        if (combat.getP1Health() == 0 || combat.getP2Health() == 0) {
+            combat.setStatus("FINISHED");
+            combat.setWinnerId(combat.getP1Health() == 0 && combat.getP2Health() == 0 ? null
+                    : combat.getP1Health() == 0 ? combat.getPlayer2Id() : combat.getPlayer1Id());
+        }
+        combat.setP1Plan(null);
+        combat.setP2Plan(null);
+        combat.setP1Ready(false);
+        combat.setP2Ready(false);
+        combat.setActionPoints(3);
+    }
+
+    private String[] actions(String plan) {
+        return plan == null || plan.isBlank() ? new String[0] : plan.split(";");
+    }
+
+    private String actionAt(String[] actions, int index) {
+        return index < actions.length ? actions[index] : null;
+    }
+
+    private String replayAction(CombatSessionEntity combat, boolean player1, String action, int damage) {
+        if (!action.startsWith("A:")) return (player1 ? "P1:" : "P2:") + action + ":" + damage;
+        int targetX = player1 ? combat.getP2X() : combat.getP1X();
+        int targetY = player1 ? combat.getP2Y() : combat.getP1Y();
+        return (player1 ? "P1:A:" : "P2:A:") + targetX + ":" + targetY + ":" + damage;
+    }
+
+    private void addReplayActions(List<String> replay, CombatSessionEntity combat, boolean player1, String action, int damage) {
+        if (!action.startsWith("M:")) {
+            replay.add(replayAction(combat, player1, action, damage));
+            return;
+        }
+        String[] parts = action.split(":");
+        int dx = Integer.parseInt(parts[1]);
+        int dy = Integer.parseInt(parts[2]);
+        for (int step = 0; step < Math.abs(dx); step++) {
+            replay.add((player1 ? "P1:M:" : "P2:M:") + Integer.signum(dx) + ":0:0");
+        }
+        for (int step = 0; step < Math.abs(dy); step++) {
+            replay.add((player1 ? "P1:M:" : "P2:M:") + "0:" + Integer.signum(dy) + ":0");
+        }
+    }
+
+    private boolean isAlive(CombatSessionEntity combat, boolean player1) {
+        return player1 ? combat.getP1Health() > 0 : combat.getP2Health() > 0;
+    }
+
+    private int applyAction(CombatSessionEntity combat, boolean player1, String action) {
+        if (action == null) return 0;
+        if (action.startsWith("P:")) {
+            String posture = normalizePosture(action.substring(2));
+            if (player1) combat.setP1Posture(posture);
+            else combat.setP2Posture(posture);
+            return 0;
+        }
+        if (action.startsWith("M:")) {
+            applyMovement(combat, player1, action);
+            return 0;
+        }
+        return action.startsWith("A:") ? applyAttack(combat, player1, action) : 0;
+    }
+
+    private void applyMovement(CombatSessionEntity combat, boolean player1, String action) {
+        if (action == null || !action.startsWith("M:")) return;
+        String[] parts = action.split(":");
+        if (player1) {
+            combat.setP1X(combat.getP1X() + Integer.parseInt(parts[1]));
+            combat.setP1Y(combat.getP1Y() + Integer.parseInt(parts[2]));
+        } else {
+            combat.setP2X(combat.getP2X() + Integer.parseInt(parts[1]));
+            combat.setP2Y(combat.getP2Y() + Integer.parseInt(parts[2]));
+        }
+    }
+
+    private int applyAttack(CombatSessionEntity combat, boolean player1, String action) {
+        if (action == null || !action.startsWith("A:")) return 0;
+        int attackerX = player1 ? combat.getP1X() : combat.getP2X();
+        int attackerY = player1 ? combat.getP1Y() : combat.getP2Y();
+        int actualTargetX = player1 ? combat.getP2X() : combat.getP1X();
+        int actualTargetY = player1 ? combat.getP2Y() : combat.getP1Y();
+        if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > MAX_SHOT_DISTANCE
+            || isShotBlocked(attackerX, attackerY, actualTargetX, actualTargetY)) return 0;
+        String targetPosture = player1 ? combat.getP2Posture() : combat.getP1Posture();
+        if (ThreadLocalRandom.current().nextInt(100) >= hitChance(targetPosture)) return 0;
+        if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - SHOT_DAMAGE));
+        else combat.setP1Health(Math.max(0, combat.getP1Health() - SHOT_DAMAGE));
+        return SHOT_DAMAGE;
+    }
+
+    private int movementRange(String posture) {
+        return STANDING.equals(posture) ? 3 : CROUCHING.equals(posture) ? 2 : 1;
+    }
+
+    private void validateMovementPath(int startX, int startY, int dx, int dy) {
+        int x = startX;
+        int y = startY;
+        int horizontal = Integer.signum(dx);
+        for (int step = 0; step < Math.abs(dx); step++) {
+            x += horizontal;
+            if (isObstacle(x, y)) throw new RuntimeException("This cell is blocked by terrain");
+        }
+        int vertical = Integer.signum(dy);
+        for (int step = 0; step < Math.abs(dy); step++) {
+            y += vertical;
+            if (isObstacle(x, y)) throw new RuntimeException("This cell is blocked by terrain");
+        }
+    }
+
+    private int hitChance(String posture) {
+        return STANDING.equals(posture) ? 100 : CROUCHING.equals(posture) ? 75 : 50;
+    }
+
+    private String normalizePosture(String posture) {
+        if (posture == null) throw new RuntimeException("Missing posture");
+        String normalized = posture.toUpperCase();
+        if (!STANDING.equals(normalized) && !CROUCHING.equals(normalized) && !PRONE.equals(normalized)) {
+            throw new RuntimeException("Unknown posture");
+        }
+        return normalized;
+    }
+
+    private boolean isObstacle(int x, int y) {
+        return WATER.contains(cell(x, y)) || WALLS.contains(cell(x, y));
+    }
+
+    private boolean isShotBlocked(int fromX, int fromY, int toX, int toY) {
+        int steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
+        for (int step = 1; step < steps; step++) {
+            int x = fromX + Math.round((toX - fromX) * step / (float) steps);
+            int y = fromY + Math.round((toY - fromY) * step / (float) steps);
+            if (isObstacle(x, y)) return true;
+        }
+        return false;
+    }
+
+    private String cell(int x, int y) {
+        return x + ":" + y;
     }
 
     private void ensureInProgress(CombatSessionEntity combat) {
@@ -152,7 +347,9 @@ public class CombatService {
     }
 
     public CombatSessionEntity getActiveCombatForPlayer(String playerId) {
-        return combatRepository.findActiveCombatForPlayer(playerId, "IN_PROGRESS")
-                .orElse(null);
+        return combatRepository.findActiveCombatsForPlayer(playerId, "IN_PROGRESS")
+            .stream()
+            .findFirst()
+            .orElse(null);
     }
 }

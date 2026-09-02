@@ -1,15 +1,272 @@
  .combat-marker {
-	align-items: center;
-	border: 2px solid rgba(255, 255, 255, 0.9);
-	border-radius: 9999px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-	color: white;
-	display: flex;
-	font-size: 10px;
-	font-weight: 700;
-	height: 34px;
-	justify-content: center;
+	height: 50px;
+	position: absolute;
 	pointer-events: none;
-	width: 34px;
+	transform: translate(-50%, -50%);
+	width: 44px;
+}
+
+.combat-marker-you {
+	--character-color: #60a5fa;
+	--character-outline: #dbeafe;
+}
+
+.combat-marker-foe {
+	--character-color: #f87171;
+	--character-outline: #fee2e2;
+}
+
+.combat-cell-reachable {
+	background: rgba(45, 212, 191, 0.28) !important;
+	box-shadow: inset 0 0 0 2px rgba(153, 246, 228, 0.72);
+}
+
+.combat-cell-reachable:hover {
+	background: rgba(45, 212, 191, 0.5) !important;
+}
+
+.character-sprite {
+	bottom: 2px;
+	height: 34px;
+	left: 50%;
+	position: absolute;
+	transform: translateX(-50%);
+	width: 26px;
+}
+
+.character-head,
+.character-body,
+.character-arm,
+.character-leg {
+	background: var(--character-color);
+	border: 1px solid var(--character-outline);
+	position: absolute;
+}
+
+.character-head {
+	border-radius: 50%;
+	height: 10px;
+	left: 8px;
+	top: 0;
+	width: 10px;
+}
+
+.character-body {
+	border-radius: 7px 7px 4px 4px;
+	height: 16px;
+	left: 6px;
+	top: 10px;
+	width: 14px;
+}
+
+.character-arm {
+	border-radius: 4px;
+	height: 5px;
+	top: 12px;
+	width: 12px;
+}
+
+.character-arm-left {
+	left: -3px;
+	transform: rotate(24deg);
+}
+
+.character-arm-right {
+	right: -3px;
+	transform: rotate(-24deg);
+}
+
+.character-leg {
+	border-radius: 4px;
+	height: 12px;
+	top: 24px;
+	width: 5px;
+}
+
+.character-leg-left {
+	left: 7px;
+	transform: rotate(5deg);
+}
+
+.character-leg-right {
+	right: 7px;
+	transform: rotate(-5deg);
+}
+
+.character-label {
+	background: rgba(15, 23, 42, 0.9);
+	border: 1px solid var(--character-outline);
+	border-radius: 4px;
+	color: white;
+	font-size: 8px;
+	font-weight: 800;
+	left: 50%;
+	line-height: 12px;
+	padding: 0 3px;
+	position: absolute;
+	top: -11px;
+	transform: translateX(-50%);
+	white-space: nowrap;
+}
+
+.posture-crouching .character-sprite {
+	transform: translateX(-50%) scaleY(0.78);
+}
+
+.posture-prone .character-sprite {
+	height: 20px;
+	transform: translateX(-50%) translateY(7px) scale(0.9);
+	width: 38px;
+}
+
+.posture-prone .character-head {
+	height: 10px;
+	left: 1px;
+	top: 5px;
+	width: 10px;
+}
+
+.posture-prone .character-body {
+	height: 10px;
+	left: 9px;
+	top: 5px;
+	width: 19px;
+}
+
+.posture-prone .character-arm {
+	height: 4px;
+	top: 2px;
+	width: 13px;
+}
+
+.posture-prone .character-arm-left {
+	left: 10px;
+	transform: rotate(-12deg);
+}
+
+.posture-prone .character-arm-right {
+	right: 0;
+	transform: rotate(12deg);
+}
+
+.posture-prone .character-leg {
+	height: 5px;
+	top: 6px;
+	width: 11px;
+}
+
+.posture-prone .character-leg-left {
+	left: 26px;
+	transform: rotate(4deg);
+}
+
+.posture-prone .character-leg-right {
+	right: -1px;
+	transform: rotate(-4deg);
+}
+
+.damage-popup {
+	color: #fca5a5;
+	font-size: 1.15rem;
+	font-weight: 800;
+	position: absolute;
+	text-shadow: 0 2px 4px #450a0a;
+	transform: translate(-50%, -50%);
+	animation: damage-popup 700ms ease-out forwards;
+}
+
+.terrain-tile {
+	background: rgba(15, 23, 42, 0.16);
+	position: absolute;
+	inset: 0;
+	width: 100%;
+}
+
+.terrain-water {
+	background: radial-gradient(ellipse at 25% 30%, rgba(125, 211, 252, 0.5), transparent 38%), repeating-linear-gradient(135deg, rgba(14, 116, 144, 0.88) 0 8px, rgba(34, 211, 238, 0.45) 8px 12px);
+}
+
+.terrain-wall {
+	background: radial-gradient(ellipse at 65% 25%, rgba(214, 211, 209, 0.22), transparent 32%), linear-gradient(135deg, rgba(41, 37, 36, 0.95), rgba(120, 113, 108, 0.9) 50%, rgba(28, 25, 23, 0.96));
+}
+
+.terrain-rock {
+	background: radial-gradient(circle at 32% 25%, rgba(255, 255, 255, 0.62), transparent 16%), linear-gradient(145deg, #a8a29e, #57534e 62%, #292524);
+	border: 1px solid rgba(231, 229, 228, 0.56);
+	border-radius: 48% 42% 52% 38%;
+	box-shadow: 2px 3px 3px rgba(15, 23, 42, 0.52), inset -2px -2px 3px rgba(28, 25, 23, 0.38);
+	height: 30%;
+	position: absolute;
+	width: 34%;
+}
+
+.terrain-water .terrain-rock {
+	background: radial-gradient(circle at 30% 22%, rgba(224, 242, 254, 0.78), transparent 16%), linear-gradient(145deg, #bae6fd, #3b82a5 58%, #164e63);
+	border-color: rgba(186, 230, 253, 0.78);
+}
+
+.rock-one {
+	left: 13%;
+	top: 20%;
+}
+
+.rock-two {
+	height: 36%;
+	right: 15%;
+	top: 16%;
+	width: 40%;
+}
+
+.rock-three {
+	bottom: 15%;
+	height: 27%;
+	left: 34%;
+	width: 32%;
+}
+
+.combat-marker-active {
+	animation: combat-impact 700ms ease-out;
+}
+
+.combat-marker-moving {
+	transition: left 560ms cubic-bezier(0.2, 0.8, 0.2, 1), top 560ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	will-change: left, top;
+}
+
+.combat-shot {
+	background: rgba(254, 240, 138, 0.72);
+	border-radius: 9999px;
+	height: 2px;
+	margin-top: -1px;
+	opacity: 0.8;
+	position: absolute;
+	transform-origin: 0 50%;
+	width: var(--shot-distance);
+	transform: translateY(-50%) rotate(var(--shot-angle)) scaleX(0);
+	animation: combat-shot 420ms ease-out forwards;
+}
+
+@keyframes combat-impact {
+	0% { filter: brightness(1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+	25% { filter: brightness(1.8); box-shadow: 0 0 0 8px rgba(248, 113, 113, 0.45), 0 0 22px rgba(248, 113, 113, 0.9); }
+	55% { filter: brightness(1.2); box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2), 0 4px 12px rgba(0, 0, 0, 0.35); }
+	100% { filter: brightness(1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+}
+
+@keyframes combat-shot {
+	0% { opacity: 0; transform: translateY(-50%) rotate(var(--shot-angle)) scaleX(0); }
+	15% { opacity: 0.8; }
+	100% { opacity: 0.8; transform: translateY(-50%) rotate(var(--shot-angle)) scaleX(1); }
+}
+
+@keyframes damage-popup {
+	0% { opacity: 0; transform: translate(-50%, -20%); }
+	20% { opacity: 1; }
+	100% { opacity: 0; transform: translate(-50%, -150%); }
+}
+
+@keyframes fade-in {
+	from { opacity: 0; transform: translateY(4px); }
+	to { opacity: 1; transform: translateY(0); }
 }
 @import "tailwindcss";

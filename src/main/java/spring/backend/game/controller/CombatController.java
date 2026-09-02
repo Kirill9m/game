@@ -1,6 +1,7 @@
 package spring.backend.game.controller;
 
 import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.dto.CombatPlanRequest;
 import spring.backend.game.service.CombatService;
 
 import java.util.UUID;
@@ -48,8 +49,9 @@ public class CombatController {
     @PostMapping("/{combatId}/end-turn")
     public ResponseEntity<CombatSessionEntity> endTurn(
             @PathVariable UUID combatId,
-            @RequestParam String playerId) {
-        return ResponseEntity.ok(combatService.endTurn(combatId, playerId));
+            @RequestParam String playerId,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) CombatPlanRequest plan) {
+        return ResponseEntity.ok(combatService.endTurn(combatId, playerId, plan));
     }
 
     @PostMapping("/{combatId}/attack")

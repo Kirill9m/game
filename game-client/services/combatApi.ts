@@ -37,10 +37,10 @@ export const combatApi = {
     return res.json();
   },
 
-  async endTurn(combatId: string, playerId: string): Promise<CombatSession> {
+  async endTurn(combatId: string, playerId: string, actions: Array<Record<string, number | string>>): Promise<CombatSession> {
     const res = await fetch(
       `${API_URL}/api/v1/combat/${combatId}/end-turn?playerId=${encodeURIComponent(playerId)}`,
-      { method: "POST" },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actions }) },
     );
     if (!res.ok) throw new Error("Failed to end turn");
     return res.json();

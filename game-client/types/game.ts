@@ -24,12 +24,19 @@ export interface CombatSession {
   player2Id: string;
   currentTurnPlayerId: string;
   actionPoints: number;
+  p1Plan?: string | null;
+  p2Plan?: string | null;
+  p1Ready?: boolean;
+  p2Ready?: boolean;
   p1X: number;
   p1Y: number;
   p2X: number;
   p2Y: number;
   p1Health: number;
   p2Health: number;
+  p1Posture?: "STANDING" | "CROUCHING" | "PRONE";
+  p2Posture?: "STANDING" | "CROUCHING" | "PRONE";
   winnerId?: string | null;
   status: "IN_PROGRESS" | "FINISHED";
+  lastRoundActions?: string[];
 }
