@@ -2,16 +2,19 @@
 
 import { useState } from "react";
 import { QuestProgress } from "@/types/game";
+import { questApi } from "@/services/questApi";
 
 interface Props {
   quests: QuestProgress[];
+  playerId: string;
+  onQuestsChange: (quests: QuestProgress[]) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: "Активный",
-  AVAILABLE: "Доступен",
-  IN_PROGRESS: "В процессе",
-  COMPLETED: "Завершён",
+  ACTIVE: "Active",
+  AVAILABLE: "Available",
+  IN_PROGRESS: "In Progress",
+  COMPLETED: "Completed",
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -23,27 +26,53 @@ const STATUS_COLOR: Record<string, string> = {
 
 function formatTime(timestamp: string): string {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString("ru-RU", {
+  return date.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-export default function QuestPanel({ quests }: Props) {
+export default function QuestPanel({ quests, playerId, onQuestsChange }: Props) {
   const [expandedQuestId, setExpandedQuestId] = useState<string | null>(null);
+  const [claimingQuestId, setClaimingQuestId] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string>("");
+
+  const handleClaimReward = async (quest: QuestProgress) => {
+    try {
+      setClaimError("");
+      setClaimingQuestId(quest.questId);
+      const updated = await questApi.claimReward(playerId, quest.playerQuestId);
+      // Update the quest in the list
+      onQuestsChange(
+        quests.map((q) => (q.playerQuestId === updated.playerQuestId ? updated : q)),
+      );
+    } catch (err: unknown) {
+      setClaimError(
+        err instanceof Error ? err.message : "Failed to claim reward",
+      );
+    } finally {
+      setClaimingQuestId(null);
+    }
+  };
 
   if (quests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-32 text-gray-600 text-sm gap-2">
         <span className="text-2xl">📜</span>
-        <p>Квестов пока нет.</p>
-        <p className="text-xs text-gray-700">Поговорите с NPC, чтобы начать.</p>
+        <p>No quests yet.</p>
+        <p className="text-xs text-gray-700">Talk to NPCs to get started.</p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3 p-1">
+      {claimError && (
+        <div className="bg-red-950/80 border border-red-800 text-red-200 px-3 py-2 rounded-xl text-xs">
+          {claimError}
+        </div>
+      )}
+
       {quests.map((quest) => {
         const progress =
           quest.totalNpcsCount > 0
@@ -51,6 +80,7 @@ export default function QuestPanel({ quests }: Props) {
             : 0;
 
         const isExpanded = expandedQuestId === quest.questId;
+        const canClaim = quest.isCompleted && !quest.rewardClaimed;
 
         return (
           <div
@@ -74,7 +104,7 @@ export default function QuestPanel({ quests }: Props) {
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between text-[10px] text-gray-500">
                   <span>
-                    Поговорил с NPC: {quest.talkedNpcsCount} / {quest.totalNpcsCount}
+                    NPCs talked to: {quest.talkedNpcsCount} / {quest.totalNpcsCount}
                   </span>
                   <span>{progress}%</span>
                 </div>
@@ -91,11 +121,48 @@ export default function QuestPanel({ quests }: Props) {
             {quest.isCompleted && (
               <div className="flex items-center gap-1.5 text-xs text-green-400">
                 <span>✅</span>
-                <span>Квест выполнен! Награда получена.</span>
+                <span>Quest completed!</span>
               </div>
             )}
 
-            {/* Журнал квеста */}
+            {/* Reward info + claim button */}
+            {quest.isCompleted && (
+              <div className="flex flex-col gap-2 border-t border-gray-800 pt-2">
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <span className="bg-amber-900/40 border border-amber-800 text-amber-200 px-2 py-0.5 rounded-full">
+                    💰 {quest.rewardGold} gold
+                  </span>
+                  <span className="bg-blue-900/40 border border-blue-800 text-blue-200 px-2 py-0.5 rounded-full">
+                    ⭐ {quest.rewardExp} quest points
+                  </span>
+                  {quest.rewardItemName && (
+                    <span className="bg-purple-900/40 border border-purple-800 text-purple-200 px-2 py-0.5 rounded-full">
+                      🎒 {quest.rewardItemName}
+                    </span>
+                  )}
+                </div>
+
+                {canClaim ? (
+                  <button
+                    type="button"
+                    disabled={claimingQuestId === quest.questId}
+                    onClick={() => handleClaimReward(quest)}
+                    className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-xs font-bold py-2 px-3 rounded-lg transition"
+                  >
+                    {claimingQuestId === quest.questId
+                      ? "Claiming..."
+                      : "🎁 Claim Reward"}
+                  </button>
+                ) : quest.rewardClaimed ? (
+                  <div className="flex items-center gap-1.5 text-xs text-green-400">
+                    <span>🎁</span>
+                    <span>Reward claimed</span>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Quest journal */}
             {quest.logEntries.length > 0 && (
               <div className="mt-1 border-t border-gray-800 pt-2">
                 <button
@@ -105,7 +172,7 @@ export default function QuestPanel({ quests }: Props) {
                   }
                   className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-gray-200 transition"
                 >
-                  <span>📖 Журнал квеста</span>
+                  <span>📖 Quest Journal</span>
                   <span>{isExpanded ? "▲" : "▼"}</span>
                 </button>
 

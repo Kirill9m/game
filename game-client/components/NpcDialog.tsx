@@ -25,7 +25,7 @@ interface NpcInfo {
 interface NpcDialogProps {
   npc: NpcInfo;
   playerId: string;
-  activeQuestId?: string; // ID текущего квеста для отслеживания прогресса
+  activeQuestId?: string; // ID of the current quest to track progress
   onClose: () => void;
 }
 
@@ -39,7 +39,7 @@ export default function NpcDialog({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
 
-  // 1. Старт диалога при открытии окна
+  // 1. Start the dialogue when the window opens
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -56,7 +56,7 @@ export default function NpcDialog({
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(
-            err instanceof Error ? err.message : "Не удалось начать диалог",
+            err instanceof Error ? err.message : "Failed to start dialogue",
           );
           setLoading(false);
         }
@@ -67,7 +67,7 @@ export default function NpcDialog({
     };
   }, [npc.id, playerId]);
 
-  // 2. Обработчик клика по варианту ответа
+  // 2. Handle a dialogue choice click
   const handleSelectChoice = async (choiceId: string) => {
     try {
       setLoading(true);
@@ -78,13 +78,13 @@ export default function NpcDialog({
       );
 
       if (!nextNode) {
-        // Диалог завершён (204 No Content от сервера)
+        // Dialogue finished (204 No Content from the server)
         onClose();
       } else {
         setCurrentNode(nextNode);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Ошибка при выборе ответа");
+      setError(err instanceof Error ? err.message : "Failed to submit choice");
     } finally {
       setLoading(false);
     }
@@ -93,11 +93,11 @@ export default function NpcDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <section className="w-full max-w-md rounded-xl border border-amber-700 bg-gray-900 p-5 shadow-2xl">
-        {/* Шапка */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-wider text-amber-400">
-              Диалог
+              Dialogue
             </p>
             <h2 className="mt-1 text-xl font-bold text-white">{npc.name}</h2>
           </div>
@@ -105,25 +105,25 @@ export default function NpcDialog({
             type="button"
             onClick={onClose}
             className="rounded border border-gray-600 px-2 py-1 text-gray-300 hover:bg-gray-800"
-            aria-label="Закрыть диалог"
+            aria-label="Close dialogue"
           >
             ✕
           </button>
         </div>
 
-        {/* Ошибка */}
+        {/* Error */}
         {error && (
           <p className="mt-4 rounded border border-red-800 bg-red-950/60 p-3 text-sm text-red-200">
             {error}
           </p>
         )}
 
-        {/* Загрузка */}
+        {/* Loading */}
         {loading && !currentNode && !error && (
-          <p className="mt-5 text-sm text-gray-400">Слушаем персонажа...</p>
+          <p className="mt-5 text-sm text-gray-400">Listening to the character...</p>
         )}
 
-        {/* Текущая реплика NPC и варианты ответов */}
+        {/* Current NPC line and answer options */}
         {currentNode && (
           <>
             <p className="mt-5 leading-6 text-gray-200">{currentNode.text}</p>

@@ -35,10 +35,27 @@ export interface WorldZone {
   radius: number;
 }
 
+export interface PlayerStats {
+  questPoints: number;
+  health: number;
+  level: number;
+  strength: number;
+  energy: number;
+  agility: number;
+  stamina: number;
+}
+
 export interface PlayerStateResponse {
   positionX: number;
   positionY: number;
   gold?: number;
+  questPoints?: number;
+  health?: number;
+  level?: number;
+  strength?: number;
+  energy?: number;
+  agility?: number;
+  stamina?: number;
   playersOnTile: PlayerInfo[];
   npcs: NpcInfo[];
 }
@@ -93,6 +110,7 @@ export interface QuestLogEntry {
 }
 
 export interface QuestProgress {
+  playerQuestId: string;
   questId: string;
   questCode: string;
   title: string;
@@ -100,5 +118,9 @@ export interface QuestProgress {
   talkedNpcsCount: number;
   totalNpcsCount: number;
   isCompleted: boolean;
+  rewardClaimed: boolean;
+  rewardGold: number;
+  rewardExp: number;
+  rewardItemName: string | null;
   logEntries: QuestLogEntry[];
 }

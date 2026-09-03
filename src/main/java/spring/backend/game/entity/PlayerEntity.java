@@ -37,8 +37,40 @@ public class PlayerEntity {
     @Builder.Default
     private int gold = 0;
 
+    @Column(name = "quest_points", columnDefinition = "integer default 0")
+    @Builder.Default
+    private int questPoints = 0;
+
+    @Column(name = "health", columnDefinition = "integer default 100")
+    @Builder.Default
+    private int health = 100;
+
+    @Column(name = "level", columnDefinition = "integer default 1")
+    @Builder.Default
+    private int level = 1;
+
+    @Column(name = "strength", columnDefinition = "integer default 5")
+    @Builder.Default
+    private int strength = 5;
+
+    @Column(name = "energy", columnDefinition = "integer default 10")
+    @Builder.Default
+    private int energy = 10;
+
+    @Column(name = "agility", columnDefinition = "integer default 5")
+    @Builder.Default
+    private int agility = 5;
+
+    @Column(name = "stamina", columnDefinition = "integer default 10")
+    @Builder.Default
+    private int stamina = 10;
+
     public void addGold(int amount) {
         this.gold += amount;
+    }
+
+    public void addQuestPoints(int amount) {
+        this.questPoints += amount;
     }
 
     public int getMoney() {

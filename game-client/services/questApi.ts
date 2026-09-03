@@ -20,4 +20,13 @@ export const questApi = {
     if (!res.ok) throw new Error("Failed to start quest");
     return res.json();
   },
+
+  async claimReward(playerId: string, playerQuestId: string): Promise<QuestProgress> {
+    const res = await fetch(
+      `${API_URL}/api/quests/claim?playerId=${encodeURIComponent(playerId)}&playerQuestId=${encodeURIComponent(playerQuestId)}`,
+      { method: "POST" }
+    );
+    if (!res.ok) throw new Error("Failed to claim reward");
+    return res.json();
+  },
 };

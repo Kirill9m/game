@@ -14,6 +14,13 @@ public class PlayerLoginResponse {
     private int positionX;
     private int positionY;
     private int gold;
+    private int questPoints;
+    private int health;
+    private int level;
+    private int strength;
+    private int energy;
+    private int agility;
+    private int stamina;
     private List<PlayerInfo> playersOnTile;
     private List<NpcInfoResponse> npcs;
 }

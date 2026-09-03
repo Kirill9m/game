@@ -22,6 +22,7 @@ import spring.backend.game.dto.QuestSystem.DialogueChoiceDto;
 import spring.backend.game.dto.QuestSystem.DialogueNodeDto;
 import spring.backend.game.dto.QuestSystem.QuestLogEntryDto;
 import spring.backend.game.dto.QuestSystem.QuestProgressDto;
+import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.QuestSystem.DialogueChoiceEntity;
 import spring.backend.game.entity.QuestSystem.DialogueNodeEntity;
@@ -30,6 +31,7 @@ import spring.backend.game.entity.QuestSystem.PlayerQuestEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
 import spring.backend.game.entity.QuestSystem.QuestLogEntryEntity;
 import spring.backend.game.entity.QuestSystem.QuestStatus;
+import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.PlayerInventoryRepository;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.DialogueChoiceRepository;
@@ -54,15 +56,16 @@ public class QuestService {
     private final PlayerRepository playerRepository;
     private final InventoryService inventoryService;
     private final PlayerInventoryRepository inventoryRepository;
+    private final ItemRepository itemRepository;
     private final PlatformTransactionManager transactionManager;
     private final QuestLogEntryRepository questLogEntryRepository;
 
-    // --- ЛОГИКА ДИАЛОГОВ ---
+    // --- DIALOGUE LOGIC ---
 
     @Transactional
     public DialogueNodeDto startDialogue(UUID npcId) {
         DialogueNodeEntity startNode = dialogueNodeRepository.findByNpcIdAndIsStartTrue(npcId)
-                .orElseThrow(() -> new EntityNotFoundException("У NPC нет начального диалога"));
+                .orElseThrow(() -> new EntityNotFoundException("NPC has no starting dialogue"));
 
         return mapToDto(startNode);
     }
@@ -70,16 +73,16 @@ public class QuestService {
     @Transactional
     public DialogueNodeDto selectChoice(String playerId, UUID choiceId, UUID activeQuestId) {
         DialogueChoiceEntity choice = dialogueChoiceRepository.findById(choiceId)
-                .orElseThrow(() -> new EntityNotFoundException("Вариант ответа не найден"));
+                .orElseThrow(() -> new EntityNotFoundException("Dialogue choice not found"));
 
-        // Если этот выбор завершает диалог
+        // If this choice ends the dialogue
         if (choice.getNextNode() == null) {
             try {
-                // Загружаем NPC в текущей транзакции
+                // Load NPC within current transaction
                 NpcEntity npc = (NpcEntity) Hibernate.unproxy(choice.getNode().getNpc());
 
-                // Обновляем прогресс квеста в отдельной транзакции,
-                // чтобы ошибки начисления награды не ломали ответ диалога
+                // Update quest progress in a separate transaction
+                // so reward errors don't break the dialogue response
                 TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
                 txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
                 txTemplate.execute(status -> {
@@ -87,33 +90,33 @@ public class QuestService {
                     return null;
                 });
             } catch (Exception e) {
-                log.error("Ошибка при обновлении прогресса квеста для игрока {}: {}", playerId, e.getMessage(), e);
+                log.error("Failed to update quest progress for player {}: {}", playerId, e.getMessage(), e);
             }
-            return null; // Сигнал клиенту, что диалог закрыт
+            return null; // Signal to the client that the dialogue is closed
         }
 
         return mapToDto(choice.getNextNode());
     }
 
     /**
-     * Проверяет, завершён ли квест, в котором участвует NPC.
-     * Если квест завершён — диалог с NPC больше недоступен.
+     * Checks whether the quest involving this NPC is completed.
+     * If the quest is completed — the NPC no longer talks.
      */
     @Transactional
     public boolean isNpcTalkBlocked(String playerId, UUID npcId) {
-        // Если квест MEET_VILLAGERS уже завершён — все NPC "молчат"
+        // If the MEET_VILLAGERS quest is completed — all NPCs "go silent"
         boolean meetVillagersCompleted = playerQuestRepository.findByPlayerId(playerId).stream()
                 .anyMatch(pq -> "MEET_VILLAGERS".equalsIgnoreCase(pq.getQuest().getCode())
                         && pq.getStatus() == QuestStatus.COMPLETED);
         return meetVillagersCompleted;
     }
 
-    // --- ЛОГИКА КВЕСТОВ ---
+    // --- QUEST LOGIC ---
 
     @Transactional
     public QuestProgressDto startQuest(String playerId, String questCode) {
         QuestEntity quest = questRepository.findByCode(questCode)
-                .orElseThrow(() -> new EntityNotFoundException("Квест не найден: " + questCode));
+                .orElseThrow(() -> new EntityNotFoundException("Quest not found: " + questCode));
 
         PlayerQuestEntity playerQuest = playerQuestRepository.findByPlayerIdAndQuestId(playerId, quest.getId())
                 .orElseGet(() -> PlayerQuestEntity.builder()
@@ -125,8 +128,8 @@ public class QuestService {
 
         playerQuestRepository.save(playerQuest);
 
-        // Записываем в журнал квеста
-        addLogEntry(playerQuest, "Квест «" + quest.getTitle() + "» принят. Поговорите с жителями деревни.");
+        // Record in the quest log
+        addLogEntry(playerQuest, "Quest \"" + quest.getTitle() + "\" accepted. Talk to the villagers.");
 
         return mapToQuestProgressDto(playerQuest);
     }
@@ -138,6 +141,39 @@ public class QuestService {
                 .toList();
     }
 
+    /**
+     * Claim the reward for a completed quest.
+     */
+    @Transactional
+    public QuestProgressDto claimReward(String playerId, UUID playerQuestId) {
+        PlayerQuestEntity playerQuest = playerQuestRepository.findById(playerQuestId)
+                .orElseThrow(() -> new EntityNotFoundException("Quest not found"));
+
+        if (!playerQuest.getPlayerId().equals(playerId)) {
+            throw new IllegalArgumentException("This quest does not belong to the player");
+        }
+
+        if (playerQuest.getStatus() != QuestStatus.COMPLETED) {
+            throw new IllegalArgumentException("Quest is not completed yet");
+        }
+
+        if (playerQuest.isRewardClaimed()) {
+            throw new IllegalArgumentException("Reward has already been claimed");
+        }
+
+        // Grant the reward
+        grantReward(playerId, playerQuest.getQuest());
+
+        // Mark the reward as claimed
+        playerQuest.setRewardClaimed(true);
+        playerQuestRepository.save(playerQuest);
+
+        // Record in the log
+        addLogEntry(playerQuest, "\uD83C\uDF81 Reward for quest \"" + playerQuest.getQuest().getTitle() + "\" claimed!");
+
+        return mapToQuestProgressDto(playerQuest);
+    }
+
     @Transactional
     public void recordNpcTalk(String playerId, UUID questId, NpcEntity npc) {
         PlayerQuestEntity playerQuest = null;
@@ -146,7 +182,7 @@ public class QuestService {
         }
 
         if (playerQuest == null) {
-            // Ищем активный квест игрока
+            // Look for an active quest
             List<PlayerQuestEntity> activeQuests = playerQuestRepository.findByPlayerIdAndStatus(playerId, QuestStatus.IN_PROGRESS);
             if (!activeQuests.isEmpty()) {
                 playerQuest = activeQuests.stream()
@@ -155,7 +191,7 @@ public class QuestService {
                         .findFirst()
                         .orElse(activeQuests.get(0));
             } else {
-                // Если активного квеста нет, проверяем, не завершен ли уже квест MEET_VILLAGERS
+                // If there is no active quest, check if MEET_VILLAGERS is already completed
                 boolean alreadyCompleted = playerQuestRepository.findByPlayerId(playerId).stream()
                         .anyMatch(pq -> "MEET_VILLAGERS".equalsIgnoreCase(pq.getQuest().getCode())
                                 && pq.getStatus() == QuestStatus.COMPLETED);
@@ -169,13 +205,13 @@ public class QuestService {
                                 .status(QuestStatus.IN_PROGRESS)
                                 .talkedNpcs(new HashSet<>())
                                 .build());
-                        addLogEntry(playerQuest, "Квест «" + defaultQuest.getTitle() + "» принят автоматически.");
+                        addLogEntry(playerQuest, "Quest \"" + defaultQuest.getTitle() + "\" accepted automatically.");
                     }
                 }
             }
         }
 
-        // Если квест активен и ещё не завершён
+        // If the quest is active and not completed yet
         if (playerQuest != null && playerQuest.getStatus() == QuestStatus.IN_PROGRESS) {
             Set<UUID> requiredIds = playerQuest.getQuest().getRequiredNpcs().stream()
                     .map(NpcEntity::getId)
@@ -188,19 +224,18 @@ public class QuestService {
                 playerQuest.getTalkedNpcs().add(npc);
 
                 if (!alreadyTalked) {
-                    // Записываем в журнал
-                    addLogEntry(playerQuest, "Поговорили с персонажем: " + npc.getName());
+                    // Record in the log
+                    addLogEntry(playerQuest, "Talked to: " + npc.getName());
                 }
 
                 Set<UUID> talkedIds = playerQuest.getTalkedNpcs().stream()
                         .map(NpcEntity::getId)
                         .collect(Collectors.toSet());
 
-                // ПРОВЕРКА ЗАВЕРШЕНИЯ: поговорил со всеми требуемыми NPC?
+                // COMPLETION CHECK: talked to all required NPCs?
                 if (talkedIds.containsAll(requiredIds)) {
                     playerQuest.setStatus(QuestStatus.COMPLETED);
-                    addLogEntry(playerQuest, "✅ Квест «" + playerQuest.getQuest().getTitle() + "» выполнен! Награда получена.");
-                    grantReward(playerId, playerQuest.getQuest());
+                    addLogEntry(playerQuest, "✅ Quest \"" + playerQuest.getQuest().getTitle() + "\" completed! Claim your reward in the quest journal.");
                 }
 
                 playerQuestRepository.save(playerQuest);
@@ -222,11 +257,21 @@ public class QuestService {
             return;
         }
 
-        // 1. Начисляем деньги игроку
+        // 1. Grant gold
         player.addGold(quest.getRewardGold());
+
+        // 2. Grant quest points and level up experience
+        player.addQuestPoints(quest.getRewardExp());
+        // Simple level formula: every 100 quest points = 1 level
+        int newLevel = Math.max(1, player.getQuestPoints() / 100 + 1);
+        if (newLevel > player.getLevel()) {
+            player.setLevel(newLevel);
+            log.info("Player {} leveled up to level {}", playerId, newLevel);
+        }
+
         playerRepository.save(player);
 
-        // 2. Начисляем награду: пистолет, нож или карту (по умолчанию выбирается из тех, которых нет, либо случайный)
+        // 3. Grant the reward item (default: from missing items or random)
         String itemCode = quest.getRewardItemCode();
         if (itemCode == null || itemCode.isBlank() || "RANDOM".equalsIgnoreCase(itemCode)) {
             List<String> missingItems = REWARD_ITEMS.stream()
@@ -242,11 +287,11 @@ public class QuestService {
         try {
             inventoryService.addItem(playerId, itemCode);
         } catch (Exception e) {
-            log.error("Не удалось выдать предмет {} игроку {}: {}", itemCode, playerId, e.getMessage(), e);
+            log.error("Failed to grant item {} to player {}: {}", itemCode, playerId, e.getMessage(), e);
         }
 
-        System.out.println("Игрок " + playerId + " получил награду за квест '" + quest.getTitle() + "': "
-                + quest.getRewardGold() + " золота, предмет " + itemCode + " и " + quest.getRewardExp() + " опыта!");
+        System.out.println("Player " + playerId + " claimed the reward for quest '" + quest.getTitle() + "': "
+                + quest.getRewardGold() + " gold, item " + itemCode + " and " + quest.getRewardExp() + " quest points!");
     }
 
     private DialogueNodeDto mapToDto(DialogueNodeEntity node) {
@@ -262,7 +307,19 @@ public class QuestService {
                 .map(e -> new QuestLogEntryDto(e.getMessage(), e.getTimestamp()))
                 .toList();
 
+        // Resolve the reward item name from the DB
+        String rewardItemName = null;
+        String rewardItemCode = pq.getQuest().getRewardItemCode();
+        if (rewardItemCode != null && !rewardItemCode.isBlank() && !"RANDOM".equalsIgnoreCase(rewardItemCode)) {
+            rewardItemName = itemRepository.findByCodeIgnoreCase(rewardItemCode)
+                    .map(ItemEntity::getName)
+                    .orElse(rewardItemCode);
+        } else if ("RANDOM".equalsIgnoreCase(rewardItemCode)) {
+            rewardItemName = "Random item";
+        }
+
         return new QuestProgressDto(
+                pq.getId(),
                 pq.getQuest().getId(),
                 pq.getQuest().getCode(),
                 pq.getQuest().getTitle(),
@@ -270,6 +327,10 @@ public class QuestService {
                 pq.getTalkedNpcs().size(),
                 pq.getQuest().getRequiredNpcs().size(),
                 pq.getStatus() == QuestStatus.COMPLETED,
+                pq.isRewardClaimed(),
+                pq.getQuest().getRewardGold(),
+                pq.getQuest().getRewardExp(),
+                rewardItemName,
                 logs);
     }
 }

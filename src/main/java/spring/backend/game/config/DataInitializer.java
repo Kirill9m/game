@@ -49,15 +49,15 @@ public class DataInitializer implements CommandLineRunner {
             return;
         }
 
-        // 1. Создаем 3-х NPC
+        // 1. Create 3 NPCs
         NpcEntity elder = npcRepository
-                .save(NpcEntity.builder().code("ELDER").name("Старейшина").positionX(0).positionY(0).build());
+                .save(NpcEntity.builder().code("ELDER").name("Elder").positionX(0).positionY(0).build());
         NpcEntity blacksmith = npcRepository
-                .save(NpcEntity.builder().code("SMITH").name("Кузнец").positionX(1).positionY(1).build());
+                .save(NpcEntity.builder().code("SMITH").name("Blacksmith").positionX(1).positionY(1).build());
         NpcEntity merchant = npcRepository
-                .save(NpcEntity.builder().code("MERCHANT").name("Торговец").positionX(2).positionY(2).build());
+                .save(NpcEntity.builder().code("MERCHANT").name("Merchant").positionX(2).positionY(2).build());
 
-        // 2. Создаем квест "Познакомиться со всеми"
+        // 2. Create the "Meet the Villagers" quest
         seedMeetVillagersQuest();
 
         seedElderDialogue(elder);
@@ -73,9 +73,57 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         try {
+            jdbcTemplate.execute("ALTER TABLE player_quests ADD COLUMN IF NOT EXISTS reward_claimed BOOLEAN NOT NULL DEFAULT FALSE");
+        } catch (Exception e) {
+            log.warn("Database schema update info (player_quests.reward_claimed): {}", e.getMessage());
+        }
+
+        try {
             jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS gold INTEGER NOT NULL DEFAULT 0");
         } catch (Exception e) {
             log.warn("Database schema update info (players.gold): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS quest_points INTEGER NOT NULL DEFAULT 0");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.quest_points): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS health INTEGER NOT NULL DEFAULT 100");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.health): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.level): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS strength INTEGER NOT NULL DEFAULT 5");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.strength): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS energy INTEGER NOT NULL DEFAULT 10");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.energy): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS agility INTEGER NOT NULL DEFAULT 5");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.agility): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS stamina INTEGER NOT NULL DEFAULT 10");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.stamina): {}", e.getMessage());
         }
 
         try {
@@ -126,9 +174,10 @@ public class DataInitializer implements CommandLineRunner {
         if (elder != null && blacksmith != null && merchant != null) {
             questRepository.save(QuestEntity.builder()
                     .code("MEET_VILLAGERS")
-                    .title("Знакомство с деревней")
+                    .title("Meet the Villagers")
                     .rewardExp(100)
                     .rewardGold(50)
+                    .rewardItemCode("RANDOM")
                     .requiredNpcs(Set.of(elder, blacksmith, merchant))
                     .build());
         }
@@ -141,13 +190,13 @@ public class DataInitializer implements CommandLineRunner {
 
 		DialogueNodeEntity elderStart = DialogueNodeEntity.builder()
 				.npc(elder)
-				.text("Приветствую тебя в нашей деревне, путник! Будь осторожен за пределами безопасной зоны.")
+				.text("Greetings, traveler! Welcome to our village. Be careful beyond the safe zone.")
 				.isStart(true)
 				.build();
 
 		DialogueChoiceEntity elderChoiceClose = DialogueChoiceEntity.builder()
 				.node(elderStart)
-				.text("Спасибо за совет, старейшина.")
+				.text("Thanks for the advice, Elder.")
 				.nextNode(null)
 				.build();
 
@@ -162,14 +211,14 @@ public class DataInitializer implements CommandLineRunner {
 
         DialogueNodeEntity smithStart = DialogueNodeEntity.builder()
                 .npc(blacksmith)
-                .text("Здорово, путник! Я кузнец этого города.")
+                .text("Hey there, traveler! I'm the blacksmith of this town.")
                 .isStart(true)
                 .build();
 
         DialogueChoiceEntity smithChoiceClose = DialogueChoiceEntity.builder()
                 .node(smithStart)
-                .text("Приятно познакомиться, я пойду дальше.")
-                .nextNode(null) // Завершает диалог -> засчитает разговор
+                .text("Nice to meet you, I'll be on my way.")
+                .nextNode(null) // Ends the dialogue -> counts the talk
                 .build();
 
         smithStart.setChoices(List.of(smithChoiceClose));
@@ -183,13 +232,13 @@ public class DataInitializer implements CommandLineRunner {
 
 		DialogueNodeEntity merchantStart = DialogueNodeEntity.builder()
 				.npc(merchant)
-				.text("Добро пожаловать в мою лавку! Скоро у меня появятся отличные товары на продажу.")
+				.text("Welcome to my shop! Great goods will be available for sale soon.")
 				.isStart(true)
 				.build();
 
 		DialogueChoiceEntity merchantChoiceClose = DialogueChoiceEntity.builder()
 				.node(merchantStart)
-				.text("Хорошо, я загляну позже.")
+				.text("Alright, I'll check back later.")
 				.nextNode(null)
 				.build();
 

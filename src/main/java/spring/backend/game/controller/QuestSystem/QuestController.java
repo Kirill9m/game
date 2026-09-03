@@ -36,4 +36,12 @@ public class QuestController {
     public ResponseEntity<List<QuestProgressDto>> getQuestProgress(@RequestParam String playerId) {
         return ResponseEntity.ok(questService.getPlayerQuests(playerId));
     }
+
+    /** Получить награду за завершённый квест */
+    @PostMapping("/claim")
+    public ResponseEntity<QuestProgressDto> claimReward(
+            @RequestParam String playerId,
+            @RequestParam UUID playerQuestId) {
+        return ResponseEntity.ok(questService.claimReward(playerId, playerQuestId));
+    }
 }

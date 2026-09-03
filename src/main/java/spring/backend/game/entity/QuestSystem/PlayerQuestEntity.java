@@ -46,6 +46,10 @@ public class PlayerQuestEntity {
     @Column(nullable = false)
     private QuestStatus status; // IN_PROGRESS, COMPLETED
 
+    @Column(name = "reward_claimed", nullable = false)
+    @Builder.Default
+    private boolean rewardClaimed = false;
+
     @ManyToMany
     @JoinTable(name = "player_talked_npcs", joinColumns = @JoinColumn(name = "player_quest_id"), inverseJoinColumns = @JoinColumn(name = "npc_id"))
     private Set<NpcEntity> talkedNpcs = new HashSet<>();

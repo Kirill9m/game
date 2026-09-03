@@ -8,6 +8,7 @@ import {
   EnemyType,
   InventoryItem,
   PlayerInfo,
+  PlayerStats,
   QuestProgress,
   WorldZone,
 } from "@/types/game";
@@ -36,6 +37,15 @@ export default function GameMapPage() {
   const [selectedEnemyCode, setSelectedEnemyCode] = useState("WOLF");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [gold, setGold] = useState<number>(0);
+  const [stats, setStats] = useState<PlayerStats>({
+    questPoints: 0,
+    health: 100,
+    level: 1,
+    strength: 5,
+    energy: 10,
+    agility: 5,
+    stamina: 10,
+  });
   const [npcs, setNpcs] = useState<NpcInfo[]>([]);
   const [activeNpc, setActiveNpc] = useState<NpcInfo | null>(null);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
@@ -134,6 +144,15 @@ export default function GameMapPage() {
       if (typeof player.gold === "number") {
         setGold(player.gold);
       }
+      setStats({
+        questPoints: player.questPoints ?? 0,
+        health: player.health ?? 100,
+        level: player.level ?? 1,
+        strength: player.strength ?? 5,
+        energy: player.energy ?? 10,
+        agility: player.agility ?? 5,
+        stamina: player.stamina ?? 10,
+      });
     } catch {
       setError("Failed to load player data from backend");
     }
@@ -173,6 +192,15 @@ export default function GameMapPage() {
         if (typeof player.gold === "number") {
           setGold(player.gold);
         }
+        setStats({
+          questPoints: player.questPoints ?? 0,
+          health: player.health ?? 100,
+          level: player.level ?? 1,
+          strength: player.strength ?? 5,
+          energy: player.energy ?? 10,
+          agility: player.agility ?? 5,
+          stamina: player.stamina ?? 10,
+        });
       } catch {}
     };
 
@@ -215,7 +243,7 @@ export default function GameMapPage() {
     { id: "inventory", icon: "🎒", label: "Inventory" },
     { id: "territory", icon: "🐺", label: "Hunt" },
     { id: "players", icon: "👥", label: "Players" },
-    { id: "quests", icon: "📜", label: "Квесты" },
+    { id: "quests", icon: "📜", label: "Quests" },
   ] as const;
 
   return (
@@ -261,12 +289,21 @@ export default function GameMapPage() {
                 <span className="font-bold text-blue-300 text-sm block">
                   {playerName} {isGuestMode && "(Guest)"}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-gray-500 text-[10px] block uppercase font-medium">
                     {combatSession ? "In Combat" : "In World"}
                   </span>
                   <span className="text-amber-400 text-[11px] font-semibold">
                     💰 {gold}
+                  </span>
+                  <span className="text-green-400 text-[11px] font-semibold">
+                    ❤️ {stats.health}
+                  </span>
+                  <span className="text-blue-400 text-[11px] font-semibold">
+                    Lv.{stats.level}
+                  </span>
+                  <span className="text-purple-400 text-[11px] font-semibold">
+                    ⭐ {stats.questPoints} QP
                   </span>
                 </div>
               </div>
@@ -398,7 +435,28 @@ export default function GameMapPage() {
                     )}
 
                     {activeTab === "quests" && (
-                      <QuestPanel quests={quests} />
+                      <QuestPanel
+                        quests={quests}
+                        playerId={playerId}
+                        onQuestsChange={(updatedQuests) => {
+                          setQuests(updatedQuests);
+                          if (playerId) {
+                            playerApi.getInventory(playerId).then(setInventory).catch(() => {});
+                            playerApi.getPlayerState(playerId).then((state) => {
+                              if (typeof state?.gold === "number") setGold(state.gold);
+                              setStats({
+                                questPoints: state.questPoints ?? 0,
+                                health: state.health ?? 100,
+                                level: state.level ?? 1,
+                                strength: state.strength ?? 5,
+                                energy: state.energy ?? 10,
+                                agility: state.agility ?? 5,
+                                stamina: state.stamina ?? 10,
+                              });
+                            }).catch(() => {});
+                          }
+                        }}
+                      />
                     )}
                   </div>
                 </div>

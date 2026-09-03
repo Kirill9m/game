@@ -77,6 +77,13 @@ public class PlayerController {
                 .positionX(player.getPositionX())
                 .positionY(player.getPositionY())
                 .gold(player.getGold())
+                .questPoints(player.getQuestPoints())
+                .health(player.getHealth())
+                .level(player.getLevel())
+                .strength(player.getStrength())
+                .energy(player.getEnergy())
+                .agility(player.getAgility())
+                .stamina(player.getStamina())
                 .playersOnTile(playersOnTile)
                 .npcs(npcs)
                 .build();

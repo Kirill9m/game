@@ -23,8 +23,8 @@ export const npcApi = {
 
     const res = await fetch(`${API_URL}/api/dialogues/start/${npcId}${query}`);
     if (res.status === 403)
-      throw new Error("Этот персонаж больше не хочет разговаривать с вами...");
-    if (!res.ok) throw new Error("Не удалось загрузить диалог");
+      throw new Error("This character no longer wants to talk to you...");
+    if (!res.ok) throw new Error("Failed to load dialogue");
     return res.json();
   },
 
@@ -44,8 +44,8 @@ export const npcApi = {
       },
     );
 
-    if (res.status === 204) return null; // Диалог окончен
-    if (!res.ok) throw new Error("Ошибка отправки выбора");
+    if (res.status === 204) return null; // Dialogue finished
+    if (!res.ok) throw new Error("Failed to submit choice");
     return res.json();
   },
 };

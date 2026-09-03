@@ -6,6 +6,7 @@ import java.util.UUID;
 import spring.backend.game.entity.QuestSystem.QuestStatus;
 
 public record QuestProgressDto(
+        UUID playerQuestId,
         UUID questId,
         String questCode,
         String title,
@@ -13,5 +14,9 @@ public record QuestProgressDto(
         int talkedNpcsCount,
         int totalNpcsCount,
         boolean isCompleted,
+        boolean rewardClaimed,
+        int rewardGold,
+        int rewardExp,
+        String rewardItemName,
         List<QuestLogEntryDto> logEntries) {
 }
