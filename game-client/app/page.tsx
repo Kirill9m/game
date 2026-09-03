@@ -21,6 +21,7 @@ import InventoryPanel from "@/components/InventoryPanel";
 import NpcDialog from "@/components/NpcDialog";
 import { NpcInfo } from "@/types/npc";
 import QuestPanel from "@/components/QuestPanel";
+import AdminPanel from "@/components/AdminPanel";
 import { questApi } from "@/services/questApi";
 
 export default function GameMapPage() {
@@ -51,9 +52,10 @@ export default function GameMapPage() {
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [quests, setQuests] = useState<QuestProgress[]>([]);
+  const [playerRole, setPlayerRole] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "inventory" | "territory" | "players" | "quests"
+    "inventory" | "territory" | "players" | "quests" | "admin"
   >("inventory");
 
   const sessionUser = session?.user as
@@ -139,6 +141,7 @@ export default function GameMapPage() {
         setPlayersOnTile(player.playersOnTile);
       }
       setNpcs(player.npcs || []);
+      setPlayerRole(player.role ?? null);
       setInventory(playerInventory);
       setQuests(playerQuests);
       if (typeof player.gold === "number") {
@@ -189,6 +192,7 @@ export default function GameMapPage() {
         setPositionY(player.positionY);
         setPlayersOnTile(player.playersOnTile || []);
         setNpcs(player.npcs || []);
+        setPlayerRole(player.role ?? null);
         if (typeof player.gold === "number") {
           setGold(player.gold);
         }
@@ -244,6 +248,10 @@ export default function GameMapPage() {
     { id: "territory", icon: "🐺", label: "Hunt" },
     { id: "players", icon: "👥", label: "Players" },
     { id: "quests", icon: "📜", label: "Quests" },
+    // The admin panel is only visible to players with the ADMIN role
+    ...(playerRole === "ADMIN"
+      ? [{ id: "admin" as const, icon: "🛠️", label: "Admin" }]
+      : []),
   ] as const;
 
   return (
@@ -457,6 +465,10 @@ export default function GameMapPage() {
                           }
                         }}
                       />
+                    )}
+
+                    {activeTab === "admin" && playerRole === "ADMIN" && (
+                      <AdminPanel playerId={playerId} />
                     )}
                   </div>
                 </div>

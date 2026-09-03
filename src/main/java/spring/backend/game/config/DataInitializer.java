@@ -19,6 +19,7 @@ import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
+import spring.backend.game.service.AdminService;
 
 @Slf4j
 @Component
@@ -30,11 +31,13 @@ public class DataInitializer implements CommandLineRunner {
     private final DialogueNodeRepository dialogueNodeRepository;
     private final ItemRepository itemRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final AdminService adminService;
 
     @Override
     public void run(String... args) {
         fixDatabaseSchema();
         seedData();
+        adminService.promoteConfiguredAdmins();
     }
 
     @Transactional
@@ -124,6 +127,12 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS stamina INTEGER NOT NULL DEFAULT 10");
         } catch (Exception e) {
             log.warn("Database schema update info (players.stamina): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'PLAYER'");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.role): {}", e.getMessage());
         }
 
         try {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { QuestProgress } from "@/types/game";
+import { useEffect, useState } from "react";
+import { AvailableQuest, QuestProgress } from "@/types/game";
 import { questApi } from "@/services/questApi";
 
 interface Props {
@@ -36,6 +36,9 @@ export default function QuestPanel({ quests, playerId, onQuestsChange }: Props) 
   const [expandedQuestId, setExpandedQuestId] = useState<string | null>(null);
   const [claimingQuestId, setClaimingQuestId] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string>("");
+  const [available, setAvailable] = useState<AvailableQuest[]>([]);
+  const [acceptingCode, setAcceptingCode] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string>("");
 
   const handleClaimReward = async (quest: QuestProgress) => {
     try {
@@ -55,7 +58,32 @@ export default function QuestPanel({ quests, playerId, onQuestsChange }: Props) 
     }
   };
 
-  if (quests.length === 0) {
+  // Reload the list of available quests whenever the player's quests change
+  useEffect(() => {
+    if (!playerId) return;
+    questApi
+      .getAvailableQuests(playerId)
+      .then(setAvailable)
+      .catch(() => setAvailable([]));
+  }, [playerId, quests]);
+
+  const handleAcceptQuest = async (code: string) => {
+    try {
+      setAcceptError("");
+      setAcceptingCode(code);
+      await questApi.startQuest(playerId, code);
+      const updated = await questApi.getPlayerQuests(playerId);
+      onQuestsChange(updated);
+    } catch (err: unknown) {
+      setAcceptError(
+        err instanceof Error ? err.message : "Failed to accept quest",
+      );
+    } finally {
+      setAcceptingCode(null);
+    }
+  };
+
+  if (quests.length === 0 && available.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-32 text-gray-600 text-sm gap-2">
         <span className="text-2xl">📜</span>
@@ -70,6 +98,46 @@ export default function QuestPanel({ quests, playerId, onQuestsChange }: Props) 
       {claimError && (
         <div className="bg-red-950/80 border border-red-800 text-red-200 px-3 py-2 rounded-xl text-xs">
           {claimError}
+        </div>
+      )}
+
+      {acceptError && (
+        <div className="bg-red-950/80 border border-red-800 text-red-200 px-3 py-2 rounded-xl text-xs">
+          {acceptError}
+        </div>
+      )}
+
+      {available.length > 0 && (
+        <div className="bg-gray-900 border border-blue-900/60 rounded-xl p-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-blue-300 mb-2">
+            📌 Available quests
+          </div>
+          <div className="flex flex-col gap-2">
+            {available.map((quest) => (
+              <div
+                key={quest.code}
+                className="flex items-center justify-between gap-2 bg-gray-800/50 rounded-lg px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">
+                    {quest.title}
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    💰 {quest.rewardGold} gold · ⭐ {quest.rewardExp} exp · 🎯{" "}
+                    {quest.requiredNpcCount} NPC(s)
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={acceptingCode === quest.code}
+                  onClick={() => handleAcceptQuest(quest.code)}
+                  className="shrink-0 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                >
+                  {acceptingCode === quest.code ? "..." : "Accept"}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

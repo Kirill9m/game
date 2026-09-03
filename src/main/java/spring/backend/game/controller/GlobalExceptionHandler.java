@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import spring.backend.game.service.AdminService.AdminAccessDeniedException;
 
 @Slf4j
 @RestControllerAdvice
@@ -26,6 +27,13 @@ public class GlobalExceptionHandler {
         log.warn("Bad request: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("error", e.getMessage(), "status", 400));
+    }
+
+    @ExceptionHandler(AdminAccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AdminAccessDeniedException e) {
+        log.warn("Access denied: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", e.getMessage(), "status", 403));
     }
 
     @ExceptionHandler(Exception.class)

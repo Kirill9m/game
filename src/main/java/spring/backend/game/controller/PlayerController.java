@@ -10,6 +10,7 @@ import spring.backend.game.dto.NpcInfoResponse;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
+import spring.backend.game.service.AdminService;
 import spring.backend.game.service.InventoryService;
 import spring.backend.game.dto.InventoryItemResponse;
 
@@ -24,6 +25,7 @@ public class PlayerController {
     private final PlayerRepository playerRepository;
     private final InventoryService inventoryService;
     private final NpcRepository npcRepository;
+    private final AdminService adminService;
 
     @PostMapping("/login")
     public ResponseEntity<PlayerLoginResponse> loginOrCreate(@RequestBody PlayerLoginRequest request) {
@@ -34,8 +36,15 @@ public class PlayerController {
             newPlayer.setAvatarUrl(request.getAvatarUrl());
             newPlayer.setPositionX(0);
             newPlayer.setPositionY(0);
+            newPlayer.setRole(PlayerEntity.ROLE_PLAYER);
             return playerRepository.save(newPlayer);
         });
+
+        // Grant the ADMIN role to players listed in the configuration
+        adminService.promoteConfiguredAdmins();
+        if (playerRepository.findById(player.getId()).isPresent()) {
+            player = playerRepository.findById(player.getId()).get();
+        }
 
         inventoryService.ensureStarterItems(player.getId());
 
@@ -84,6 +93,7 @@ public class PlayerController {
                 .energy(player.getEnergy())
                 .agility(player.getAgility())
                 .stamina(player.getStamina())
+                .role(player.getRole())
                 .playersOnTile(playersOnTile)
                 .npcs(npcs)
                 .build();

@@ -21,6 +21,7 @@ public class PlayerLoginResponse {
     private int energy;
     private int agility;
     private int stamina;
+    private String role;
     private List<PlayerInfo> playersOnTile;
     private List<NpcInfoResponse> npcs;
 }

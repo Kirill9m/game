@@ -65,6 +65,13 @@ public class PlayerEntity {
     @Builder.Default
     private int stamina = 10;
 
+    @Column(name = "role", nullable = false, columnDefinition = "varchar(20) default 'PLAYER'")
+    @Builder.Default
+    private String role = ROLE_PLAYER;
+
+    public static final String ROLE_PLAYER = "PLAYER";
+    public static final String ROLE_ADMIN = "ADMIN";
+
     public void addGold(int amount) {
         this.gold += amount;
     }

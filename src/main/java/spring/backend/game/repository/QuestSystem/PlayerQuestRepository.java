@@ -15,4 +15,6 @@ public interface PlayerQuestRepository extends JpaRepository<PlayerQuestEntity, 
     List<PlayerQuestEntity> findByPlayerId(String playerId);
 
     List<PlayerQuestEntity> findByPlayerIdAndStatus(String playerId, QuestStatus status);
+
+    List<PlayerQuestEntity> findByQuestId(UUID questId);
 }

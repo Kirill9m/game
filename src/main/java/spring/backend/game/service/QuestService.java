@@ -18,6 +18,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import spring.backend.game.dto.QuestSystem.AvailableQuestDto;
 import spring.backend.game.dto.QuestSystem.DialogueChoiceDto;
 import spring.backend.game.dto.QuestSystem.DialogueNodeDto;
 import spring.backend.game.dto.QuestSystem.QuestLogEntryDto;
@@ -99,16 +100,45 @@ public class QuestService {
     }
 
     /**
-     * Checks whether the quest involving this NPC is completed.
-     * If the quest is completed — the NPC no longer talks.
+     * Checks whether the NPC refuses to talk to this player.
+     * An NPC goes silent only when every quest that requires this NPC is
+     * already completed for the player. NPCs required by an active (in
+     * progress) quest — or not tied to any of the player's quests — are
+     * always open for a chat.
      */
     @Transactional
     public boolean isNpcTalkBlocked(String playerId, UUID npcId) {
-        // If the MEET_VILLAGERS quest is completed — all NPCs "go silent"
-        boolean meetVillagersCompleted = playerQuestRepository.findByPlayerId(playerId).stream()
-                .anyMatch(pq -> "MEET_VILLAGERS".equalsIgnoreCase(pq.getQuest().getCode())
-                        && pq.getStatus() == QuestStatus.COMPLETED);
-        return meetVillagersCompleted;
+        List<PlayerQuestEntity> relatedQuests = playerQuestRepository.findByPlayerId(playerId).stream()
+                .filter(pq -> pq.getQuest().getRequiredNpcs().stream()
+                        .anyMatch(n -> n.getId().equals(npcId)))
+                .toList();
+
+        if (relatedQuests.isEmpty()) {
+            return false;
+        }
+        return relatedQuests.stream().allMatch(pq -> pq.getStatus() == QuestStatus.COMPLETED);
+    }
+
+    /**
+     * Quests the player has not started yet — shown in the quest panel so
+     * players can accept quests created from the admin panel.
+     */
+    @Transactional
+    public List<AvailableQuestDto> getAvailableQuests(String playerId) {
+        Set<UUID> startedQuestIds = playerQuestRepository.findByPlayerId(playerId).stream()
+                .map(pq -> pq.getQuest().getId())
+                .collect(Collectors.toSet());
+
+        return questRepository.findAll().stream()
+                .filter(quest -> !startedQuestIds.contains(quest.getId()))
+                .map(quest -> new AvailableQuestDto(
+                        quest.getId(),
+                        quest.getCode(),
+                        quest.getTitle(),
+                        quest.getRewardGold(),
+                        quest.getRewardExp(),
+                        quest.getRequiredNpcs() == null ? 0 : quest.getRequiredNpcs().size()))
+                .toList();
     }
 
     // --- QUEST LOGIC ---

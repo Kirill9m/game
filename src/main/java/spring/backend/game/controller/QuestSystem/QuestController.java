@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
+import spring.backend.game.dto.QuestSystem.AvailableQuestDto;
 import spring.backend.game.dto.QuestSystem.QuestProgressDto;
 import spring.backend.game.service.QuestService;
 
@@ -35,6 +36,12 @@ public class QuestController {
     @GetMapping("/progress")
     public ResponseEntity<List<QuestProgressDto>> getQuestProgress(@RequestParam String playerId) {
         return ResponseEntity.ok(questService.getPlayerQuests(playerId));
+    }
+
+    /** Quests the player can accept (not started yet) */
+    @GetMapping("/available")
+    public ResponseEntity<List<AvailableQuestDto>> getAvailableQuests(@RequestParam String playerId) {
+        return ResponseEntity.ok(questService.getAvailableQuests(playerId));
     }
 
     /** Получить награду за завершённый квест */

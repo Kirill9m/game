@@ -1,4 +1,4 @@
-import { QuestProgress } from "@/types/game";
+import { AvailableQuest, QuestProgress } from "@/types/game";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -9,6 +9,15 @@ export const questApi = {
       { cache: "no-store" }
     );
     if (!res.ok) throw new Error("Failed to fetch quests");
+    return res.json();
+  },
+
+  async getAvailableQuests(playerId: string): Promise<AvailableQuest[]> {
+    const res = await fetch(
+      `${API_URL}/api/quests/available?playerId=${encodeURIComponent(playerId)}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) throw new Error("Failed to fetch available quests");
     return res.json();
   },
 

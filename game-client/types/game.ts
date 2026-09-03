@@ -48,6 +48,7 @@ export interface PlayerStats {
 export interface PlayerStateResponse {
   positionX: number;
   positionY: number;
+  role?: string;
   gold?: number;
   questPoints?: number;
   health?: number;
@@ -107,6 +108,15 @@ export interface EnemyType {
 export interface QuestLogEntry {
   message: string;
   timestamp: string;
+}
+
+export interface AvailableQuest {
+  questId: string;
+  code: string;
+  title: string;
+  rewardGold: number;
+  rewardExp: number;
+  requiredNpcCount: number;
 }
 
 export interface QuestProgress {
