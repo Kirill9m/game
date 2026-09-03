@@ -96,6 +96,13 @@ public class QuestService {
     }
 
     @Transactional
+    public List<QuestProgressDto> getPlayerQuests(String playerId) {
+        return playerQuestRepository.findByPlayerId(playerId).stream()
+                .map(this::mapToQuestProgressDto)
+                .toList();
+    }
+
+    @Transactional
     public void recordNpcTalk(String playerId, UUID questId, NpcEntity npc) {
         PlayerQuestEntity playerQuest = null;
         if (questId != null) {
@@ -169,7 +176,7 @@ public class QuestService {
         String itemCode = quest.getRewardItemCode();
         if (itemCode == null || itemCode.isBlank() || "RANDOM".equalsIgnoreCase(itemCode)) {
             List<String> missingItems = REWARD_ITEMS.stream()
-                    .filter(code -> !inventoryRepository.existsByPlayerIdAndItemCodeIgnoreCase(playerId, code))
+                    .filter(code -> !inventoryRepository.existsByPlayerAndItemCode(playerId, code))
                     .toList();
             if (!missingItems.isEmpty()) {
                 itemCode = missingItems.get(new Random().nextInt(missingItems.size()));

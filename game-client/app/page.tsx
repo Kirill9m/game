@@ -8,6 +8,7 @@ import {
   EnemyType,
   InventoryItem,
   PlayerInfo,
+  QuestProgress,
   WorldZone,
 } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
@@ -18,6 +19,8 @@ import { combatApi } from "@/services/combatApi";
 import InventoryPanel from "@/components/InventoryPanel";
 import NpcDialog from "@/components/NpcDialog";
 import { NpcInfo } from "@/types/npc";
+import QuestPanel from "@/components/QuestPanel";
+import { questApi } from "@/services/questApi";
 
 export default function GameMapPage() {
   const { data: session, status } = useSession();
@@ -37,9 +40,10 @@ export default function GameMapPage() {
   const [activeNpc, setActiveNpc] = useState<NpcInfo | null>(null);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [quests, setQuests] = useState<QuestProgress[]>([]);
 
   const [activeTab, setActiveTab] = useState<
-    "inventory" | "territory" | "players"
+    "inventory" | "territory" | "players" | "quests"
   >("inventory");
 
   const sessionUser = session?.user as
@@ -209,6 +213,7 @@ export default function GameMapPage() {
     { id: "inventory", icon: "🎒", label: "Inventory" },
     { id: "territory", icon: "🐺", label: "Hunt" },
     { id: "players", icon: "👥", label: "Players" },
+    { id: "quests", icon: "📜", label: "Квесты" },
   ] as const;
 
   return (
@@ -388,6 +393,10 @@ export default function GameMapPage() {
                         npcs={npcs}
                         onTalk={setActiveNpc}
                       />
+                    )}
+
+                    {activeTab === "quests" && (
+                      <QuestPanel quests={quests} />
                     )}
                   </div>
                 </div>

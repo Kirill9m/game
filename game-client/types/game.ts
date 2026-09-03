@@ -86,3 +86,13 @@ export interface EnemyType {
   actionPoints: number;
   movementRange: number;
 }
+
+export interface QuestProgress {
+  questId: string;
+  questCode: string;
+  title: string;
+  status: "ACTIVE" | "AVAILABLE" | "IN_PROGRESS" | "COMPLETED";
+  talkedNpcsCount: number;
+  totalNpcsCount: number;
+  isCompleted: boolean;
+}

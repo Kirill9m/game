@@ -51,11 +51,11 @@ public class DataInitializer implements CommandLineRunner {
 
         // 1. Создаем 3-х NPC
         NpcEntity elder = npcRepository
-                .save(NpcEntity.builder().code("ELDER").name("Старейшина").positionX(10).positionY(10).build());
+                .save(NpcEntity.builder().code("ELDER").name("Старейшина").positionX(0).positionY(0).build());
         NpcEntity blacksmith = npcRepository
-                .save(NpcEntity.builder().code("SMITH").name("Кузнец").positionX(20).positionY(15).build());
+                .save(NpcEntity.builder().code("SMITH").name("Кузнец").positionX(1).positionY(1).build());
         NpcEntity merchant = npcRepository
-                .save(NpcEntity.builder().code("MERCHANT").name("Торговец").positionX(5).positionY(30).build());
+                .save(NpcEntity.builder().code("MERCHANT").name("Торговец").positionX(2).positionY(2).build());
 
         // 2. Создаем квест "Познакомиться со всеми"
         seedMeetVillagersQuest();
