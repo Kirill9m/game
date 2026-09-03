@@ -138,11 +138,13 @@ public class InventoryService {
         }
 
         var existingItems = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId);
-        int targetX = gridXFor(itemCode);
-        int targetY = gridYFor(itemCode);
+        final int initialTargetX = gridXFor(itemCode);
+        final int initialTargetY = gridYFor(itemCode);
+        int targetX = initialTargetX;
+        int targetY = initialTargetY;
 
         boolean occupied = existingItems.stream().anyMatch(other ->
-                rectanglesOverlap(targetX, targetY, item.getWidth(), item.getHeight(),
+                rectanglesOverlap(initialTargetX, initialTargetY, item.getWidth(), item.getHeight(),
                         other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
 
         if (occupied) {

@@ -7,7 +7,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -46,6 +50,7 @@ public class QuestService {
     private final PlayerRepository playerRepository;
     private final InventoryService inventoryService;
     private final PlayerInventoryRepository inventoryRepository;
+    private final PlatformTransactionManager transactionManager;
 
     // --- ЛОГИКА ДИАЛОГОВ ---
 
@@ -65,8 +70,17 @@ public class QuestService {
         // Если этот выбор завершает диалог
         if (choice.getNextNode() == null) {
             try {
-                // Фиксируем, что поговорили с NPC для текущего квеста
-                recordNpcTalk(playerId, activeQuestId, choice.getNode().getNpc());
+                // Загружаем NPC в текущей транзакции
+                NpcEntity npc = (NpcEntity) Hibernate.unproxy(choice.getNode().getNpc());
+
+                // Обновляем прогресс квеста в отдельной транзакции,
+                // чтобы ошибки начисления награды не ломали ответ диалога
+                TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+                txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                txTemplate.execute(status -> {
+                    recordNpcTalk(playerId, activeQuestId, npc);
+                    return null;
+                });
             } catch (Exception e) {
                 log.error("Ошибка при обновлении прогресса квеста для игрока {}: {}", playerId, e.getMessage(), e);
             }
@@ -185,7 +199,11 @@ public class QuestService {
             }
         }
 
-        inventoryService.addItem(playerId, itemCode);
+        try {
+            inventoryService.addItem(playerId, itemCode);
+        } catch (Exception e) {
+            log.error("Не удалось выдать предмет {} игроку {}: {}", itemCode, playerId, e.getMessage(), e);
+        }
 
         System.out.println("Игрок " + playerId + " получил награду за квест '" + quest.getTitle() + "': "
                 + quest.getRewardGold() + " золота, предмет " + itemCode + " и " + quest.getRewardExp() + " опыта!");
