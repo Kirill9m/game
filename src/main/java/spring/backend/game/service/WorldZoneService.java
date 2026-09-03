@@ -26,6 +26,21 @@ public class WorldZoneService {
         return distanceX * distanceX + distanceY * distanceY <= (long) zone.getRadius() * zone.getRadius();
     }
 
+    /**
+     * True when the cell is outside the safe zone. When no safe zone is
+     * configured at all, every cell is considered outside (dangerous).
+     */
+    public boolean isOutsideSafeZone(int x, int y) {
+        return worldZoneRepository.findFirstByOrderByIdAsc()
+                .map(zone -> {
+                    long distanceX = (long) x - zone.getCenterX();
+                    long distanceY = (long) y - zone.getCenterY();
+                    return distanceX * distanceX + distanceY * distanceY
+                            > (long) zone.getRadius() * zone.getRadius();
+                })
+                .orElse(true);
+    }
+
     private WorldZoneResponse toResponse(WorldZoneEntity zone) {
         return WorldZoneResponse.builder()
                 .name(zone.getName())

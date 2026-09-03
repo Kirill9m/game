@@ -26,6 +26,31 @@ export interface MoveResponse {
   playersOnTile: PlayerInfo[];
   npcs: NpcInfo[];
   cooldown: string;
+  /** Player health after the move (radiation may have reduced it). */
+  health?: number;
+  /** Health lost to radiation on this step (0 when the cell is clean). */
+  radiationDamage?: number;
+  /** True when an enemy ambush triggered and a combat session was started. */
+  combatStarted?: boolean;
+  combatId?: string | null;
+  enemyName?: string | null;
+}
+
+export interface WorldCell {
+  positionX: number;
+  positionY: number;
+  blocked: boolean;
+  radiation: number;
+  ambushChance: number;
+  enemyName: string | null;
+}
+
+export interface WorldBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  size: number;
 }
 
 export interface WorldZone {

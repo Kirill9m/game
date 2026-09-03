@@ -1,5 +1,7 @@
 package spring.backend.game.controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -7,7 +9,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
+import spring.backend.game.dto.WorldBoundsResponse;
+import spring.backend.game.dto.WorldCellResponse;
 import spring.backend.game.dto.WorldZoneResponse;
+import spring.backend.game.service.WorldCellService;
+import spring.backend.game.service.WorldConstants;
 import spring.backend.game.service.WorldZoneService;
 
 @RestController
@@ -16,9 +22,25 @@ import spring.backend.game.service.WorldZoneService;
 @CrossOrigin(origins = {"http://localhost:3000", "http://192.168.8.96:3000"})
 public class WorldController {
     private final WorldZoneService worldZoneService;
+    private final WorldCellService worldCellService;
 
     @GetMapping("/safe-zone")
     public ResponseEntity<WorldZoneResponse> getSafeZone() {
         return ResponseEntity.ok(worldZoneService.getSafeZone());
+    }
+
+    /** Public per-cell danger settings (blocked / radiation / ambush) for the world map. */
+    @GetMapping("/cells")
+    public ResponseEntity<List<WorldCellResponse>> getWorldCells() {
+        return ResponseEntity.ok(worldCellService.getPublicCells());
+    }
+
+    /** World geometry (1000x1000, extends into negative coordinates). */
+    @GetMapping("/bounds")
+    public ResponseEntity<WorldBoundsResponse> getWorldBounds() {
+        return ResponseEntity.ok(new WorldBoundsResponse(
+                WorldConstants.WORLD_MIN, WorldConstants.WORLD_MAX,
+                WorldConstants.WORLD_MIN, WorldConstants.WORLD_MAX,
+                WorldConstants.WORLD_SIZE));
     }
 }

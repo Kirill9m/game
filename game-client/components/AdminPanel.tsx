@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adminApi } from "@/services/adminApi";
+import { playerApi } from "@/services/playerApi";
 import type {
   AdminDialogueNode,
   AdminEnemyType,
@@ -9,13 +10,15 @@ import type {
   AdminNpc,
   AdminPlayer,
   AdminQuest,
+  AdminWorldCell,
 } from "@/types/admin";
+import type { WorldZone } from "@/types/game";
 
 interface Props {
   playerId: string;
 }
 
-type Section = "quests" | "dialogues" | "items" | "enemies" | "players";
+type Section = "quests" | "dialogues" | "items" | "enemies" | "players" | "world";
 
 interface ChoiceDraft {
   text: string;
@@ -41,6 +44,8 @@ export default function AdminPanel({ playerId }: Props) {
   const [quests, setQuests] = useState<AdminQuest[]>([]);
   const [items, setItems] = useState<AdminItem[]>([]);
   const [enemies, setEnemies] = useState<AdminEnemyType[]>([]);
+  const [worldCells, setWorldCells] = useState<AdminWorldCell[]>([]);
+  const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [selectedNpcId, setSelectedNpcId] = useState<string>("");
   const [nodesData, setNodesData] = useState<{ npcId: string; nodes: AdminDialogueNode[] }>({
     npcId: "",
@@ -85,6 +90,13 @@ export default function AdminPanel({ playerId }: Props) {
   const [enemyMove, setEnemyMove] = useState(2);
   const [enemyDifficulty, setEnemyDifficulty] = useState(1);
 
+  // --- World cell form state ---
+  const [selectedCell, setSelectedCell] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [cellBlocked, setCellBlocked] = useState(false);
+  const [cellRadiation, setCellRadiation] = useState(0);
+  const [cellAmbush, setCellAmbush] = useState(0);
+  const [cellEnemyId, setCellEnemyId] = useState<string>("");
+
   // --- Player edit state ---
   const [editingPlayerId, setEditingPlayerId] = useState<string>("");
   const [playerDraft, setPlayerDraft] = useState({
@@ -116,18 +128,20 @@ export default function AdminPanel({ playerId }: Props) {
   );
 
   const loadAll = useCallback(async () => {
-    const [p, n, q, i, e] = await Promise.all([
+    const [p, n, q, i, e, w] = await Promise.all([
       adminApi.getPlayers(playerId),
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
       adminApi.getEnemyTypes(playerId),
+      adminApi.getWorldCells(playerId),
     ]);
     setPlayers(p);
     setNpcs(n);
     setQuests(q);
     setItems(i);
     setEnemies(e);
+    setWorldCells(w);
     setSelectedNpcId((current) => current || n[0]?.id || "");
   }, [playerId]);
 
@@ -140,14 +154,18 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
       adminApi.getEnemyTypes(playerId),
+      adminApi.getWorldCells(playerId),
+      playerApi.getSafeZone().catch(() => null),
     ])
-      .then(([p, n, q, i, e]) => {
+      .then(([p, n, q, i, e, w, zone]) => {
         if (cancelled) return;
         setPlayers(p);
         setNpcs(n);
         setQuests(q);
         setItems(i);
         setEnemies(e);
+        setWorldCells(w);
+        setSafeZone(zone);
         setSelectedNpcId((current) => current || n[0]?.id || "");
       })
       .catch((err: unknown) => {
@@ -369,6 +387,45 @@ export default function AdminPanel({ playerId }: Props) {
       setNotice("Enemy type deleted");
     });
 
+  // --- World cell handlers ---
+
+  const handleSelectCell = (x: number, y: number) => {
+    setSelectedCell({ x, y });
+    const existing = worldCells.find(
+      (c) => c.positionX === x && c.positionY === y,
+    );
+    setCellBlocked(existing?.blocked ?? false);
+    setCellRadiation(existing?.radiation ?? 0);
+    setCellAmbush(existing?.ambushChance ?? 0);
+    setCellEnemyId(existing?.enemyType?.id ?? "");
+  };
+
+  const handleSaveCell = () =>
+    run(async () => {
+      if (cellEnemyId && cellAmbush <= 0) {
+        throw new Error("Ambush chance must be above 0 when an enemy is selected");
+      }
+      const saved = await adminApi.upsertWorldCell(playerId, {
+        positionX: selectedCell.x,
+        positionY: selectedCell.y,
+        blocked: cellBlocked,
+        radiation: cellRadiation,
+        ambushChance: cellEnemyId ? cellAmbush : 0,
+        enemyTypeId: cellEnemyId || null,
+      });
+      await loadAll();
+      setNotice(
+        `Cell [${saved.positionX}:${saved.positionY}] saved`,
+      );
+    });
+
+  const handleDeleteCell = (cellId: string) =>
+    run(async () => {
+      await adminApi.deleteWorldCell(playerId, cellId);
+      await loadAll();
+      setNotice("Cell settings removed");
+    });
+
   const handleStartEditPlayer = (player: AdminPlayer) => {
     setEditingPlayerId(player.id);
     setPlayerDraft({
@@ -416,6 +473,7 @@ export default function AdminPanel({ playerId }: Props) {
                 { id: "dialogues", icon: "💬", label: "Dialogues" },
                 { id: "items", icon: "⚔️", label: "Items" },
                 { id: "enemies", icon: "👹", label: "Enemies" },
+                { id: "world", icon: "🗺️", label: "World Cells" },
                 { id: "players", icon: "🛡️", label: "Players" },
               ] as const
             ).map((tab) => (
@@ -842,6 +900,243 @@ export default function AdminPanel({ playerId }: Props) {
               No NPCs exist yet — create one in the Quest Generator tab.
             </div>
           )}
+        </div>
+      )}
+
+      {/* ================= WORLD CELLS ================= */}
+      {section === "world" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              🗺️ World Cells — click a cell to configure it
+            </span>
+            <p className="text-[11px] text-gray-500">
+              🚫 blocked (cannot enter) · ☢️ radiation (HP loss per step) · 👹 ambush
+              (chance + enemy, only outside the blue safe zone).
+            </p>
+            <div className="flex justify-center">
+              <div className="aspect-square w-full max-w-[320px] overflow-hidden rounded-md border border-gray-700 bg-gray-950 p-1">
+                <div className="grid h-full w-full grid-cols-10 grid-rows-10 gap-px bg-gray-950">
+                  {Array.from({ length: 100 }, (_, index) => {
+                    const x = index % 10;
+                    const y = 9 - Math.floor(index / 10);
+                    const settings = worldCells.find(
+                      (c) => c.positionX === x && c.positionY === y,
+                    );
+                    const inSafeZone =
+                      safeZone &&
+                      (() => {
+                        const dx = x - safeZone.centerX;
+                        const dy = y - safeZone.centerY;
+                        return (
+                          dx * dx + dy * dy <=
+                          safeZone.radius * safeZone.radius
+                        );
+                      })();
+                    const isSelected =
+                      selectedCell.x === x && selectedCell.y === y;
+                    let bg = inSafeZone ? "bg-blue-800/50" : "bg-red-900/40";
+                    let icon = "";
+                    if (settings?.blocked) {
+                      bg = "bg-gray-800";
+                      icon = "🚫";
+                    } else if ((settings?.radiation ?? 0) > 0) {
+                      bg = "bg-lime-800/70";
+                      icon = "☢️";
+                    }
+                    if ((settings?.ambushChance ?? 0) > 0 && !settings?.blocked) {
+                      bg = icon ? bg : "bg-orange-800/70";
+                      icon = icon || "👹";
+                    }
+                    return (
+                      <button
+                        key={`${x}:${y}`}
+                        type="button"
+                        onClick={() => handleSelectCell(x, y)}
+                        className={`relative flex items-center justify-center transition ${bg} ${
+                          isSelected
+                            ? "ring-2 ring-blue-400 z-10"
+                            : "hover:ring-1 hover:ring-gray-400"
+                        }`}
+                        title={`[${x}/${y}]${
+                          settings
+                            ? ` — ${settings.blocked ? "blocked" : ""}${
+                                settings.radiation > 0
+                                  ? ` ☢${settings.radiation}`
+                                  : ""
+                              }${
+                                settings.ambushChance > 0
+                                  ? ` 👹${settings.ambushChance}%`
+                                  : ""
+                              }`
+                            : ""
+                        }`}
+                      >
+                        {icon && (
+                          <span className="select-none text-[9px] leading-none">
+                            {icon}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Cell settings form */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              ⚙️ Settings for cell [{selectedCell.x}:{selectedCell.y}]
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Position X</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={9}
+                  className={inputClass}
+                  value={selectedCell.x}
+                  onChange={(e) =>
+                    setSelectedCell((c) => ({
+                      ...c,
+                      x: Math.max(0, Math.min(9, Number(e.target.value) || 0)),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Position Y</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={9}
+                  className={inputClass}
+                  value={selectedCell.y}
+                  onChange={(e) =>
+                    setSelectedCell((c) => ({
+                      ...c,
+                      y: Math.max(0, Math.min(9, Number(e.target.value) || 0)),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-[11px] text-gray-300">
+              <input
+                type="checkbox"
+                checked={cellBlocked}
+                onChange={(e) => setCellBlocked(e.target.checked)}
+                className="accent-red-500"
+              />
+              🚫 Blocked — players cannot step onto this cell
+            </label>
+            <div>
+              <label className={labelClass}>☢️ Radiation (HP lost per step)</label>
+              <input
+                type="number"
+                min={0}
+                className={inputClass}
+                value={cellRadiation}
+                onChange={(e) => setCellRadiation(Number(e.target.value) || 0)}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>
+                👹 Ambush chance (%) — only outside the safe zone
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className={inputClass}
+                value={cellAmbush}
+                onChange={(e) =>
+                  setCellAmbush(
+                    Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Ambush enemy</label>
+              <select
+                className={inputClass}
+                value={cellEnemyId}
+                onChange={(e) => setCellEnemyId(e.target.value)}
+              >
+                <option value="">— No ambush —</option>
+                {enemies.map((enemy) => (
+                  <option key={enemy.id} value={enemy.id}>
+                    {enemy.name} ({enemy.maxHealth} HP / {enemy.damage} DMG)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="button" disabled={busy} onClick={handleSaveCell} className={primaryBtn}>
+              💾 Save Cell Settings
+            </button>
+          </div>
+
+          {/* Configured cells list */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              📍 Configured Cells ({worldCells.length})
+            </span>
+            {worldCells.map((cell) => (
+              <div
+                key={cell.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 font-mono">
+                    [{cell.positionX}:{cell.positionY}]
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {cell.blocked && (
+                      <span className="bg-gray-800 border border-gray-600 text-gray-200 px-2 py-0.5 rounded-full text-[10px]">
+                        🚫 blocked
+                      </span>
+                    )}
+                    {cell.radiation > 0 && (
+                      <span className="bg-lime-900/40 border border-lime-700 text-lime-200 px-2 py-0.5 rounded-full text-[10px]">
+                        ☢️ {cell.radiation} HP
+                      </span>
+                    )}
+                    {cell.ambushChance > 0 && (
+                      <span className="bg-orange-900/40 border border-orange-700 text-orange-200 px-2 py-0.5 rounded-full text-[10px]">
+                        👹 {cell.ambushChance}% {cell.enemyType?.name ?? ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCell(cell.positionX, cell.positionY)}
+                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[10px] font-bold px-2 py-1 rounded-lg transition"
+                  >
+                    ✎ Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleDeleteCell(cell.id)}
+                    className={dangerBtn}
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))}
+            {worldCells.length === 0 && (
+              <div className="text-center text-gray-600 text-xs py-4">
+                No cells configured yet — click a cell on the grid above.
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -29,6 +29,14 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", e.getMessage(), "status", 400));
     }
 
+    /** Movement conflicts: cooldown active, blocked cell, etc. */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(IllegalStateException e) {
+        log.warn("Conflict: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", e.getMessage(), "status", 409));
+    }
+
     @ExceptionHandler(AdminAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AdminAccessDeniedException e) {
         log.warn("Access denied: {}", e.getMessage());

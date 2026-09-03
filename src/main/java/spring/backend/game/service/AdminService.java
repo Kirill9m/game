@@ -110,6 +110,7 @@ public class AdminService {
     private final EnemyTypeRepository enemyTypeRepository;
     private final PlayerInventoryRepository playerInventoryRepository;
     private final CombatRepository combatRepository;
+    private final WorldCellService worldCellService;
     private final Random random = new Random();
 
     // --- ACCESS CONTROL ---
@@ -692,6 +693,9 @@ public class AdminService {
         // Detach combat sessions that reference this enemy type, then remove them
         List<CombatSessionEntity> sessions = combatRepository.findByEnemyTypeId(enemyId);
         combatRepository.deleteAll(sessions);
+
+        // Detach world cells that use this enemy type for ambushes
+        worldCellService.detachEnemyType(enemyId);
 
         enemyTypeRepository.delete(enemy);
         log.info("Admin deleted enemy type {} ({} combat sessions removed)", enemy.getCode(), sessions.size());

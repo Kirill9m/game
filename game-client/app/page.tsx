@@ -10,6 +10,7 @@ import {
   PlayerInfo,
   PlayerStats,
   QuestProgress,
+  WorldCell,
   WorldZone,
 } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
@@ -50,9 +51,11 @@ export default function GameMapPage() {
   const [npcs, setNpcs] = useState<NpcInfo[]>([]);
   const [activeNpc, setActiveNpc] = useState<NpcInfo | null>(null);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
+  const [worldCells, setWorldCells] = useState<WorldCell[]>([]);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [quests, setQuests] = useState<QuestProgress[]>([]);
   const [playerRole, setPlayerRole] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
 
   const [activeTab, setActiveTab] = useState<
     "inventory" | "territory" | "players" | "quests" | "admin"
@@ -120,6 +123,10 @@ export default function GameMapPage() {
       .getSafeZone()
       .then(setSafeZone)
       .catch(() => setError("Failed to load world zone"));
+    void playerApi
+      .getWorldCells()
+      .then(setWorldCells)
+      .catch(() => {});
   }, []);
 
   const playerId = sessionUser?.githubId || guestData?.id || "";
@@ -221,6 +228,7 @@ export default function GameMapPage() {
 
     try {
       setError("");
+      setNotice("");
       const data = await playerApi.movePlayer(playerId, targetX, targetY);
       setPositionX(data.positionX);
       setPositionY(data.positionY);
@@ -228,6 +236,21 @@ export default function GameMapPage() {
       setNpcs(data.npcs || []);
       setCooldown(data.cooldown);
       setActiveNpc(null);
+      if (typeof data.health === "number") {
+        setStats((prev) => ({ ...prev, health: data.health as number }));
+      }
+      if ((data.radiationDamage ?? 0) > 0) {
+        setNotice(
+          `☢️ Radiation! You lost ${data.radiationDamage} HP (${data.health} HP left).`,
+        );
+      }
+      if (data.combatStarted && data.combatId) {
+        setNotice(
+          `⚔️ Ambush! ${data.enemyName ?? "An enemy"} attacked you!`,
+        );
+        const combat = await combatApi.getCombat(data.combatId);
+        setCombatSession(combat);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Movement failed");
     }
@@ -339,6 +362,12 @@ export default function GameMapPage() {
           {error && (
             <div className="bg-red-950/80 border border-red-800 text-red-200 px-3 py-2 rounded-xl text-xs shrink-0">
               {error}
+            </div>
+          )}
+
+          {notice && !error && (
+            <div className="bg-amber-950/80 border border-amber-700 text-amber-200 px-3 py-2 rounded-xl text-xs shrink-0">
+              {notice}
             </div>
           )}
 
@@ -552,6 +581,7 @@ export default function GameMapPage() {
                 positionY={positionY}
                 zone={safeZone}
                 npcs={npcs}
+                cells={worldCells}
                 onTalk={setActiveNpc}
               />
             </div>

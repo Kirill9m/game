@@ -2,6 +2,8 @@ import {
   InventoryItem,
   MoveResponse,
   PlayerStateResponse,
+  WorldBounds,
+  WorldCell,
   WorldZone,
 } from "@/types/game";
 
@@ -37,8 +39,14 @@ export const playerApi = {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || "Movement failed");
+      let message = "Movement failed";
+      try {
+        const body = await response.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // ignore body parse errors
+      }
+      throw new Error(message);
     }
 
     return response.json();
@@ -96,6 +104,18 @@ export const playerApi = {
   async getSafeZone(): Promise<WorldZone> {
     const response = await fetch(`${API_URL}/api/v1/world/safe-zone`);
     if (!response.ok) throw new Error("Failed to load safe zone");
+    return response.json();
+  },
+
+  async getWorldCells(): Promise<WorldCell[]> {
+    const response = await fetch(`${API_URL}/api/v1/world/cells`);
+    if (!response.ok) throw new Error("Failed to load world cells");
+    return response.json();
+  },
+
+  async getWorldBounds(): Promise<WorldBounds> {
+    const response = await fetch(`${API_URL}/api/v1/world/bounds`);
+    if (!response.ok) throw new Error("Failed to load world bounds");
     return response.json();
   },
 };

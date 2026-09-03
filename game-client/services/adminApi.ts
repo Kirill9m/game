@@ -5,6 +5,7 @@ import type {
   AdminNpc,
   AdminPlayer,
   AdminQuest,
+  AdminWorldCell,
   CreateDialogueNodePayload,
   CreateEnemyTypePayload,
   CreateItemPayload,
@@ -12,6 +13,7 @@ import type {
   CreateQuestPayload,
   UpdateEnemyTypePayload,
   UpdatePlayerPayload,
+  UpsertWorldCellPayload,
 } from "@/types/admin";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -276,6 +278,34 @@ export const adminApi = {
     return request<AdminEnemyType>(
       `${API_URL}/api/admin/enemies/generate?${withPlayerId(playerId)}&difficulty=${difficulty}`,
       { method: "POST" },
+    );
+  },
+
+  // --- World cells (per-cell settings: blocked / radiation / ambush) ---
+  async getWorldCells(playerId: string): Promise<AdminWorldCell[]> {
+    return request<AdminWorldCell[]>(
+      `${API_URL}/api/admin/world-cells?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async upsertWorldCell(
+    playerId: string,
+    payload: UpsertWorldCellPayload,
+  ): Promise<AdminWorldCell> {
+    return request<AdminWorldCell>(
+      `${API_URL}/api/admin/world-cells?${withPlayerId(playerId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteWorldCell(playerId: string, cellId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/world-cells/${encodeURIComponent(cellId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
     );
   },
 };

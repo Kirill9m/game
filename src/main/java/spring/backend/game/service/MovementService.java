@@ -7,19 +7,28 @@ import spring.backend.game.dto.MoveRequest;
 import spring.backend.game.dto.MoveResponse;
 import spring.backend.game.dto.NpcInfoResponse;
 import spring.backend.game.dto.PlayerInfo;
+import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.PlayerEntity;
+import spring.backend.game.entity.WorldCellEntity;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
 public class MovementService {
     private final PlayerRepository playerRepository;
     private final NpcRepository npcRepository;
+    private final WorldCellService worldCellService;
+    private final WorldZoneService worldZoneService;
+    private final CombatService combatService;
 
     @Transactional
     public MoveResponse movePlayer(String playerId, MoveRequest request) {
@@ -46,11 +55,47 @@ public class MovementService {
             throw new IllegalArgumentException("You can move only one coordinate at the same time");
         }
 
+        // World bounds: the map is 1000x1000 and extends into negative coordinates
+        if (targetX < WorldConstants.WORLD_MIN || targetX > WorldConstants.WORLD_MAX
+                || targetY < WorldConstants.WORLD_MIN || targetY > WorldConstants.WORLD_MAX) {
+            throw new IllegalStateException("You cannot move outside the world bounds ("
+                    + WorldConstants.WORLD_MIN + ".." + WorldConstants.WORLD_MAX + ")");
+        }
+
+        // Admin-configured cells can be completely closed for entering
+        if (worldCellService.isBlocked(targetX, targetY)) {
+            throw new IllegalStateException("This cell is blocked — you cannot enter it");
+        }
+
         player.setPositionX(targetX);
         player.setPositionY(targetY);
         Instant newCooldown = now.plusSeconds(3);
         player.setCooldown(newCooldown);
+
+        // Radiation: configured per cell, damages the player on every step
+        int radiationDamage = 0;
+        Optional<WorldCellEntity> cellSettings = worldCellService.getSettings(targetX, targetY);
+        if (cellSettings.isPresent() && cellSettings.get().getRadiation() > 0) {
+            radiationDamage = cellSettings.get().getRadiation();
+            player.setHealth(Math.max(0, player.getHealth() - radiationDamage));
+        }
         playerRepository.save(player);
+
+        // Enemy ambush: only outside the safe zone, chance and enemy are configured per cell
+        UUID combatId = null;
+        String enemyName = null;
+        boolean combatStarted = false;
+        if (worldZoneService.isOutsideSafeZone(targetX, targetY)
+                && cellSettings.isPresent()
+                && cellSettings.get().getAmbushChance() > 0
+                && cellSettings.get().getEnemyType() != null
+                && ThreadLocalRandom.current().nextInt(100) < cellSettings.get().getAmbushChance()) {
+            EnemyTypeEntity enemy = cellSettings.get().getEnemyType();
+            CombatSessionEntity combat = combatService.startBotCombat(playerId, enemy.getCode());
+            combatId = combat.getId();
+            enemyName = enemy.getName();
+            combatStarted = true;
+        }
 
         List<PlayerEntity> playersOnSameTile = playerRepository.findByPositionXAndPositionY(targetX, targetY);
 
@@ -77,6 +122,11 @@ public class MovementService {
                 .cooldown(newCooldown)
                 .playersOnTile(playerInfos)
                 .npcs(npcInfos)
+                .health(player.getHealth())
+                .radiationDamage(radiationDamage)
+                .combatStarted(combatStarted)
+                .combatId(combatId)
+                .enemyName(enemyName)
                 .build();
     }
 }

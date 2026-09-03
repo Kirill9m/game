@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import spring.backend.game.dto.AdminDtos.AdminItemDto;
 import spring.backend.game.dto.AdminDtos.AdminNpcDto;
 import spring.backend.game.dto.AdminDtos.AdminPlayerDto;
 import spring.backend.game.dto.AdminDtos.AdminQuestDto;
+import spring.backend.game.dto.AdminDtos.AdminWorldCellDto;
 import spring.backend.game.dto.AdminDtos.BootstrapAdminRequest;
 import spring.backend.game.dto.AdminDtos.CreateDialogueNodeRequest;
 import spring.backend.game.dto.AdminDtos.CreateEnemyTypeRequest;
@@ -32,7 +34,9 @@ import spring.backend.game.dto.AdminDtos.UpdateEnemyTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpdateNpcRequest;
 import spring.backend.game.dto.AdminDtos.UpdatePlayerRequest;
 import spring.backend.game.dto.AdminDtos.UpdateQuestRequest;
+import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
 import spring.backend.game.service.AdminService;
+import spring.backend.game.service.WorldCellService;
 
 /**
  * Admin panel API. Every endpoint (except the code-protected bootstrap)
@@ -46,6 +50,7 @@ import spring.backend.game.service.AdminService;
 public class AdminController {
 
     private final AdminService adminService;
+    private final WorldCellService worldCellService;
 
     // --- BOOTSTRAP (first admin) ---
 
@@ -298,6 +303,31 @@ public class AdminController {
     public ResponseEntity<Void> deleteEnemyType(@PathVariable UUID enemyId, @RequestParam String playerId) {
         adminService.requireAdmin(playerId);
         adminService.deleteEnemyType(enemyId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // --- WORLD CELLS (per-cell settings: blocked / radiation / ambush) ---
+
+    @GetMapping("/world-cells")
+    public ResponseEntity<List<AdminWorldCellDto>> getWorldCells(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(worldCellService.getAllCells());
+    }
+
+    /** Create or update settings for a single cell. */
+    @PutMapping("/world-cells")
+    public ResponseEntity<AdminWorldCellDto> upsertWorldCell(
+            @RequestParam String playerId,
+            @RequestBody UpsertWorldCellRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(worldCellService.upsertCell(request));
+    }
+
+    /** Remove per-cell settings (the cell becomes a normal world tile again). */
+    @DeleteMapping("/world-cells/{cellId}")
+    public ResponseEntity<Void> deleteWorldCell(@PathVariable Long cellId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        worldCellService.deleteCell(cellId);
         return ResponseEntity.noContent().build();
     }
 }

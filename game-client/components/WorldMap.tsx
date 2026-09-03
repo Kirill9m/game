@@ -1,4 +1,4 @@
-import { WorldZone } from "@/types/game";
+import { WorldCell, WorldZone } from "@/types/game";
 import { NpcInfo } from "@/types/npc";
 
 interface WorldMapProps {
@@ -6,6 +6,8 @@ interface WorldMapProps {
   positionY: number;
   zone: WorldZone;
   npcs: NpcInfo[];
+  /** Admin-configured per-cell dangers (blocked / radiation / ambush). */
+  cells?: WorldCell[];
   onTalk: (npc: NpcInfo) => void;
 }
 
@@ -16,6 +18,7 @@ export default function WorldMap({
   positionY,
   zone,
   npcs,
+  cells,
   onTalk,
 }: WorldMapProps) {
   const isInsideZone = (x: number, y: number) => {
@@ -26,6 +29,10 @@ export default function WorldMap({
     );
   };
 
+  const cellSettings = new Map(
+    (cells ?? []).map((cell) => [`${cell.positionX}:${cell.positionY}`, cell]),
+  );
+
   return (
     <section className="space-y-3 rounded-lg border border-red-500/60 bg-red-950/60 p-3">
       <div className="flex items-center justify-between gap-3">
@@ -34,7 +41,8 @@ export default function WorldMap({
             {zone.name}
           </h2>
           <p className="text-xs text-red-200/80">
-            Blue dome: safe | Red land: dangerous
+            Blue dome: safe | Red land: dangerous | ☢️ radiation | 🚫 blocked |
+            👹 ambush
           </p>
         </div>
         <span className="rounded-full border border-blue-300/60 bg-blue-500/20 px-2 py-1 text-xs text-blue-100">
@@ -55,14 +63,41 @@ export default function WorldMap({
               const npcsAtPosition = npcs.filter(
                 (npc) => npc.positionX === x && npc.positionY === y,
               );
+              const settings = cellSettings.get(`${x}:${y}`);
+
+              let bg = safe ? "bg-blue-500/55" : "bg-red-600/65";
+              let icon = "";
+              const details: string[] = [];
+              if (settings?.blocked) {
+                bg = "bg-gray-950";
+                icon = "🚫";
+                details.push("blocked");
+              } else if ((settings?.radiation ?? 0) > 0) {
+                bg = "bg-lime-700/75";
+                icon = "☢️";
+                details.push(`☢ ${settings?.radiation} HP`);
+              }
+              if ((settings?.ambushChance ?? 0) > 0) {
+                if (!settings?.blocked && !icon) {
+                  bg = "bg-orange-600/70";
+                }
+                icon = icon || "👹";
+                details.push(
+                  `👹 ${settings?.ambushChance}%${settings?.enemyName ? ` ${settings.enemyName}` : ""}`,
+                );
+              }
+
               return (
                 <div
                   key={`${x}:${y}`}
-                  className={`relative flex items-center justify-center ${
-                    safe ? "bg-blue-500/55" : "bg-red-600/65"
-                  }`}
-                  title={`[${x}/${y}]`}
+                  className={`relative flex items-center justify-center ${bg}`}
+                  title={`[${x}/${y}]${details.length ? ` — ${details.join(" | ")}` : ""}`}
                 >
+                  {icon && (
+                    <span className="z-10 select-none text-[10px] leading-none opacity-90">
+                      {icon}
+                    </span>
+                  )}
                   {npcsAtPosition.map((npc) => (
                     <button
                       key={npc.code}

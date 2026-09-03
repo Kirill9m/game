@@ -80,6 +80,16 @@ public final class AdminDtos {
             int movementRange) {
     }
 
+    public record AdminWorldCellDto(
+            Long id,
+            int positionX,
+            int positionY,
+            boolean blocked,
+            int radiation,
+            int ambushChance,
+            AdminEnemyTypeDto enemyType) {
+    }
+
     // --- REQUESTS ---
 
     public record CreateNpcRequest(String code, String name, Integer positionX, Integer positionY) {
@@ -152,6 +162,15 @@ public final class AdminDtos {
             Integer energy,
             Integer positionX,
             Integer positionY) {
+    }
+
+    public record UpsertWorldCellRequest(
+            Integer positionX,
+            Integer positionY,
+            Boolean blocked,
+            Integer radiation,
+            Integer ambushChance,
+            UUID enemyTypeId) {
     }
 
     public record BootstrapAdminRequest(String playerId, String code) {

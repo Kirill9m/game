@@ -126,3 +126,22 @@ export interface UpdatePlayerPayload {
   positionX?: number;
   positionY?: number;
 }
+
+export interface AdminWorldCell {
+  id: string;
+  positionX: number;
+  positionY: number;
+  blocked: boolean;
+  radiation: number;
+  ambushChance: number;
+  enemyType: AdminEnemyType | null;
+}
+
+export interface UpsertWorldCellPayload {
+  positionX: number;
+  positionY: number;
+  blocked: boolean;
+  radiation: number;
+  ambushChance: number;
+  enemyTypeId: string | null;
+}
