@@ -46,7 +46,7 @@ export default function NpcDialog({
     setError("");
 
     npcApi
-      .startDialogue(npc.id)
+      .startDialogue(npc.id, playerId)
       .then((node) => {
         if (!cancelled) {
           setCurrentNode(node);
@@ -65,7 +65,7 @@ export default function NpcDialog({
     return () => {
       cancelled = true;
     };
-  }, [npc.id]);
+  }, [npc.id, playerId]);
 
   // 2. Обработчик клика по варианту ответа
   const handleSelectChoice = async (choiceId: string) => {

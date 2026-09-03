@@ -1,5 +1,6 @@
 package spring.backend.game.service;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import spring.backend.game.dto.QuestSystem.DialogueChoiceDto;
 import spring.backend.game.dto.QuestSystem.DialogueNodeDto;
+import spring.backend.game.dto.QuestSystem.QuestLogEntryDto;
 import spring.backend.game.dto.QuestSystem.QuestProgressDto;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.QuestSystem.DialogueChoiceEntity;
@@ -26,6 +28,7 @@ import spring.backend.game.entity.QuestSystem.DialogueNodeEntity;
 import spring.backend.game.entity.QuestSystem.NpcEntity;
 import spring.backend.game.entity.QuestSystem.PlayerQuestEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
+import spring.backend.game.entity.QuestSystem.QuestLogEntryEntity;
 import spring.backend.game.entity.QuestSystem.QuestStatus;
 import spring.backend.game.repository.PlayerInventoryRepository;
 import spring.backend.game.repository.PlayerRepository;
@@ -33,6 +36,7 @@ import spring.backend.game.repository.QuestSystem.DialogueChoiceRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.repository.QuestSystem.PlayerQuestRepository;
+import spring.backend.game.repository.QuestSystem.QuestLogEntryRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
 
 @Slf4j
@@ -51,6 +55,7 @@ public class QuestService {
     private final InventoryService inventoryService;
     private final PlayerInventoryRepository inventoryRepository;
     private final PlatformTransactionManager transactionManager;
+    private final QuestLogEntryRepository questLogEntryRepository;
 
     // --- ЛОГИКА ДИАЛОГОВ ---
 
@@ -90,6 +95,19 @@ public class QuestService {
         return mapToDto(choice.getNextNode());
     }
 
+    /**
+     * Проверяет, завершён ли квест, в котором участвует NPC.
+     * Если квест завершён — диалог с NPC больше недоступен.
+     */
+    @Transactional
+    public boolean isNpcTalkBlocked(String playerId, UUID npcId) {
+        // Если квест MEET_VILLAGERS уже завершён — все NPC "молчат"
+        boolean meetVillagersCompleted = playerQuestRepository.findByPlayerId(playerId).stream()
+                .anyMatch(pq -> "MEET_VILLAGERS".equalsIgnoreCase(pq.getQuest().getCode())
+                        && pq.getStatus() == QuestStatus.COMPLETED);
+        return meetVillagersCompleted;
+    }
+
     // --- ЛОГИКА КВЕСТОВ ---
 
     @Transactional
@@ -106,6 +124,10 @@ public class QuestService {
                         .build());
 
         playerQuestRepository.save(playerQuest);
+
+        // Записываем в журнал квеста
+        addLogEntry(playerQuest, "Квест «" + quest.getTitle() + "» принят. Поговорите с жителями деревни.");
+
         return mapToQuestProgressDto(playerQuest);
     }
 
@@ -147,6 +169,7 @@ public class QuestService {
                                 .status(QuestStatus.IN_PROGRESS)
                                 .talkedNpcs(new HashSet<>())
                                 .build());
+                        addLogEntry(playerQuest, "Квест «" + defaultQuest.getTitle() + "» принят автоматически.");
                     }
                 }
             }
@@ -159,7 +182,15 @@ public class QuestService {
                     .collect(Collectors.toSet());
 
             if (requiredIds.contains(npc.getId())) {
+                boolean alreadyTalked = playerQuest.getTalkedNpcs().stream()
+                        .anyMatch(t -> t.getId().equals(npc.getId()));
+
                 playerQuest.getTalkedNpcs().add(npc);
+
+                if (!alreadyTalked) {
+                    // Записываем в журнал
+                    addLogEntry(playerQuest, "Поговорили с персонажем: " + npc.getName());
+                }
 
                 Set<UUID> talkedIds = playerQuest.getTalkedNpcs().stream()
                         .map(NpcEntity::getId)
@@ -168,12 +199,21 @@ public class QuestService {
                 // ПРОВЕРКА ЗАВЕРШЕНИЯ: поговорил со всеми требуемыми NPC?
                 if (talkedIds.containsAll(requiredIds)) {
                     playerQuest.setStatus(QuestStatus.COMPLETED);
+                    addLogEntry(playerQuest, "✅ Квест «" + playerQuest.getQuest().getTitle() + "» выполнен! Награда получена.");
                     grantReward(playerId, playerQuest.getQuest());
                 }
 
                 playerQuestRepository.save(playerQuest);
             }
         }
+    }
+
+    private void addLogEntry(PlayerQuestEntity playerQuest, String message) {
+        questLogEntryRepository.save(QuestLogEntryEntity.builder()
+                .playerQuest(playerQuest)
+                .message(message)
+                .timestamp(Instant.now())
+                .build());
     }
 
     private void grantReward(String playerId, QuestEntity quest) {
@@ -218,6 +258,10 @@ public class QuestService {
     }
 
     private QuestProgressDto mapToQuestProgressDto(PlayerQuestEntity pq) {
+        List<QuestLogEntryDto> logs = questLogEntryRepository.findByPlayerQuestIdOrderByTimestampAsc(pq.getId()).stream()
+                .map(e -> new QuestLogEntryDto(e.getMessage(), e.getTimestamp()))
+                .toList();
+
         return new QuestProgressDto(
                 pq.getQuest().getId(),
                 pq.getQuest().getCode(),
@@ -225,6 +269,7 @@ public class QuestService {
                 pq.getStatus(),
                 pq.getTalkedNpcs().size(),
                 pq.getQuest().getRequiredNpcs().size(),
-                pq.getStatus() == QuestStatus.COMPLETED);
+                pq.getStatus() == QuestStatus.COMPLETED,
+                logs);
     }
 }

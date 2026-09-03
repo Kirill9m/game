@@ -10,11 +10,20 @@ export const npcApi = {
     return response.json();
   },
 
-  startDialogue: async (npcId: string): Promise<DialogueNodeDto> => {
+  startDialogue: async (
+    npcId: string,
+    playerId?: string,
+  ): Promise<DialogueNodeDto> => {
     if (!npcId) throw new Error("NPC ID is required");
 
     // Добавлен ${API_URL}
-    const res = await fetch(`${API_URL}/api/dialogues/start/${npcId}`);
+    const params = new URLSearchParams();
+    if (playerId) params.append("playerId", playerId);
+    const query = params.toString() ? `?${params.toString()}` : "";
+
+    const res = await fetch(`${API_URL}/api/dialogues/start/${npcId}${query}`);
+    if (res.status === 403)
+      throw new Error("Этот персонаж больше не хочет разговаривать с вами...");
     if (!res.ok) throw new Error("Не удалось загрузить диалог");
     return res.json();
   },

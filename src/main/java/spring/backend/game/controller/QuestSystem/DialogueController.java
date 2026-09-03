@@ -2,6 +2,7 @@ package spring.backend.game.controller.QuestSystem;
 
 import java.util.UUID;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +26,15 @@ public class DialogueController {
 
     // Старт диалога с NPC (возвращает первую реплику и кнопки)
     @GetMapping("/start/{npcId}")
-    public ResponseEntity<DialogueNodeDto> startDialogue(@PathVariable UUID npcId) {
+    public ResponseEntity<DialogueNodeDto> startDialogue(
+            @PathVariable UUID npcId,
+            @RequestParam(required = false) String playerId) {
+
+        // Если квест завершён — блокируем диалог с NPC
+        if (playerId != null && questService.isNpcTalkBlocked(playerId, npcId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
         return ResponseEntity.ok(questService.startDialogue(npcId));
     }
 

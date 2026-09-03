@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { QuestProgress } from "@/types/game";
 
 interface Props {
@@ -20,7 +21,17 @@ const STATUS_COLOR: Record<string, string> = {
   COMPLETED: "text-green-400 bg-green-900/30 border-green-700",
 };
 
+function formatTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function QuestPanel({ quests }: Props) {
+  const [expandedQuestId, setExpandedQuestId] = useState<string | null>(null);
+
   if (quests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-32 text-gray-600 text-sm gap-2">
@@ -38,6 +49,8 @@ export default function QuestPanel({ quests }: Props) {
           quest.totalNpcsCount > 0
             ? Math.round((quest.talkedNpcsCount / quest.totalNpcsCount) * 100)
             : 0;
+
+        const isExpanded = expandedQuestId === quest.questId;
 
         return (
           <div
@@ -79,6 +92,38 @@ export default function QuestPanel({ quests }: Props) {
               <div className="flex items-center gap-1.5 text-xs text-green-400">
                 <span>✅</span>
                 <span>Квест выполнен! Награда получена.</span>
+              </div>
+            )}
+
+            {/* Журнал квеста */}
+            {quest.logEntries.length > 0 && (
+              <div className="mt-1 border-t border-gray-800 pt-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedQuestId(isExpanded ? null : quest.questId)
+                  }
+                  className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-gray-200 transition"
+                >
+                  <span>📖 Журнал квеста</span>
+                  <span>{isExpanded ? "▲" : "▼"}</span>
+                </button>
+
+                {isExpanded && (
+                  <div className="mt-2 flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                    {quest.logEntries.map((entry, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 text-xs text-gray-300 bg-gray-800/50 rounded-lg px-2.5 py-1.5"
+                      >
+                        <span className="text-gray-500 font-mono text-[10px] mt-0.5 shrink-0">
+                          {formatTime(entry.timestamp)}
+                        </span>
+                        <span className="leading-snug">{entry.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

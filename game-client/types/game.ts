@@ -87,6 +87,11 @@ export interface EnemyType {
   movementRange: number;
 }
 
+export interface QuestLogEntry {
+  message: string;
+  timestamp: string;
+}
+
 export interface QuestProgress {
   questId: string;
   questCode: string;
@@ -95,4 +100,5 @@ export interface QuestProgress {
   talkedNpcsCount: number;
   totalNpcsCount: number;
   isCompleted: boolean;
+  logEntries: QuestLogEntry[];
 }

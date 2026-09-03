@@ -101,6 +101,17 @@ public class DataInitializer implements CommandLineRunner {
         } catch (Exception e) {
             log.warn("Database schema update info (quest_required_npcs): {}", e.getMessage());
         }
+
+        try {
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS quest_log_entries (" +
+                    "id UUID PRIMARY KEY, " +
+                    "player_quest_id UUID NOT NULL, " +
+                    "message VARCHAR(500) NOT NULL, " +
+                    "timestamp TIMESTAMP NOT NULL, " +
+                    "FOREIGN KEY (player_quest_id) REFERENCES player_quests(id))");
+        } catch (Exception e) {
+            log.warn("Database schema update info (quest_log_entries): {}", e.getMessage());
+        }
     }
 
     private void seedMeetVillagersQuest() {

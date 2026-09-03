@@ -118,9 +118,10 @@ export default function GameMapPage() {
     if (!playerId) return;
     try {
       setError("");
-      const [player, playerInventory] = await Promise.all([
+      const [player, playerInventory, playerQuests] = await Promise.all([
         playerApi.loginPlayer(playerId, playerName, playerAvatar),
         playerApi.getInventory(playerId),
+        questApi.getPlayerQuests(playerId),
       ]);
       setPositionX(player.positionX);
       setPositionY(player.positionY);
@@ -129,6 +130,7 @@ export default function GameMapPage() {
       }
       setNpcs(player.npcs || []);
       setInventory(playerInventory);
+      setQuests(playerQuests);
       if (typeof player.gold === "number") {
         setGold(player.gold);
       }
@@ -501,6 +503,7 @@ export default function GameMapPage() {
                   playerApi.getPlayerState(playerId).then((state) => {
                     if (typeof state?.gold === "number") setGold(state.gold);
                   }).catch(() => {});
+                  questApi.getPlayerQuests(playerId).then(setQuests).catch(() => {});
                 }
               }}
             />
