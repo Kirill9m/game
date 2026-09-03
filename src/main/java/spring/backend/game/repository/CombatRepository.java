@@ -20,4 +20,8 @@ public interface CombatRepository extends JpaRepository<CombatSessionEntity, UUI
     List<CombatSessionEntity> findActiveCombatsForPlayer(
             @Param("playerId") String playerId,
             @Param("status") String status);
+
+    List<CombatSessionEntity> findByEnemyTypeId(UUID enemyTypeId);
+
+    List<CombatSessionEntity> findByPlayer1IdOrPlayer2Id(String player1Id, String player2Id);
 }

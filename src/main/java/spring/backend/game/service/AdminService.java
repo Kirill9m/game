@@ -17,15 +17,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import spring.backend.game.config.AdminProperties;
 import spring.backend.game.dto.AdminDtos;
+import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.PlayerEntity;
+import spring.backend.game.entity.PlayerInventoryEntity;
 import spring.backend.game.entity.QuestSystem.DialogueChoiceEntity;
 import spring.backend.game.entity.QuestSystem.DialogueNodeEntity;
 import spring.backend.game.entity.QuestSystem.NpcEntity;
 import spring.backend.game.entity.QuestSystem.PlayerQuestEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
 import spring.backend.game.entity.QuestSystem.QuestLogEntryEntity;
+import spring.backend.game.repository.CombatRepository;
+import spring.backend.game.repository.EnemyTypeRepository;
 import spring.backend.game.repository.ItemRepository;
+import spring.backend.game.repository.PlayerInventoryRepository;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.DialogueChoiceRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
@@ -72,6 +78,26 @@ public class AdminService {
             "Old Harold", "Wandering Trader", "Herbalist Mira", "Watch Captain",
             "Fisherman Finn", "Tavern Keeper", "Blacksmith's Apprentice", "Village Doctor");
 
+    /** Name pools for the random item generator. */
+    private static final List<String> WEAPON_PREFIXES = List.of(
+            "Rusty", "Iron", "Steel", "Silver", "Enchanted", "Cursed", "Dragonbone", "Runed");
+    private static final List<String> WEAPON_NAMES = List.of(
+            "Sword", "Axe", "Dagger", "Spear", "Mace", "Halberd", "Scimitar", "Warhammer");
+    private static final List<String> ARMOR_NAMES = List.of(
+            "Vest", "Tunic", "Cuirass", "Brigandine", "Cloak", "Gauntlets", "Boots", "Shield");
+    private static final List<String> UTILITY_NAMES = List.of(
+            "Health Potion", "Lockpick", "Torch", "Rope", "Scroll", "Amulet", "Talisman", "Whetstone");
+    private static final List<String> ITEM_PREFIXES = List.of(
+            "Simple", "Fine", "Rare", "Ancient", "Traveler's", "Hunter's", "Wanderer's", "Mystic");
+
+    /** Name pools for the random enemy generator. */
+    private static final List<String> ENEMY_NAMES = List.of(
+            "Goblin", "Wolf", "Bandit", "Skeleton", "Orc Brute", "Swamp Slime",
+            "Cave Spider", "Wraith", "Marauder", "Imp", "Scavenger", "Beast");
+    private static final List<String> ENEMY_TITLES = List.of(
+            "Scout", "Warrior", "Stalker", "Champion", "Elder", "Runts",
+            "Alpha", "Rogue", "Brute", "Hunter", "Seer", "Fiend");
+
     private final AdminProperties adminProperties;
     private final PlayerRepository playerRepository;
     private final NpcRepository npcRepository;
@@ -81,6 +107,9 @@ public class AdminService {
     private final ItemRepository itemRepository;
     private final PlayerQuestRepository playerQuestRepository;
     private final QuestLogEntryRepository questLogEntryRepository;
+    private final EnemyTypeRepository enemyTypeRepository;
+    private final PlayerInventoryRepository playerInventoryRepository;
+    private final CombatRepository combatRepository;
     private final Random random = new Random();
 
     // --- ACCESS CONTROL ---
@@ -144,6 +173,76 @@ public class AdminService {
         return playerRepository.findAll().stream()
                 .map(this::toPlayerDto)
                 .toList();
+    }
+
+    /** Update player stats/profile. Only provided (non-null) fields are applied. */
+    @Transactional
+    public AdminDtos.AdminPlayerDto updatePlayer(String targetPlayerId, AdminDtos.UpdatePlayerRequest request) {
+        PlayerEntity player = playerRepository.findById(targetPlayerId)
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + targetPlayerId));
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        if (request.username() != null) {
+            String name = request.username().trim();
+            if (name.isEmpty()) {
+                throw new IllegalArgumentException("Username cannot be empty");
+            }
+            player.setUsername(name);
+        }
+        if (request.level() != null) {
+            player.setLevel(Math.max(1, request.level()));
+        }
+        if (request.gold() != null) {
+            player.setGold(Math.max(0, request.gold()));
+        }
+        if (request.health() != null) {
+            player.setHealth(Math.max(0, request.health()));
+        }
+        if (request.strength() != null) {
+            player.setStrength(Math.max(0, request.strength()));
+        }
+        if (request.agility() != null) {
+            player.setAgility(Math.max(0, request.agility()));
+        }
+        if (request.stamina() != null) {
+            player.setStamina(Math.max(0, request.stamina()));
+        }
+        if (request.energy() != null) {
+            player.setEnergy(Math.max(0, request.energy()));
+        }
+        if (request.positionX() != null) {
+            player.setPositionX(request.positionX());
+        }
+        if (request.positionY() != null) {
+            player.setPositionY(request.positionY());
+        }
+        log.info("Admin updated player {}", targetPlayerId);
+        return toPlayerDto(playerRepository.save(player));
+    }
+
+    /** Delete a player together with inventory, quest progress and combat history. */
+    @Transactional
+    public void deletePlayer(String targetPlayerId) {
+        PlayerEntity player = playerRepository.findById(targetPlayerId)
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + targetPlayerId));
+
+        // Inventory
+        playerInventoryRepository.deleteAll(playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(targetPlayerId));
+
+        // Quest progress (and log entries)
+        for (PlayerQuestEntity playerQuest : playerQuestRepository.findByPlayerId(targetPlayerId)) {
+            List<QuestLogEntryEntity> logs =
+                    questLogEntryRepository.findByPlayerQuestIdOrderByTimestampAsc(playerQuest.getId());
+            questLogEntryRepository.deleteAll(logs);
+            playerQuestRepository.delete(playerQuest);
+        }
+
+        // Combat history
+        combatRepository.deleteAll(combatRepository.findByPlayer1IdOrPlayer2Id(targetPlayerId, targetPlayerId));
+
+        playerRepository.delete(player);
+        log.info("Admin deleted player {}", targetPlayerId);
     }
 
     // --- NPC MANAGEMENT ---
@@ -471,6 +570,164 @@ public class AdminService {
         return toItemDto(item);
     }
 
+    /**
+     * Item generator: creates an item with a random name, type and stats.
+     * Types: WEAPON (damage + short range), ARMOR (no damage, 1x1), UTILITY.
+     */
+    @Transactional
+    public AdminDtos.AdminItemDto generateRandomItem() {
+        String type = switch (random.nextInt(3)) {
+            case 0 -> "WEAPON";
+            case 1 -> "ARMOR";
+            default -> "UTILITY";
+        };
+        String name;
+        int damage = 0;
+        int attackRange = 0;
+        int width = 1;
+        int height = 1;
+        switch (type) {
+            case "WEAPON" -> {
+                name = WEAPON_PREFIXES.get(random.nextInt(WEAPON_PREFIXES.size())) + " "
+                        + WEAPON_NAMES.get(random.nextInt(WEAPON_NAMES.size()));
+                damage = 3 + random.nextInt(13); // 3..15
+                attackRange = 1 + random.nextInt(3); // 1..3
+            }
+            case "ARMOR" -> {
+                name = ITEM_PREFIXES.get(random.nextInt(ITEM_PREFIXES.size())) + " "
+                        + ARMOR_NAMES.get(random.nextInt(ARMOR_NAMES.size()));
+            }
+            default -> {
+                name = ITEM_PREFIXES.get(random.nextInt(ITEM_PREFIXES.size())) + " "
+                        + UTILITY_NAMES.get(random.nextInt(UTILITY_NAMES.size()));
+                // Utility items occasionally occupy a 2x1 slot
+                if (random.nextInt(4) == 0) {
+                    width = 2;
+                }
+            }
+        }
+        String code = "ITEM_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        AdminDtos.AdminItemDto created = createItem(code, name, type, damage, attackRange, width, height);
+        log.info("Generated random item '{}' ({}, {})", created.name(), created.code(), type);
+        return created;
+    }
+
+    @Transactional
+    public void deleteItem(UUID itemId) {
+        ItemEntity item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new EntityNotFoundException("Item not found: " + itemId));
+
+        // Remove the item from all inventories first
+        playerInventoryRepository.deleteAll(playerInventoryRepository.findByItemId(itemId));
+
+        itemRepository.delete(item);
+        log.info("Admin deleted item {}", item.getCode());
+    }
+
+    // --- ENEMY TYPE MANAGEMENT ---
+
+    @Transactional(readOnly = true)
+    public List<AdminDtos.AdminEnemyTypeDto> getAllEnemyTypes() {
+        return enemyTypeRepository.findAllByOrderByNameAsc().stream()
+                .map(this::toEnemyTypeDto)
+                .toList();
+    }
+
+    @Transactional
+    public AdminDtos.AdminEnemyTypeDto createEnemyType(AdminDtos.CreateEnemyTypeRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        String normalizedCode = requireNonBlank(request.code(), "Enemy code is required")
+                .trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9_]", "_");
+        if (enemyTypeRepository.findByCodeIgnoreCase(normalizedCode).isPresent()) {
+            throw new IllegalArgumentException("Enemy code already exists: " + normalizedCode);
+        }
+        EnemyTypeEntity enemy = enemyTypeRepository.save(EnemyTypeEntity.builder()
+                .code(normalizedCode)
+                .name(requireNonBlank(request.name(), "Enemy name is required").trim())
+                .maxHealth(clampMin1(request.maxHealth(), 30))
+                .damage(clampMin0(request.damage(), 5))
+                .attackRange(clampMin0(request.attackRange(), 1))
+                .actionPoints(clampMin1(request.actionPoints(), 3))
+                .movementRange(clampMin1(request.movementRange(), 2))
+                .build());
+        log.info("Admin created enemy type {}", enemy.getCode());
+        return toEnemyTypeDto(enemy);
+    }
+
+    @Transactional
+    public AdminDtos.AdminEnemyTypeDto updateEnemyType(UUID enemyId, AdminDtos.UpdateEnemyTypeRequest request) {
+        EnemyTypeEntity enemy = enemyTypeRepository.findById(enemyId)
+                .orElseThrow(() -> new EntityNotFoundException("Enemy type not found: " + enemyId));
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        if (request.name() != null && !request.name().isBlank()) {
+            enemy.setName(request.name().trim());
+        }
+        if (request.maxHealth() != null) {
+            enemy.setMaxHealth(clampMin1(request.maxHealth(), 1));
+        }
+        if (request.damage() != null) {
+            enemy.setDamage(clampMin0(request.damage(), 0));
+        }
+        if (request.attackRange() != null) {
+            enemy.setAttackRange(clampMin0(request.attackRange(), 0));
+        }
+        if (request.actionPoints() != null) {
+            enemy.setActionPoints(clampMin1(request.actionPoints(), 1));
+        }
+        if (request.movementRange() != null) {
+            enemy.setMovementRange(clampMin1(request.movementRange(), 1));
+        }
+        return toEnemyTypeDto(enemyTypeRepository.save(enemy));
+    }
+
+    @Transactional
+    public void deleteEnemyType(UUID enemyId) {
+        EnemyTypeEntity enemy = enemyTypeRepository.findById(enemyId)
+                .orElseThrow(() -> new EntityNotFoundException("Enemy type not found: " + enemyId));
+
+        // Detach combat sessions that reference this enemy type, then remove them
+        List<CombatSessionEntity> sessions = combatRepository.findByEnemyTypeId(enemyId);
+        combatRepository.deleteAll(sessions);
+
+        enemyTypeRepository.delete(enemy);
+        log.info("Admin deleted enemy type {} ({} combat sessions removed)", enemy.getCode(), sessions.size());
+    }
+
+    /**
+     * Enemy generator: creates an enemy type with a random name and combat
+     * stats within reasonable ranges. Difficulty 1 (weak) .. 3 (boss-like).
+     */
+    @Transactional
+    public AdminDtos.AdminEnemyTypeDto generateRandomEnemy(int difficulty) {
+        int tier = Math.min(3, Math.max(1, difficulty));
+        String name = ENEMY_NAMES.get(random.nextInt(ENEMY_NAMES.size())) + " "
+                + ENEMY_TITLES.get(random.nextInt(ENEMY_TITLES.size()));
+        String code = "ENEMY_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+
+        int maxHealth = 20 + tier * 20 + random.nextInt(21); // tier1: 40..60, tier2: 60..80, tier3: 80..100
+        int damage = 2 + tier * 2 + random.nextInt(5); // tier1: 4..8, tier2: 6..10, tier3: 8..12
+        int attackRange = 1 + random.nextInt(tier + 1); // melee..ranged for higher tiers
+        int actionPoints = 2 + random.nextInt(2) + (tier >= 2 ? 1 : 0); // 2..5
+        int movementRange = 1 + random.nextInt(3); // 1..3
+
+        AdminDtos.AdminEnemyTypeDto created = createEnemyType(new AdminDtos.CreateEnemyTypeRequest(
+                code, name, maxHealth, damage, attackRange, actionPoints, movementRange));
+        log.info("Generated random enemy '{}' ({}, difficulty {})", created.name(), created.code(), tier);
+        return created;
+    }
+
+    private static int clampMin0(Integer value, int fallback) {
+        return Math.max(0, value == null ? fallback : value);
+    }
+
+    private static int clampMin1(Integer value, int fallback) {
+        return Math.max(1, value == null ? fallback : value);
+    }
+
     // --- DTO MAPPERS ---
 
     private AdminDtos.AdminPlayerDto toPlayerDto(PlayerEntity player) {
@@ -503,6 +760,12 @@ public class AdminService {
     private AdminDtos.AdminItemDto toItemDto(ItemEntity item) {
         return new AdminDtos.AdminItemDto(item.getId(), item.getCode(), item.getName(), item.getType(),
                 item.getDamage(), item.getAttackRange(), item.getWidth(), item.getHeight());
+    }
+
+    private AdminDtos.AdminEnemyTypeDto toEnemyTypeDto(EnemyTypeEntity enemy) {
+        return new AdminDtos.AdminEnemyTypeDto(enemy.getId(), enemy.getCode(), enemy.getName(),
+                enemy.getMaxHealth(), enemy.getDamage(), enemy.getAttackRange(),
+                enemy.getActionPoints(), enemy.getMovementRange());
     }
 
     private static String requireNonBlank(String value, String message) {

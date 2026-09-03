@@ -16,17 +16,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
+import spring.backend.game.dto.AdminDtos.AdminEnemyTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminItemDto;
 import spring.backend.game.dto.AdminDtos.AdminNpcDto;
 import spring.backend.game.dto.AdminDtos.AdminPlayerDto;
 import spring.backend.game.dto.AdminDtos.AdminQuestDto;
 import spring.backend.game.dto.AdminDtos.BootstrapAdminRequest;
 import spring.backend.game.dto.AdminDtos.CreateDialogueNodeRequest;
+import spring.backend.game.dto.AdminDtos.CreateEnemyTypeRequest;
 import spring.backend.game.dto.AdminDtos.CreateItemRequest;
 import spring.backend.game.dto.AdminDtos.CreateNpcRequest;
 import spring.backend.game.dto.AdminDtos.CreateQuestRequest;
 import spring.backend.game.dto.AdminDtos.SetRoleRequest;
+import spring.backend.game.dto.AdminDtos.UpdateEnemyTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpdateNpcRequest;
+import spring.backend.game.dto.AdminDtos.UpdatePlayerRequest;
 import spring.backend.game.dto.AdminDtos.UpdateQuestRequest;
 import spring.backend.game.service.AdminService;
 
@@ -66,6 +70,26 @@ public class AdminController {
             @RequestBody SetRoleRequest request) {
         adminService.requireAdmin(playerId);
         return ResponseEntity.ok(adminService.setPlayerRole(targetPlayerId, request.role()));
+    }
+
+    /** Update player stats (username, level, gold, health, attributes, position). */
+    @PatchMapping("/players/{targetPlayerId}")
+    public ResponseEntity<AdminPlayerDto> updatePlayer(
+            @PathVariable String targetPlayerId,
+            @RequestParam String playerId,
+            @RequestBody UpdatePlayerRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.updatePlayer(targetPlayerId, request));
+    }
+
+    /** Delete a player with inventory, quest progress and combat history. */
+    @DeleteMapping("/players/{targetPlayerId}")
+    public ResponseEntity<Void> deletePlayer(
+            @PathVariable String targetPlayerId,
+            @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        adminService.deletePlayer(targetPlayerId);
+        return ResponseEntity.noContent().build();
     }
 
     // --- NPCS ---
@@ -158,6 +182,15 @@ public class AdminController {
         return ResponseEntity.ok(adminService.generateRandomQuest(createNewNpc));
     }
 
+    /** Random enemy generator: difficulty 1 (weak) .. 3 (boss-like). */
+    @PostMapping("/enemies/generate")
+    public ResponseEntity<AdminEnemyTypeDto> generateEnemy(
+            @RequestParam String playerId,
+            @RequestParam(defaultValue = "1") int difficulty) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.generateRandomEnemy(difficulty));
+    }
+
     // --- DIALOGUES ---
 
     @GetMapping("/dialogues")
@@ -220,5 +253,51 @@ public class AdminController {
                 request.attackRange() == null ? 0 : request.attackRange(),
                 request.width() == null ? 1 : request.width(),
                 request.height() == null ? 1 : request.height()));
+    }
+
+    /** Random item generator: random type (WEAPON/ARMOR/UTILITY), name and stats. */
+    @PostMapping("/items/generate")
+    public ResponseEntity<AdminItemDto> generateItem(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.generateRandomItem());
+    }
+
+    @DeleteMapping("/items/{itemId}")
+    public ResponseEntity<Void> deleteItem(@PathVariable UUID itemId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        adminService.deleteItem(itemId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // --- ENEMY TYPES ---
+
+    @GetMapping("/enemies")
+    public ResponseEntity<List<AdminEnemyTypeDto>> getEnemyTypes(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.getAllEnemyTypes());
+    }
+
+    @PostMapping("/enemies")
+    public ResponseEntity<AdminEnemyTypeDto> createEnemyType(
+            @RequestParam String playerId,
+            @RequestBody CreateEnemyTypeRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.createEnemyType(request));
+    }
+
+    @PatchMapping("/enemies/{enemyId}")
+    public ResponseEntity<AdminEnemyTypeDto> updateEnemyType(
+            @PathVariable UUID enemyId,
+            @RequestParam String playerId,
+            @RequestBody UpdateEnemyTypeRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.updateEnemyType(enemyId, request));
+    }
+
+    @DeleteMapping("/enemies/{enemyId}")
+    public ResponseEntity<Void> deleteEnemyType(@PathVariable UUID enemyId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        adminService.deleteEnemyType(enemyId);
+        return ResponseEntity.noContent().build();
     }
 }

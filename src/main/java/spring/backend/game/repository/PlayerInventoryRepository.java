@@ -17,4 +17,6 @@ public interface PlayerInventoryRepository extends JpaRepository<PlayerInventory
 
     @Query("SELECT COUNT(pi) > 0 FROM PlayerInventoryEntity pi WHERE pi.player.id = :playerId AND UPPER(pi.item.code) = UPPER(:itemCode)")
     boolean existsByPlayerIdAndItemCodeIgnoreCase(@Param("playerId") String playerId, @Param("itemCode") String itemCode);
+
+    List<PlayerInventoryEntity> findByItemId(UUID itemId);
 }

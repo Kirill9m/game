@@ -69,6 +69,17 @@ public final class AdminDtos {
             int height) {
     }
 
+    public record AdminEnemyTypeDto(
+            UUID id,
+            String code,
+            String name,
+            int maxHealth,
+            int damage,
+            int attackRange,
+            int actionPoints,
+            int movementRange) {
+    }
+
     // --- REQUESTS ---
 
     public record CreateNpcRequest(String code, String name, Integer positionX, Integer positionY) {
@@ -109,6 +120,38 @@ public final class AdminDtos {
             Integer attackRange,
             Integer width,
             Integer height) {
+    }
+
+    public record CreateEnemyTypeRequest(
+            String code,
+            String name,
+            Integer maxHealth,
+            Integer damage,
+            Integer attackRange,
+            Integer actionPoints,
+            Integer movementRange) {
+    }
+
+    public record UpdateEnemyTypeRequest(
+            String name,
+            Integer maxHealth,
+            Integer damage,
+            Integer attackRange,
+            Integer actionPoints,
+            Integer movementRange) {
+    }
+
+    public record UpdatePlayerRequest(
+            String username,
+            Integer level,
+            Integer gold,
+            Integer health,
+            Integer strength,
+            Integer agility,
+            Integer stamina,
+            Integer energy,
+            Integer positionX,
+            Integer positionY) {
     }
 
     public record BootstrapAdminRequest(String playerId, String code) {

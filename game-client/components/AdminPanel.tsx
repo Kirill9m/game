@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { adminApi } from "@/services/adminApi";
 import type {
   AdminDialogueNode,
+  AdminEnemyType,
   AdminItem,
   AdminNpc,
   AdminPlayer,
@@ -14,7 +15,7 @@ interface Props {
   playerId: string;
 }
 
-type Section = "quests" | "dialogues" | "players";
+type Section = "quests" | "dialogues" | "items" | "enemies" | "players";
 
 interface ChoiceDraft {
   text: string;
@@ -39,6 +40,7 @@ export default function AdminPanel({ playerId }: Props) {
   const [npcs, setNpcs] = useState<AdminNpc[]>([]);
   const [quests, setQuests] = useState<AdminQuest[]>([]);
   const [items, setItems] = useState<AdminItem[]>([]);
+  const [enemies, setEnemies] = useState<AdminEnemyType[]>([]);
   const [selectedNpcId, setSelectedNpcId] = useState<string>("");
   const [nodesData, setNodesData] = useState<{ npcId: string; nodes: AdminDialogueNode[] }>({
     npcId: "",
@@ -64,6 +66,38 @@ export default function AdminPanel({ playerId }: Props) {
   const [nodeIsStart, setNodeIsStart] = useState(false);
   const [nodeChoices, setNodeChoices] = useState<ChoiceDraft[]>([]);
 
+  // --- Item form state ---
+  const [itemCode, setItemCode] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [itemType, setItemType] = useState("WEAPON");
+  const [itemDamage, setItemDamage] = useState(5);
+  const [itemRange, setItemRange] = useState(1);
+  const [itemWidth, setItemWidth] = useState(1);
+  const [itemHeight, setItemHeight] = useState(1);
+
+  // --- Enemy form state ---
+  const [enemyCode, setEnemyCode] = useState("");
+  const [enemyName, setEnemyName] = useState("");
+  const [enemyHealth, setEnemyHealth] = useState(40);
+  const [enemyDamage, setEnemyDamage] = useState(6);
+  const [enemyRange, setEnemyRange] = useState(1);
+  const [enemyAp, setEnemyAp] = useState(3);
+  const [enemyMove, setEnemyMove] = useState(2);
+  const [enemyDifficulty, setEnemyDifficulty] = useState(1);
+
+  // --- Player edit state ---
+  const [editingPlayerId, setEditingPlayerId] = useState<string>("");
+  const [playerDraft, setPlayerDraft] = useState({
+    username: "",
+    level: 1,
+    gold: 0,
+    health: 100,
+    strength: 5,
+    agility: 5,
+    stamina: 10,
+    energy: 10,
+  });
+
   const run = useCallback(
     async (action: () => Promise<void>, okMessage?: string) => {
       setError("");
@@ -82,16 +116,18 @@ export default function AdminPanel({ playerId }: Props) {
   );
 
   const loadAll = useCallback(async () => {
-    const [p, n, q, i] = await Promise.all([
+    const [p, n, q, i, e] = await Promise.all([
       adminApi.getPlayers(playerId),
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
+      adminApi.getEnemyTypes(playerId),
     ]);
     setPlayers(p);
     setNpcs(n);
     setQuests(q);
     setItems(i);
+    setEnemies(e);
     setSelectedNpcId((current) => current || n[0]?.id || "");
   }, [playerId]);
 
@@ -103,13 +139,15 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
+      adminApi.getEnemyTypes(playerId),
     ])
-      .then(([p, n, q, i]) => {
+      .then(([p, n, q, i, e]) => {
         if (cancelled) return;
         setPlayers(p);
         setNpcs(n);
         setQuests(q);
         setItems(i);
+        setEnemies(e);
         setSelectedNpcId((current) => current || n[0]?.id || "");
       })
       .catch((err: unknown) => {
@@ -263,6 +301,107 @@ export default function AdminPanel({ playerId }: Props) {
       setNotice(`Role updated to ${role}`);
     });
 
+  const handleGenerateItem = () =>
+    run(async () => {
+      const item = await adminApi.generateItem(playerId);
+      await loadAll();
+      setNotice(`Generated item "${item.name}" (${item.code})`);
+    });
+
+  const handleCreateItem = () =>
+    run(async () => {
+      if (!itemCode.trim() || !itemName.trim()) {
+        throw new Error("Item code and name are required");
+      }
+      await adminApi.createItem(playerId, {
+        code: itemCode.trim(),
+        name: itemName.trim(),
+        type: itemType,
+        damage: itemDamage,
+        attackRange: itemRange,
+        width: itemWidth,
+        height: itemHeight,
+      });
+      setItemCode("");
+      setItemName("");
+      await loadAll();
+      setNotice("Item created");
+    });
+
+  const handleDeleteItem = (itemId: string) =>
+    run(async () => {
+      await adminApi.deleteItem(playerId, itemId);
+      await loadAll();
+      setNotice("Item deleted");
+    });
+
+  const handleGenerateEnemy = () =>
+    run(async () => {
+      const enemy = await adminApi.generateEnemy(playerId, enemyDifficulty);
+      await loadAll();
+      setNotice(`Generated enemy "${enemy.name}" (${enemy.code})`);
+    });
+
+  const handleCreateEnemy = () =>
+    run(async () => {
+      if (!enemyCode.trim() || !enemyName.trim()) {
+        throw new Error("Enemy code and name are required");
+      }
+      await adminApi.createEnemyType(playerId, {
+        code: enemyCode.trim(),
+        name: enemyName.trim(),
+        maxHealth: enemyHealth,
+        damage: enemyDamage,
+        attackRange: enemyRange,
+        actionPoints: enemyAp,
+        movementRange: enemyMove,
+      });
+      setEnemyCode("");
+      setEnemyName("");
+      await loadAll();
+      setNotice("Enemy type created");
+    });
+
+  const handleDeleteEnemy = (enemyId: string) =>
+    run(async () => {
+      await adminApi.deleteEnemyType(playerId, enemyId);
+      await loadAll();
+      setNotice("Enemy type deleted");
+    });
+
+  const handleStartEditPlayer = (player: AdminPlayer) => {
+    setEditingPlayerId(player.id);
+    setPlayerDraft({
+      username: player.username ?? "",
+      level: player.level,
+      gold: player.gold,
+      health: 100,
+      strength: 5,
+      agility: 5,
+      stamina: 10,
+      energy: 10,
+    });
+  };
+
+  const handleSavePlayer = (targetPlayerId: string) =>
+    run(async () => {
+      await adminApi.updatePlayer(playerId, targetPlayerId, playerDraft);
+      setEditingPlayerId("");
+      await loadAll();
+      setNotice("Player updated");
+    });
+
+  const handleDeletePlayer = (targetPlayerId: string) =>
+    run(async () => {
+      if (targetPlayerId === playerId) {
+        throw new Error("You cannot delete your own account");
+      }
+      await adminApi.deletePlayer(playerId, targetPlayerId);
+      if (editingPlayerId === targetPlayerId) setEditingPlayerId("");
+      await loadAll();
+      setNotice("Player deleted");
+    });
+
   const selectedNpc = npcs.find((n) => n.id === selectedNpcId);
   const nodeNameById = new Map(npcs.map((n) => [n.id, n.name]));
 
@@ -271,13 +410,15 @@ export default function AdminPanel({ playerId }: Props) {
       {/* Section switcher */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex gap-2">
-          {(
-            [
-              { id: "quests", icon: "🎲", label: "Quest Generator" },
-              { id: "dialogues", icon: "💬", label: "Dialogues" },
-              { id: "players", icon: "🛡️", label: "Players" },
-            ] as const
-          ).map((tab) => (
+            {(
+              [
+                { id: "quests", icon: "🎲", label: "Quest Generator" },
+                { id: "dialogues", icon: "💬", label: "Dialogues" },
+                { id: "items", icon: "⚔️", label: "Items" },
+                { id: "enemies", icon: "👹", label: "Enemies" },
+                { id: "players", icon: "🛡️", label: "Players" },
+              ] as const
+            ).map((tab) => (
             <button
               key={tab.id}
               type="button"

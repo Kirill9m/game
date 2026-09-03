@@ -1,13 +1,17 @@
 import type {
   AdminDialogueNode,
+  AdminEnemyType,
   AdminItem,
   AdminNpc,
   AdminPlayer,
   AdminQuest,
   CreateDialogueNodePayload,
+  CreateEnemyTypePayload,
   CreateItemPayload,
   CreateNpcPayload,
   CreateQuestPayload,
+  UpdateEnemyTypePayload,
+  UpdatePlayerPayload,
 } from "@/types/admin";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -65,6 +69,28 @@ export const adminApi = {
       {
         ...jsonBody({ role }),
       },
+    );
+  },
+
+  async updatePlayer(
+    playerId: string,
+    targetPlayerId: string,
+    payload: UpdatePlayerPayload,
+  ): Promise<AdminPlayer> {
+    return request<AdminPlayer>(
+      `${API_URL}/api/admin/players/${encodeURIComponent(targetPlayerId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deletePlayer(playerId: string, targetPlayerId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/players/${encodeURIComponent(targetPlayerId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
     );
   },
 
@@ -188,6 +214,68 @@ export const adminApi = {
     return request<AdminItem>(
       `${API_URL}/api/admin/items?${withPlayerId(playerId)}`,
       jsonBody(payload),
+    );
+  },
+
+  /** Random item generator: random type (WEAPON/ARMOR/UTILITY), name and stats. */
+  async generateItem(playerId: string): Promise<AdminItem> {
+    return request<AdminItem>(
+      `${API_URL}/api/admin/items/generate?${withPlayerId(playerId)}`,
+      { method: "POST" },
+    );
+  },
+
+  async deleteItem(playerId: string, itemId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/items/${encodeURIComponent(itemId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  // --- Enemy types ---
+  async getEnemyTypes(playerId: string): Promise<AdminEnemyType[]> {
+    return request<AdminEnemyType[]>(
+      `${API_URL}/api/admin/enemies?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async createEnemyType(
+    playerId: string,
+    payload: CreateEnemyTypePayload,
+  ): Promise<AdminEnemyType> {
+    return request<AdminEnemyType>(
+      `${API_URL}/api/admin/enemies?${withPlayerId(playerId)}`,
+      jsonBody(payload),
+    );
+  },
+
+  async updateEnemyType(
+    playerId: string,
+    enemyId: string,
+    payload: UpdateEnemyTypePayload,
+  ): Promise<AdminEnemyType> {
+    return request<AdminEnemyType>(
+      `${API_URL}/api/admin/enemies/${encodeURIComponent(enemyId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteEnemyType(playerId: string, enemyId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/enemies/${encodeURIComponent(enemyId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  /** Random enemy generator: difficulty 1 (weak) .. 3 (boss-like). */
+  async generateEnemy(playerId: string, difficulty: number): Promise<AdminEnemyType> {
+    return request<AdminEnemyType>(
+      `${API_URL}/api/admin/enemies/generate?${withPlayerId(playerId)}&difficulty=${difficulty}`,
+      { method: "POST" },
     );
   },
 };

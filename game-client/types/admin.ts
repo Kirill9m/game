@@ -83,3 +83,46 @@ export interface CreateItemPayload {
   width: number;
   height: number;
 }
+
+export interface AdminEnemyType {
+  id: string;
+  code: string;
+  name: string;
+  maxHealth: number;
+  damage: number;
+  attackRange: number;
+  actionPoints: number;
+  movementRange: number;
+}
+
+export interface CreateEnemyTypePayload {
+  code: string;
+  name: string;
+  maxHealth?: number;
+  damage?: number;
+  attackRange?: number;
+  actionPoints?: number;
+  movementRange?: number;
+}
+
+export interface UpdateEnemyTypePayload {
+  name?: string;
+  maxHealth?: number;
+  damage?: number;
+  attackRange?: number;
+  actionPoints?: number;
+  movementRange?: number;
+}
+
+export interface UpdatePlayerPayload {
+  username?: string;
+  level?: number;
+  gold?: number;
+  health?: number;
+  strength?: number;
+  agility?: number;
+  stamina?: number;
+  energy?: number;
+  positionX?: number;
+  positionY?: number;
+}
