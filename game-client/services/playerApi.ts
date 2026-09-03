@@ -8,7 +8,11 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export const playerApi = {
-  async loginPlayer(githubId: string, username: string, avatarUrl: string) {
+  async loginPlayer(
+    githubId: string,
+    username: string,
+    avatarUrl: string,
+  ): Promise<PlayerStateResponse> {
     const response = await fetch(
       `${API_URL}/api/v1/players/login`,
       {

@@ -32,4 +32,20 @@ public class PlayerEntity {
     private int turnOrder;
 
     private Instant cooldown;
+
+    @Column(name = "gold", columnDefinition = "integer default 0")
+    @Builder.Default
+    private int gold = 0;
+
+    public void addGold(int amount) {
+        this.gold += amount;
+    }
+
+    public int getMoney() {
+        return this.gold;
+    }
+
+    public void setMoney(int money) {
+        this.gold = money;
+    }
 }

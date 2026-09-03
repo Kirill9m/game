@@ -38,6 +38,7 @@ export interface WorldZone {
 export interface PlayerStateResponse {
   positionX: number;
   positionY: number;
+  gold?: number;
   playersOnTile: PlayerInfo[];
   npcs: NpcInfo[];
 }

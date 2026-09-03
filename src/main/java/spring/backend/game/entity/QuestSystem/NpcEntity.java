@@ -1,4 +1,4 @@
-package spring.backend.game.entity;
+package spring.backend.game.entity.QuestSystem;
 
 import java.util.UUID;
 
@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -20,8 +21,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "quests")
-public class QuestEntity {
+@EqualsAndHashCode(of = "id")
+@Table(name = "npcs")
+public class NpcEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -29,15 +31,12 @@ public class QuestEntity {
     @Column(nullable = false, unique = true, length = 50)
     private String code;
 
-    @Column(nullable = false, length = 150)
-    private String title;
-
-    @Column(nullable = false, length = 1000)
-    private String description;
-
     @Column(nullable = false, length = 100)
-    private String reward;
+    private String name;
 
-    @Column(name = "giver_npc_code", nullable = false, length = 50)
-    private String giverNpcCode;
+    @Column(name = "position_x", nullable = false)
+    private int positionX;
+
+    @Column(name = "position_y", nullable = false)
+    private int positionY;
 }

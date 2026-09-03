@@ -13,6 +13,7 @@ public class PlayerLoginResponse {
     private String avatarUrl;
     private int positionX;
     private int positionY;
-        private List<PlayerInfo> playersOnTile;
-        private List<NpcInfoResponse> npcs;
+    private int gold;
+    private List<PlayerInfo> playersOnTile;
+    private List<NpcInfoResponse> npcs;
 }

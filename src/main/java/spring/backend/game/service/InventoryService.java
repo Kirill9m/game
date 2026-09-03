@@ -17,7 +17,8 @@ import spring.backend.game.repository.PlayerRepository;
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
-    private static final List<String> STARTER_ITEMS = List.of("KNIFE", "PISTOL", "WORLD_MAP");
+    // На старте инвентарь пустой, предметы выдаются в награду за квесты (например, за квест знакомства)
+    private static final List<String> STARTER_ITEMS = List.of();
 
     private final ItemRepository itemRepository;
     private final PlayerInventoryRepository inventoryRepository;
@@ -116,5 +117,59 @@ public class InventoryService {
 
     private int gridYFor(String itemCode) {
         return 0;
+    }
+
+    @Transactional
+    public void addItem(String playerId, String itemCode) {
+        PlayerEntity player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+        ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode)
+                .orElseThrow(() -> new RuntimeException("Item not found: " + itemCode));
+
+        var existingItem = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(e -> e.getItem().getCode().equalsIgnoreCase(itemCode))
+                .findFirst()
+                .orElse(null);
+
+        if (existingItem != null) {
+            existingItem.setQuantity(existingItem.getQuantity() + 1);
+            inventoryRepository.save(existingItem);
+            return;
+        }
+
+        var existingItems = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId);
+        int targetX = gridXFor(itemCode);
+        int targetY = gridYFor(itemCode);
+
+        boolean occupied = existingItems.stream().anyMatch(other ->
+                rectanglesOverlap(targetX, targetY, item.getWidth(), item.getHeight(),
+                        other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
+
+        if (occupied) {
+            outer:
+            for (int y = 0; y < 10; y++) {
+                for (int x = 0; x <= 8 - item.getWidth(); x++) {
+                    final int checkX = x;
+                    final int checkY = y;
+                    boolean overlaps = existingItems.stream().anyMatch(other ->
+                            rectanglesOverlap(checkX, checkY, item.getWidth(), item.getHeight(),
+                                    other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
+                    if (!overlaps) {
+                        targetX = checkX;
+                        targetY = checkY;
+                        break outer;
+                    }
+                }
+            }
+        }
+
+        inventoryRepository.save(PlayerInventoryEntity.builder()
+                .player(player)
+                .item(item)
+                .quantity(1)
+                .gridX(targetX)
+                .gridY(targetY)
+                .equipped(false)
+                .build());
     }
 }

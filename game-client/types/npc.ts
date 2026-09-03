@@ -1,4 +1,5 @@
 export interface NpcInfo {
+  id: string;
   code: string;
   name: string;
   positionX: number;

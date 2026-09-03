@@ -5,9 +5,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import spring.backend.game.dto.MoveRequest;
 import spring.backend.game.dto.MoveResponse;
+import spring.backend.game.dto.NpcInfoResponse;
 import spring.backend.game.dto.PlayerInfo;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
+import spring.backend.game.repository.QuestSystem.NpcRepository;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -17,7 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MovementService {
     private final PlayerRepository playerRepository;
-    private final NpcService npcService;
+    private final NpcRepository npcRepository;
 
     @Transactional
     public MoveResponse movePlayer(String playerId, MoveRequest request) {
@@ -58,13 +60,23 @@ public class MovementService {
                         .username(p.getUsername()) // Since id is now the unique string identifier (GitHub/Guest ID)
                         .build())
                 .toList();
+                List<NpcInfoResponse> npcInfos = npcRepository.findByPositionXAndPositionY(targetX, targetY)
+                    .stream()
+                    .map(npc -> NpcInfoResponse.builder()
+                        .id(npc.getId())
+                        .code(npc.getCode())
+                        .name(npc.getName())
+                        .positionX(npc.getPositionX())
+                        .positionY(npc.getPositionY())
+                        .build())
+                    .toList();
 
         return MoveResponse.builder()
                 .positionX(targetX)
                 .positionY(targetY)
                 .cooldown(newCooldown)
                 .playersOnTile(playerInfos)
-                .npcs(npcService.getNpcsAt(targetX, targetY))
+                .npcs(npcInfos)
                 .build();
     }
 }

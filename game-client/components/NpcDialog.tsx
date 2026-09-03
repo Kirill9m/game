@@ -2,69 +2,145 @@
 
 import { useEffect, useState } from "react";
 import { npcApi } from "@/services/npcApi";
-import { NpcDialogue, NpcInfo } from "@/types/npc";
+
+export interface DialogueChoiceDto {
+  id: string;
+  text: string;
+  endsDialogue: boolean;
+}
+
+export interface DialogueNodeDto {
+  id: string;
+  npcName: string;
+  text: string;
+  choices: DialogueChoiceDto[];
+}
+
+interface NpcInfo {
+  id: string;
+  code: string;
+  name: string;
+}
 
 interface NpcDialogProps {
   npc: NpcInfo;
   playerId: string;
+  activeQuestId?: string; // ID текущего квеста для отслеживания прогресса
   onClose: () => void;
 }
 
-export default function NpcDialog({ npc, playerId, onClose }: NpcDialogProps) {
-  const [dialogue, setDialogue] = useState<NpcDialogue | null>(null);
-  const [error, setError] = useState("");
+export default function NpcDialog({
+  npc,
+  playerId,
+  activeQuestId,
+  onClose,
+}: NpcDialogProps) {
+  const [currentNode, setCurrentNode] = useState<DialogueNodeDto | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
+  // 1. Старт диалога при открытии окна
   useEffect(() => {
     let cancelled = false;
-    setDialogue(null);
+    setLoading(true);
     setError("");
-    void npcApi
-      .talk(playerId, npc.code)
-      .then((response) => {
-        if (!cancelled) setDialogue(response);
+
+    npcApi
+      .startDialogue(npc.id)
+      .then((node) => {
+        if (!cancelled) {
+          setCurrentNode(node);
+          setLoading(false);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Conversation failed");
+          setError(
+            err instanceof Error ? err.message : "Не удалось начать диалог",
+          );
+          setLoading(false);
         }
       });
+
     return () => {
       cancelled = true;
     };
-  }, [npc.code, playerId]);
+  }, [npc.id]);
+
+  // 2. Обработчик клика по варианту ответа
+  const handleSelectChoice = async (choiceId: string) => {
+    try {
+      setLoading(true);
+      const nextNode = await npcApi.selectChoice(
+        playerId,
+        choiceId,
+        activeQuestId,
+      );
+
+      if (!nextNode) {
+        // Диалог завершён (204 No Content от сервера)
+        onClose();
+      } else {
+        setCurrentNode(nextNode);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ошибка при выборе ответа");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <section className="w-full max-w-md rounded-xl border border-amber-700 bg-gray-900 p-5 shadow-2xl">
+        {/* Шапка */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-wider text-amber-400">Conversation</p>
+            <p className="text-xs uppercase tracking-wider text-amber-400">
+              Диалог
+            </p>
             <h2 className="mt-1 text-xl font-bold text-white">{npc.name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded border border-gray-600 px-2 py-1 text-gray-300 hover:bg-gray-800" aria-label="Close conversation">
-            X
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-600 px-2 py-1 text-gray-300 hover:bg-gray-800"
+            aria-label="Закрыть диалог"
+          >
+            ✕
           </button>
         </div>
-        {error && <p className="mt-4 rounded border border-red-800 bg-red-950/60 p-3 text-sm text-red-200">{error}</p>}
-        {!dialogue && !error && <p className="mt-5 text-sm text-gray-400">Listening...</p>}
-        {dialogue && (
+
+        {/* Ошибка */}
+        {error && (
+          <p className="mt-4 rounded border border-red-800 bg-red-950/60 p-3 text-sm text-red-200">
+            {error}
+          </p>
+        )}
+
+        {/* Загрузка */}
+        {loading && !currentNode && !error && (
+          <p className="mt-5 text-sm text-gray-400">Слушаем персонажа...</p>
+        )}
+
+        {/* Текущая реплика NPC и варианты ответов */}
+        {currentNode && (
           <>
-            <p className="mt-5 leading-6 text-gray-200">{dialogue.dialogue}</p>
-            <div className="mt-5 space-y-3">
-              {dialogue.quests.map((quest) => (
-                <div key={quest.code} className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-semibold text-emerald-200">{quest.title}</h3>
-                    <span className="text-xs uppercase text-emerald-400">{quest.status}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-300">{quest.description}</p>
-                  <p className="mt-2 text-xs text-amber-300">Reward: {quest.reward}</p>
-                </div>
+            <p className="mt-5 leading-6 text-gray-200">{currentNode.text}</p>
+
+            <div className="mt-5 space-y-2">
+              {currentNode.choices.map((choice) => (
+                <button
+                  key={choice.id}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleSelectChoice(choice.id)}
+                  className="w-full rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-left font-medium text-amber-200 transition hover:bg-amber-900/50 hover:text-white disabled:opacity-50"
+                >
+                  ➔ {choice.text}
+                </button>
               ))}
             </div>
-            <button type="button" onClick={onClose} className="mt-5 w-full rounded-lg bg-amber-600 py-2 font-semibold text-white hover:bg-amber-500">
-              Continue exploring
-            </button>
           </>
         )}
       </section>

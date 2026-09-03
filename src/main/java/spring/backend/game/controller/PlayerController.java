@@ -6,11 +6,12 @@ import org.springframework.web.bind.annotation.*;
 import spring.backend.game.dto.PlayerInfo;
 import spring.backend.game.dto.PlayerLoginRequest;
 import spring.backend.game.dto.PlayerLoginResponse;
+import spring.backend.game.dto.NpcInfoResponse;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
+import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.service.InventoryService;
 import spring.backend.game.dto.InventoryItemResponse;
-import spring.backend.game.service.NpcService;
 
 import java.util.List;
 
@@ -22,7 +23,7 @@ public class PlayerController {
 
     private final PlayerRepository playerRepository;
     private final InventoryService inventoryService;
-    private final NpcService npcService;
+    private final NpcRepository npcRepository;
 
     @PostMapping("/login")
     public ResponseEntity<PlayerLoginResponse> loginOrCreate(@RequestBody PlayerLoginRequest request) {
@@ -57,6 +58,17 @@ public class PlayerController {
                         .username(tilePlayer.getUsername())
                         .build())
                 .toList();
+                List<NpcInfoResponse> npcs = npcRepository
+                    .findByPositionXAndPositionY(player.getPositionX(), player.getPositionY())
+                    .stream()
+                    .map(npc -> NpcInfoResponse.builder()
+                        .id(npc.getId())
+                        .code(npc.getCode())
+                        .name(npc.getName())
+                        .positionX(npc.getPositionX())
+                        .positionY(npc.getPositionY())
+                        .build())
+                    .toList();
 
         return PlayerLoginResponse.builder()
                 .id(player.getId())
@@ -64,8 +76,9 @@ public class PlayerController {
                 .avatarUrl(player.getAvatarUrl())
                 .positionX(player.getPositionX())
                 .positionY(player.getPositionY())
+                .gold(player.getGold())
                 .playersOnTile(playersOnTile)
-                .npcs(npcService.getNpcsAt(player.getPositionX(), player.getPositionY()))
+                .npcs(npcs)
                 .build();
     }
 
