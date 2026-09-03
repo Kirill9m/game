@@ -11,7 +11,8 @@ interface WorldMapProps {
   onTalk: (npc: NpcInfo) => void;
 }
 
-const MAP_SIZE = 10;
+const MAP_SIZE = 20;
+const HALF_MAP = Math.floor(MAP_SIZE / 2);
 
 export default function WorldMap({
   positionX,
@@ -53,11 +54,15 @@ export default function WorldMap({
       <div className="aspect-square w-full overflow-hidden rounded-md border border-red-300/40 bg-red-700/50 p-1">
         {/* Внутренний relative-контейнер без p-1 для точного позиционирования оверлея */}
         <div className="relative h-full w-full">
-          <div className="grid h-full w-full grid-cols-10 grid-rows-10 gap-px bg-red-950/70">
+          <div className="grid h-full w-full grid-cols-20 grid-rows-20 gap-px bg-red-950/70">
             {Array.from({ length: MAP_SIZE * MAP_SIZE }, (_, index) => {
-              const x = index % MAP_SIZE;
-              // Y=0 внизу, Y=9 вверху (Декартова система координат)
-              const y = MAP_SIZE - 1 - Math.floor(index / MAP_SIZE);
+              const gridX = index % MAP_SIZE;
+              const gridY = MAP_SIZE - 1 - Math.floor(index / MAP_SIZE);
+
+              // Центрирование: 0,0 находится в центре сетки (-10..9)
+              const x = gridX - HALF_MAP;
+              const y = gridY - HALF_MAP;
+
               const safe = isInsideZone(x, y);
               const current = positionX === x && positionY === y;
               const npcsAtPosition = npcs.filter(
@@ -94,9 +99,11 @@ export default function WorldMap({
                   title={`[${x}/${y}]${details.length ? ` — ${details.join(" | ")}` : ""}`}
                 >
                   {icon && (
-                    <span className="z-10 select-none text-[10px] leading-none opacity-90">
-                      {icon}
-                    </span>
+                    <div className="z-10 flex items-center justify-center">
+                      <span className="text-lg select-none leading-none opacity-90 drop-shadow-md">
+                        {icon}
+                      </span>
+                    </div>
                   )}
                   {npcsAtPosition.map((npc) => (
                     <button
@@ -121,8 +128,8 @@ export default function WorldMap({
           <div
             className="pointer-events-none absolute rounded-full border-2 border-blue-200/80 bg-blue-300/15 shadow-[0_0_28px_rgba(96,165,250,0.8)]"
             style={{
-              left: `${((zone.centerX - zone.radius) / MAP_SIZE) * 100}%`,
-              bottom: `${((zone.centerY - zone.radius) / MAP_SIZE) * 100}%`,
+              left: `${((zone.centerX + HALF_MAP - zone.radius) / MAP_SIZE) * 100}%`,
+              bottom: `${((zone.centerY + HALF_MAP - zone.radius) / MAP_SIZE) * 100}%`,
               width: `${((zone.radius * 2 + 1) / MAP_SIZE) * 100}%`,
               aspectRatio: "1",
             }}

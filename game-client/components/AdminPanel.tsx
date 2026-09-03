@@ -996,13 +996,13 @@ export default function AdminPanel({ playerId }: Props) {
                 <input
                   type="number"
                   min={0}
-                  max={9}
+                  max={999}
                   className={inputClass}
                   value={selectedCell.x}
                   onChange={(e) =>
                     setSelectedCell((c) => ({
                       ...c,
-                      x: Math.max(0, Math.min(9, Number(e.target.value) || 0)),
+                      x: Math.max(0, Math.min(999, Number(e.target.value) || 0)),
                     }))
                   }
                 />
@@ -1012,13 +1012,13 @@ export default function AdminPanel({ playerId }: Props) {
                 <input
                   type="number"
                   min={0}
-                  max={9}
+                  max={999}
                   className={inputClass}
                   value={selectedCell.y}
                   onChange={(e) =>
                     setSelectedCell((c) => ({
                       ...c,
-                      y: Math.max(0, Math.min(9, Number(e.target.value) || 0)),
+                      y: Math.max(0, Math.min(999, Number(e.target.value) || 0)),
                     }))
                   }
                 />
