@@ -145,3 +145,27 @@ export interface UpsertWorldCellPayload {
   ambushChance: number;
   enemyTypeId: string | null;
 }
+
+/** Admin view of a player map (world area opened from the inventory). */
+export interface AdminGameMap {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  centerX: number;
+  centerY: number;
+  radius: number;
+  itemCode: string;
+}
+
+export interface CreateGameMapPayload {
+  code: string;
+  name: string;
+  description: string | null;
+  centerX: number;
+  centerY: number;
+  radius: number;
+  itemCode: string;
+}
+
+export type UpdateGameMapPayload = Partial<CreateGameMapPayload>;

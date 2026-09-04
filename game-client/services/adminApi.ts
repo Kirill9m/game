@@ -1,6 +1,7 @@
 import type {
   AdminDialogueNode,
   AdminEnemyType,
+  AdminGameMap,
   AdminItem,
   AdminNpc,
   AdminPlayer,
@@ -8,10 +9,12 @@ import type {
   AdminWorldCell,
   CreateDialogueNodePayload,
   CreateEnemyTypePayload,
+  CreateGameMapPayload,
   CreateItemPayload,
   CreateNpcPayload,
   CreateQuestPayload,
   UpdateEnemyTypePayload,
+  UpdateGameMapPayload,
   UpdatePlayerPayload,
   UpsertWorldCellPayload,
 } from "@/types/admin";
@@ -305,6 +308,42 @@ export const adminApi = {
   async deleteWorldCell(playerId: string, cellId: string): Promise<void> {
     await request<void>(
       `${API_URL}/api/admin/world-cells/${encodeURIComponent(cellId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  // --- Game maps (world areas opened from the inventory) ---
+  async getMaps(playerId: string): Promise<AdminGameMap[]> {
+    return request<AdminGameMap[]>(
+      `${API_URL}/api/admin/maps?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async createMap(playerId: string, payload: CreateGameMapPayload): Promise<AdminGameMap> {
+    return request<AdminGameMap>(
+      `${API_URL}/api/admin/maps?${withPlayerId(playerId)}`,
+      jsonBody(payload),
+    );
+  },
+
+  async updateMap(
+    playerId: string,
+    mapId: string,
+    payload: UpdateGameMapPayload,
+  ): Promise<AdminGameMap> {
+    return request<AdminGameMap>(
+      `${API_URL}/api/admin/maps/${encodeURIComponent(mapId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteMap(playerId: string, mapId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/maps/${encodeURIComponent(mapId)}?${withPlayerId(playerId)}`,
       { method: "DELETE" },
     );
   },

@@ -60,6 +60,21 @@ export interface WorldZone {
   radius: number;
 }
 
+/**
+ * A player-viewable map. Each map is bound to an inventory item (by item
+ * code) and shows a circular area of the world centered at (centerX, centerY).
+ */
+export interface GameMap {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  centerX: number;
+  centerY: number;
+  radius: number;
+  itemCode: string;
+}
+
 export interface PlayerStats {
   questPoints: number;
   health: number;

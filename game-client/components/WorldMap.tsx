@@ -1,10 +1,13 @@
-import { WorldCell, WorldZone } from "@/types/game";
+import { GameMap, WorldCell, WorldZone } from "@/types/game";
 import { NpcInfo } from "@/types/npc";
 
 interface WorldMapProps {
   positionX: number;
   positionY: number;
-  zone: WorldZone;
+  /** The map being shown — its center can differ from the player's position. */
+  map: GameMap;
+  /** Village safe zone — cells inside it are drawn blue. */
+  safeZone?: WorldZone | null;
   npcs: NpcInfo[];
   /** Admin-configured per-cell dangers (blocked / radiation / ambush). */
   cells?: WorldCell[];
@@ -17,17 +20,28 @@ const HALF_MAP = Math.floor(MAP_SIZE / 2);
 export default function WorldMap({
   positionX,
   positionY,
-  zone,
+  map,
+  safeZone,
   npcs,
   cells,
   onTalk,
 }: WorldMapProps) {
-  const isInsideZone = (x: number, y: number) => {
-    const distanceX = x - zone.centerX;
-    const distanceY = y - zone.centerY;
-    return (
-      distanceX * distanceX + distanceY * distanceY <= zone.radius * zone.radius
-    );
+  const isInsideSafe = (x: number, y: number) => {
+    if (!safeZone) return false;
+    const dx = x - safeZone.centerX;
+    const dy = y - safeZone.centerY;
+    return dx * dx + dy * dy <= safeZone.radius * safeZone.radius;
+  };
+
+  // Grid cell (gridX, gridY) → world coordinates. The grid shows cells
+  // [centerX - 10 .. centerX + 9] × [centerY - 10 .. centerY + 9].
+  const toWorldX = (gridX: number) => map.centerX + gridX - HALF_MAP;
+  const toWorldY = (gridY: number) => map.centerY + gridY - HALF_MAP;
+
+  const inMapArea = (x: number, y: number) => {
+    const dx = x - map.centerX;
+    const dy = y - map.centerY;
+    return dx * dx + dy * dy <= map.radius * map.radius;
   };
 
   const cellSettings = new Map(
@@ -39,15 +53,18 @@ export default function WorldMap({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide text-blue-200">
-            {zone.name}
+            {map.name}
           </h2>
-          <p className="text-xs text-red-200/80">
+          {map.description && (
+            <p className="text-xs text-red-200/80">{map.description}</p>
+          )}
+          <p className="text-xs text-red-200/70">
             Blue dome: safe | Red land: dangerous | ☢️ radiation | 🚫 blocked |
             👹 ambush
           </p>
         </div>
         <span className="rounded-full border border-blue-300/60 bg-blue-500/20 px-2 py-1 text-xs text-blue-100">
-          Radius {zone.radius}
+          Center [{map.centerX}:{map.centerY}] · R{map.radius}
         </span>
       </div>
 
@@ -59,30 +76,36 @@ export default function WorldMap({
               const gridX = index % MAP_SIZE;
               const gridY = MAP_SIZE - 1 - Math.floor(index / MAP_SIZE);
 
-              // Центрирование: 0,0 находится в центре сетки (-10..9)
-              const x = gridX - HALF_MAP;
-              const y = gridY - HALF_MAP;
+              const x = toWorldX(gridX);
+              const y = toWorldY(gridY);
 
-              const safe = isInsideZone(x, y);
+              // Cells that fall outside the circular area this map covers are dimmed.
+              const inMap = inMapArea(x, y);
+
+              const safe = inMap && isInsideSafe(x, y);
               const current = positionX === x && positionY === y;
               const npcsAtPosition = npcs.filter(
                 (npc) => npc.positionX === x && npc.positionY === y,
               );
               const settings = cellSettings.get(`${x}:${y}`);
 
-              let bg = safe ? "bg-blue-500/55" : "bg-red-600/65";
+              let bg = safe
+                ? "bg-blue-500/55"
+                : inMap
+                  ? "bg-red-600/65"
+                  : "bg-gray-900/70";
               let icon = "";
               const details: string[] = [];
               if (settings?.blocked) {
                 bg = "bg-gray-950";
                 icon = "🚫";
                 details.push("blocked");
-              } else if ((settings?.radiation ?? 0) > 0) {
+              } else if ((settings?.radiation ?? 0) > 0 && inMap) {
                 bg = "bg-lime-700/75";
                 icon = "☢️";
                 details.push(`☢ ${settings?.radiation} HP`);
               }
-              if ((settings?.ambushChance ?? 0) > 0) {
+              if ((settings?.ambushChance ?? 0) > 0 && inMap) {
                 if (!settings?.blocked && !icon) {
                   bg = "bg-orange-600/70";
                 }
@@ -96,7 +119,7 @@ export default function WorldMap({
                 <div
                   key={`${x}:${y}`}
                   className={`relative flex items-center justify-center ${bg}`}
-                  title={`[${x}/${y}]${details.length ? ` — ${details.join(" | ")}` : ""}`}
+                  title={`[${x}/${y}]${!inMap ? " — outside this map" : ""}${details.length ? ` — ${details.join(" | ")}` : ""}`}
                 >
                   {icon && (
                     <div className="z-10 flex items-center justify-center">
@@ -125,15 +148,29 @@ export default function WorldMap({
             })}
           </div>
 
+          {/* The circular area this map actually covers */}
           <div
-            className="pointer-events-none absolute rounded-full border-2 border-blue-200/80 bg-blue-300/15 shadow-[0_0_28px_rgba(96,165,250,0.8)]"
+            className="pointer-events-none absolute rounded-full border-2 border-cyan-300/80 bg-cyan-300/10 shadow-[0_0_28px_rgba(103,232,249,0.55)]"
             style={{
-              left: `${((zone.centerX + HALF_MAP - zone.radius) / MAP_SIZE) * 100}%`,
-              bottom: `${((zone.centerY + HALF_MAP - zone.radius) / MAP_SIZE) * 100}%`,
-              width: `${((zone.radius * 2 + 1) / MAP_SIZE) * 100}%`,
+              left: `${((HALF_MAP - map.radius) / MAP_SIZE) * 100}%`,
+              top: `${((HALF_MAP - map.radius) / MAP_SIZE) * 100}%`,
+              width: `${((map.radius * 2 + 1) / MAP_SIZE) * 100}%`,
               aspectRatio: "1",
             }}
           />
+
+          {/* The village safe zone (may be outside the current map's viewport) */}
+          {safeZone && (
+            <div
+              className="pointer-events-none absolute rounded-full border-2 border-blue-200/80 bg-blue-300/15 shadow-[0_0_28px_rgba(96,165,250,0.8)]"
+              style={{
+                left: `${((safeZone.centerX - (map.centerX - HALF_MAP) - safeZone.radius) / MAP_SIZE) * 100}%`,
+                bottom: `${((safeZone.centerY - (map.centerY - HALF_MAP) - safeZone.radius) / MAP_SIZE) * 100}%`,
+                width: `${((safeZone.radius * 2 + 1) / MAP_SIZE) * 100}%`,
+                aspectRatio: "1",
+              }}
+            />
+          )}
         </div>
       </div>
     </section>

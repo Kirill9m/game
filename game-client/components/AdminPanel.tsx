@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { adminApi } from "@/services/adminApi";
 import { playerApi } from "@/services/playerApi";
 import type {
   AdminDialogueNode,
   AdminEnemyType,
+  AdminGameMap,
   AdminItem,
   AdminNpc,
   AdminPlayer,
@@ -18,7 +19,15 @@ interface Props {
   playerId: string;
 }
 
-type Section = "quests" | "dialogues" | "items" | "enemies" | "players" | "world";
+type Section = "quests" | "dialogues" | "items" | "enemies" | "players" | "world" | "maps";
+
+// --- World map (admin cell editor): big map, movable viewport ---
+// Matches the game world (WorldConstants): 1000×1000 cells, negative allowed.
+const WORLD_SIZE = 1000; // total map cells per side
+const WORLD_MIN = -500; // lowest coordinate (negative coordinates are valid)
+const WORLD_MAX = WORLD_MIN + WORLD_SIZE - 1; // 499
+const VIEW_SIZE = 10; // visible window per side
+const VIEW_HALF = Math.floor(VIEW_SIZE / 2);
 
 interface ChoiceDraft {
   text: string;
@@ -46,6 +55,7 @@ export default function AdminPanel({ playerId }: Props) {
   const [enemies, setEnemies] = useState<AdminEnemyType[]>([]);
   const [worldCells, setWorldCells] = useState<AdminWorldCell[]>([]);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
+  const [maps, setMaps] = useState<AdminGameMap[]>([]);
   const [selectedNpcId, setSelectedNpcId] = useState<string>("");
   const [nodesData, setNodesData] = useState<{ npcId: string; nodes: AdminDialogueNode[] }>({
     npcId: "",
@@ -97,6 +107,22 @@ export default function AdminPanel({ playerId }: Props) {
   const [cellAmbush, setCellAmbush] = useState(0);
   const [cellEnemyId, setCellEnemyId] = useState<string>("");
 
+  // --- Map form state ---
+  const [mapCode, setMapCode] = useState("");
+  const [mapName, setMapName] = useState("");
+  const [mapDesc, setMapDesc] = useState("");
+  const [mapX, setMapX] = useState(0);
+  const [mapY, setMapY] = useState(0);
+  const [mapRadius, setMapRadius] = useState(4);
+  const [mapItemCode, setMapItemCode] = useState("WORLD_MAP");
+  const [editingMapId, setEditingMapId] = useState<string>("");
+
+  // --- World map navigation state ---
+  const [viewOrigin, setViewOrigin] = useState({ x: 0, y: 0 });
+  const [jumpX, setJumpX] = useState(0);
+  const [jumpY, setJumpY] = useState(0);
+  const miniMapRef = useRef<HTMLDivElement>(null);
+
   // --- Player edit state ---
   const [editingPlayerId, setEditingPlayerId] = useState<string>("");
   const [playerDraft, setPlayerDraft] = useState({
@@ -128,13 +154,14 @@ export default function AdminPanel({ playerId }: Props) {
   );
 
   const loadAll = useCallback(async () => {
-    const [p, n, q, i, e, w] = await Promise.all([
+    const [p, n, q, i, e, w, m] = await Promise.all([
       adminApi.getPlayers(playerId),
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
       adminApi.getEnemyTypes(playerId),
       adminApi.getWorldCells(playerId),
+      adminApi.getMaps(playerId),
     ]);
     setPlayers(p);
     setNpcs(n);
@@ -142,6 +169,7 @@ export default function AdminPanel({ playerId }: Props) {
     setItems(i);
     setEnemies(e);
     setWorldCells(w);
+    setMaps(m);
     setSelectedNpcId((current) => current || n[0]?.id || "");
   }, [playerId]);
 
@@ -155,9 +183,10 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getItems(playerId),
       adminApi.getEnemyTypes(playerId),
       adminApi.getWorldCells(playerId),
+      adminApi.getMaps(playerId),
       playerApi.getSafeZone().catch(() => null),
     ])
-      .then(([p, n, q, i, e, w, zone]) => {
+      .then(([p, n, q, i, e, w, m, zone]) => {
         if (cancelled) return;
         setPlayers(p);
         setNpcs(n);
@@ -165,6 +194,7 @@ export default function AdminPanel({ playerId }: Props) {
         setItems(i);
         setEnemies(e);
         setWorldCells(w);
+        setMaps(m);
         setSafeZone(zone);
         setSelectedNpcId((current) => current || n[0]?.id || "");
       })
@@ -400,6 +430,38 @@ export default function AdminPanel({ playerId }: Props) {
     setCellEnemyId(existing?.enemyType?.id ?? "");
   };
 
+  // World map navigation helpers
+  const clampView = (x: number, y: number) => ({
+    x: Math.max(WORLD_MIN, Math.min(WORLD_MAX - VIEW_SIZE + 1, x)),
+    y: Math.max(WORLD_MIN, Math.min(WORLD_MAX - VIEW_SIZE + 1, y)),
+  });
+
+  const moveView = (dx: number, dy: number) =>
+    setViewOrigin((origin) => clampView(origin.x + dx, origin.y + dy));
+
+  // Center the camera on a cell (and select it for editing)
+  const jumpToCell = (x: number, y: number) => {
+    const cx = Math.max(WORLD_MIN, Math.min(WORLD_MAX, x));
+    const cy = Math.max(WORLD_MIN, Math.min(WORLD_MAX, y));
+    setJumpX(cx);
+    setJumpY(cy);
+    setViewOrigin(clampView(cx - VIEW_HALF, cy - VIEW_HALF));
+    handleSelectCell(cx, cy);
+  };
+
+  // Mini-map click → move the camera to the chosen point
+  const handleMiniMapClick = (event: MouseEvent<HTMLDivElement>) => {
+    const rect = miniMapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x =
+      Math.floor(((event.clientX - rect.left) / rect.width) * WORLD_SIZE) +
+      WORLD_MIN;
+    const y =
+      Math.floor(((rect.bottom - event.clientY) / rect.height) * WORLD_SIZE) +
+      WORLD_MIN;
+    jumpToCell(x, y);
+  };
+
   const handleSaveCell = () =>
     run(async () => {
       if (cellEnemyId && cellAmbush <= 0) {
@@ -424,6 +486,63 @@ export default function AdminPanel({ playerId }: Props) {
       await adminApi.deleteWorldCell(playerId, cellId);
       await loadAll();
       setNotice("Cell settings removed");
+    });
+
+  // --- Map handlers ---
+
+  const resetMapForm = () => {
+    setMapCode("");
+    setMapName("");
+    setMapDesc("");
+    setMapX(0);
+    setMapY(0);
+    setMapRadius(4);
+    setMapItemCode("WORLD_MAP");
+    setEditingMapId("");
+  };
+
+  const handleStartEditMap = (map: AdminGameMap) => {
+    setEditingMapId(map.id);
+    setMapCode(map.code);
+    setMapName(map.name);
+    setMapDesc(map.description ?? "");
+    setMapX(map.centerX);
+    setMapY(map.centerY);
+    setMapRadius(map.radius);
+    setMapItemCode(map.itemCode);
+  };
+
+  const handleSaveMap = () =>
+    run(async () => {
+      if (!mapCode.trim() || !mapName.trim() || !mapItemCode.trim()) {
+        throw new Error("Map code, name and item code are required");
+      }
+      const payload = {
+        code: mapCode.trim(),
+        name: mapName.trim(),
+        description: mapDesc.trim() || null,
+        centerX: mapX,
+        centerY: mapY,
+        radius: mapRadius,
+        itemCode: mapItemCode.trim().toUpperCase(),
+      };
+      if (editingMapId) {
+        await adminApi.updateMap(playerId, editingMapId, payload);
+        setNotice(`Map "${payload.name}" updated`);
+      } else {
+        await adminApi.createMap(playerId, payload);
+        setNotice(`Map "${payload.name}" created`);
+      }
+      resetMapForm();
+      await loadAll();
+    });
+
+  const handleDeleteMap = (mapId: string) =>
+    run(async () => {
+      await adminApi.deleteMap(playerId, mapId);
+      if (editingMapId === mapId) resetMapForm();
+      await loadAll();
+      setNotice("Map deleted");
     });
 
   const handleStartEditPlayer = (player: AdminPlayer) => {
@@ -474,6 +593,7 @@ export default function AdminPanel({ playerId }: Props) {
                 { id: "items", icon: "⚔️", label: "Items" },
                 { id: "enemies", icon: "👹", label: "Enemies" },
                 { id: "world", icon: "🗺️", label: "World Cells" },
+                { id: "maps", icon: "🧭", label: "Maps" },
                 { id: "players", icon: "🛡️", label: "Players" },
               ] as const
             ).map((tab) => (
@@ -907,19 +1027,119 @@ export default function AdminPanel({ playerId }: Props) {
       {section === "world" && (
         <div className="flex flex-col gap-3">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
-              🗺️ World Cells — click a cell to configure it
-            </span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                🗺️ World Cells — click a cell to configure it
+              </span>
+              <span className="font-mono text-[10px] text-gray-500">
+                {WORLD_SIZE}×{WORLD_SIZE} cells ({WORLD_MIN}…
+                {WORLD_MAX}) · view [{viewOrigin.x}–
+                {viewOrigin.x + VIEW_SIZE - 1}]×[{viewOrigin.y}–
+                {viewOrigin.y + VIEW_SIZE - 1}]
+              </span>
+            </div>
             <p className="text-[11px] text-gray-500">
               🚫 blocked (cannot enter) · ☢️ radiation (HP loss per step) · 👹 ambush
-              (chance + enemy, only outside the blue safe zone).
+              (chance + enemy, only outside the blue safe zone). The map is bigger
+              than the window — pan with the arrows, type coordinates, or click the
+              overview to jump to a point.
             </p>
-            <div className="flex justify-center">
-              <div className="aspect-square w-full max-w-[320px] overflow-hidden rounded-md border border-gray-700 bg-gray-950 p-1">
-                <div className="grid h-full w-full grid-cols-10 grid-rows-10 gap-px bg-gray-950">
-                  {Array.from({ length: 100 }, (_, index) => {
-                    const x = index % 10;
-                    const y = 9 - Math.floor(index / 10);
+
+            {/* Pan + jump controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  title="Up"
+                  onClick={() => moveView(0, 1)}
+                  className="h-8 w-8 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-200 text-xs flex items-center justify-center transition"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  title="Left"
+                  onClick={() => moveView(-1, 0)}
+                  className="h-8 w-8 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-200 text-xs flex items-center justify-center transition"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  title="Back to 0,0"
+                  onClick={() => setViewOrigin({ x: 0, y: 0 })}
+                  className="h-8 w-8 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-200 text-xs flex items-center justify-center transition"
+                >
+                  🏠
+                </button>
+                <button
+                  type="button"
+                  title="Right"
+                  onClick={() => moveView(1, 0)}
+                  className="h-8 w-8 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-200 text-xs flex items-center justify-center transition"
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  title="Down"
+                  onClick={() => moveView(0, -1)}
+                  className="h-8 w-8 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-200 text-xs flex items-center justify-center transition"
+                >
+                  ▼
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 ml-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  📍 Jump to
+                </span>
+                <input
+                  type="number"
+                  min={WORLD_MIN}
+                  max={WORLD_MAX}
+                  className="w-16 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                  value={jumpX}
+                  onChange={(e) =>
+                    setJumpX(
+                      Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(e.target.value) || 0)),
+                    )
+                  }
+                />
+                <span className="text-xs text-gray-500">:</span>
+                <input
+                  type="number"
+                  min={WORLD_MIN}
+                  max={WORLD_MAX}
+                  className="w-16 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                  value={jumpY}
+                  onChange={(e) =>
+                    setJumpY(
+                      Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(e.target.value) || 0)),
+                    )
+                  }
+                />
+                <button type="button" disabled={busy} onClick={() => jumpToCell(jumpX, jumpY)} className={primaryBtn}>
+                  Go
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-4">
+              {/* Main viewport (camera window) */}
+              <div className="flex flex-col items-center gap-1 w-full max-w-[320px]">
+                <div className="w-full aspect-square overflow-hidden rounded-md border border-gray-700 bg-gray-950 p-1">
+                  <div
+                    className="grid h-full w-full gap-px bg-gray-950"
+                    style={{
+                      gridTemplateColumns: `repeat(${VIEW_SIZE}, minmax(0, 1fr))`,
+                      gridTemplateRows: `repeat(${VIEW_SIZE}, minmax(0, 1fr))`,
+                    }}
+                  >
+                  {Array.from({ length: VIEW_SIZE * VIEW_SIZE }, (_, index) => {
+                    const x = viewOrigin.x + (index % VIEW_SIZE);
+                    const y =
+                      viewOrigin.y +
+                      (VIEW_SIZE - 1 - Math.floor(index / VIEW_SIZE));
                     const settings = worldCells.find(
                       (c) => c.positionX === x && c.positionY === y,
                     );
@@ -980,7 +1200,88 @@ export default function AdminPanel({ playerId }: Props) {
                       </button>
                     );
                   })}
+                  </div>
                 </div>
+                <span className="font-mono text-[10px] text-gray-500">
+                  [{viewOrigin.x}–{viewOrigin.x + VIEW_SIZE - 1}] × [{viewOrigin.y}–
+                  {viewOrigin.y + VIEW_SIZE - 1}]
+                </span>
+              </div>
+
+              {/* Mini-map — click to move the camera */}
+              <div className="flex flex-col items-center gap-1 w-full max-w-[200px]">
+                <div
+                  ref={miniMapRef}
+                  onClick={handleMiniMapClick}
+                  className="relative aspect-square w-full cursor-crosshair overflow-hidden rounded-xl border border-gray-700 bg-gray-950"
+                  title="Click anywhere on the overview to jump the camera to that point"
+                >
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, rgba(148,163,184,0.25) 1px, transparent 1px), linear-gradient(to top, rgba(148,163,184,0.25) 1px, transparent 1px)",
+                      backgroundSize: "10% 10%",
+                    }}
+                  />
+                  {/* Axis lines through cell (0,0) */}
+                  <div className="pointer-events-none absolute left-1/2 top-0 h-full w-px bg-blue-400/30" />
+                  <div className="pointer-events-none absolute top-1/2 left-0 w-full h-px bg-blue-400/30" />
+                  {worldCells
+                    .filter(
+                      (cell) =>
+                        cell.positionX >= WORLD_MIN &&
+                        cell.positionX <= WORLD_MAX &&
+                        cell.positionY >= WORLD_MIN &&
+                        cell.positionY <= WORLD_MAX,
+                    )
+                    .map((cell) => (
+                      <span
+                        key={cell.id}
+                        className={`absolute h-[5px] w-[5px] rounded-full border border-black/70 ${
+                          cell.blocked
+                            ? "bg-gray-300"
+                            : (cell.radiation ?? 0) > 0
+                              ? "bg-lime-400"
+                              : (cell.ambushChance ?? 0) > 0
+                                ? "bg-orange-400"
+                                : "bg-blue-400"
+                        }`}
+                        style={{
+                          left: `${((cell.positionX - WORLD_MIN + 0.5) / WORLD_SIZE) * 100}%`,
+                          bottom: `${((cell.positionY - WORLD_MIN + 0.5) / WORLD_SIZE) * 100}%`,
+                          transform: "translate(-50%, 50%)",
+                          zIndex: 5,
+                        }}
+                        title={`[${cell.positionX}:${cell.positionY}]${cell.blocked ? " 🚫" : ""}${(cell.radiation ?? 0) > 0 ? ` ☢${cell.radiation}` : ""}${(cell.ambushChance ?? 0) > 0 ? ` 👹${cell.ambushChance}%` : ""}`}
+                      />
+                    ))}
+                  <div
+                    className="pointer-events-none absolute z-10 rounded-[2px] border border-blue-400 bg-blue-400/10 shadow-[0_0_6px_rgba(96,165,250,0.5)]"
+                    style={{
+                      left: `${((viewOrigin.x - WORLD_MIN) / WORLD_SIZE) * 100}%`,
+                      bottom: `${((viewOrigin.y - WORLD_MIN) / WORLD_SIZE) * 100}%`,
+                      width: `${(VIEW_SIZE / WORLD_SIZE) * 100}%`,
+                      height: `${(VIEW_SIZE / WORLD_SIZE) * 100}%`,
+                    }}
+                  />
+                  {selectedCell.x >= WORLD_MIN &&
+                    selectedCell.x <= WORLD_MAX &&
+                    selectedCell.y >= WORLD_MIN &&
+                    selectedCell.y <= WORLD_MAX && (
+                      <span
+                        className="pointer-events-none absolute z-20 h-[7px] w-[7px] rounded-full border border-white bg-white"
+                        style={{
+                          left: `${((selectedCell.x - WORLD_MIN + 0.5) / WORLD_SIZE) * 100}%`,
+                          bottom: `${((selectedCell.y - WORLD_MIN + 0.5) / WORLD_SIZE) * 100}%`,
+                          transform: "translate(-50%, 50%)",
+                        }}
+                      />
+                    )}
+                </div>
+                <span className="text-[10px] text-gray-500">
+                  🏁 overview — click to jump the camera
+                </span>
               </div>
             </div>
           </div>
@@ -995,14 +1296,14 @@ export default function AdminPanel({ playerId }: Props) {
                 <label className={labelClass}>Position X</label>
                 <input
                   type="number"
-                  min={0}
-                  max={999}
+                  min={WORLD_MIN}
+                  max={WORLD_MAX}
                   className={inputClass}
                   value={selectedCell.x}
                   onChange={(e) =>
                     setSelectedCell((c) => ({
                       ...c,
-                      x: Math.max(0, Math.min(999, Number(e.target.value) || 0)),
+                      x: Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(e.target.value) || 0)),
                     }))
                   }
                 />
@@ -1011,14 +1312,14 @@ export default function AdminPanel({ playerId }: Props) {
                 <label className={labelClass}>Position Y</label>
                 <input
                   type="number"
-                  min={0}
-                  max={999}
+                  min={WORLD_MIN}
+                  max={WORLD_MAX}
                   className={inputClass}
                   value={selectedCell.y}
                   onChange={(e) =>
                     setSelectedCell((c) => ({
                       ...c,
-                      y: Math.max(0, Math.min(999, Number(e.target.value) || 0)),
+                      y: Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(e.target.value) || 0)),
                     }))
                   }
                 />
@@ -1115,7 +1416,7 @@ export default function AdminPanel({ playerId }: Props) {
                 <div className="flex gap-1 shrink-0">
                   <button
                     type="button"
-                    onClick={() => handleSelectCell(cell.positionX, cell.positionY)}
+                    onClick={() => jumpToCell(cell.positionX, cell.positionY)}
                     className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[10px] font-bold px-2 py-1 rounded-lg transition"
                   >
                     ✎ Edit
@@ -1134,6 +1435,158 @@ export default function AdminPanel({ playerId }: Props) {
             {worldCells.length === 0 && (
               <div className="text-center text-gray-600 text-xs py-4">
                 No cells configured yet — click a cell on the grid above.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= MAPS (world areas opened from the inventory) ================= */}
+      {section === "maps" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                {editingMapId ? "✏️ Edit Map" : "➕ New Map"}
+              </span>
+              {editingMapId && (
+                <button type="button" onClick={resetMapForm} className={dangerBtn}>
+                  Cancel edit
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Each map shows a circular area of the world (different maps = different
+              coordinates) and is bound to an inventory item. Players open it from the
+              inventory via the “Open” button.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Code</label>
+                <input
+                  className={inputClass}
+                  value={mapCode}
+                  onChange={(e) => setMapCode(e.target.value.toUpperCase())}
+                  placeholder="DESERT_MAP"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Name</label>
+                <input
+                  className={inputClass}
+                  value={mapName}
+                  onChange={(e) => setMapName(e.target.value)}
+                  placeholder="Desert Map"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Description</label>
+                <input
+                  className={inputClass}
+                  value={mapDesc}
+                  onChange={(e) => setMapDesc(e.target.value)}
+                  placeholder="Scorched dunes far to the east…"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Center X (-500..499)</label>
+                <input
+                  type="number"
+                  min={-500}
+                  max={499}
+                  className={inputClass}
+                  value={mapX}
+                  onChange={(e) => setMapX(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Center Y (-500..499)</label>
+                <input
+                  type="number"
+                  min={-500}
+                  max={499}
+                  className={inputClass}
+                  value={mapY}
+                  onChange={(e) => setMapY(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Radius (1..9)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={9}
+                  className={inputClass}
+                  value={mapRadius}
+                  onChange={(e) => setMapRadius(Number(e.target.value) || 1)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Item code (opens the map)</label>
+                <select
+                  className={inputClass}
+                  value={mapItemCode}
+                  onChange={(e) => setMapItemCode(e.target.value)}
+                >
+                  {items.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name} ({item.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <button type="button" disabled={busy} onClick={handleSaveMap} className={primaryBtn}>
+              {editingMapId ? "💾 Save changes" : "➕ Create map"}
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              🧭 Maps ({maps.length})
+            </span>
+            {maps.map((gm) => (
+              <div
+                key={gm.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">
+                    {gm.name}{" "}
+                    <span className="text-[10px] text-gray-500 font-mono">
+                      {gm.code}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    Center [{gm.centerX}:{gm.centerY}] · R{gm.radius} · opens via{" "}
+                    <span className="font-mono text-blue-400">{gm.itemCode}</span>
+                  </div>
+                  {gm.description && (
+                    <div className="text-[10px] text-gray-400 mt-0.5">{gm.description}</div>
+                  )}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleStartEditMap(gm)}
+                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[10px] font-bold px-2 py-1 rounded-lg transition"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleDeleteMap(gm.id)}
+                    className={dangerBtn}
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))}
+            {maps.length === 0 && (
+              <div className="text-center text-gray-600 text-xs py-4">
+                No maps yet — create one above.
               </div>
             )}
           </div>

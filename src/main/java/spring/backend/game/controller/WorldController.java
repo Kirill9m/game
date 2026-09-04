@@ -5,13 +5,16 @@ import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
+import spring.backend.game.dto.GameMapResponse;
 import spring.backend.game.dto.WorldBoundsResponse;
 import spring.backend.game.dto.WorldCellResponse;
 import spring.backend.game.dto.WorldZoneResponse;
+import spring.backend.game.service.GameMapService;
 import spring.backend.game.service.WorldCellService;
 import spring.backend.game.service.WorldConstants;
 import spring.backend.game.service.WorldZoneService;
@@ -23,6 +26,7 @@ import spring.backend.game.service.WorldZoneService;
 public class WorldController {
     private final WorldZoneService worldZoneService;
     private final WorldCellService worldCellService;
+    private final GameMapService gameMapService;
 
     @GetMapping("/safe-zone")
     public ResponseEntity<WorldZoneResponse> getSafeZone() {
@@ -42,5 +46,17 @@ public class WorldController {
                 WorldConstants.WORLD_MIN, WorldConstants.WORLD_MAX,
                 WorldConstants.WORLD_MIN, WorldConstants.WORLD_MAX,
                 WorldConstants.WORLD_SIZE));
+    }
+
+    /** All known player maps (each is opened by its inventory item). */
+    @GetMapping("/maps")
+    public ResponseEntity<List<GameMapResponse>> getMaps() {
+        return ResponseEntity.ok(gameMapService.getAllMaps());
+    }
+
+    /** The map bound to the given inventory item code (e.g. WORLD_MAP). */
+    @GetMapping("/maps/item/{itemCode}")
+    public ResponseEntity<GameMapResponse> getMapByItem(@PathVariable String itemCode) {
+        return ResponseEntity.ok(gameMapService.getMapByItemCode(itemCode));
     }
 }

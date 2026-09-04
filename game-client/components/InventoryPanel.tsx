@@ -6,7 +6,8 @@ interface InventoryPanelProps {
   items: InventoryItem[];
   playerId: string;
   onItemsChange: (items: InventoryItem[]) => void;
-  onOpenMap?: () => void;
+  /** Called when a map/utility item is opened, with the item's code. */
+  onOpenMap?: (itemCode?: string) => void;
 }
 
 const COLUMNS = 8;
@@ -217,7 +218,7 @@ export default function InventoryPanel({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onOpenMap();
+                          onOpenMap(item.code);
                         }}
                         className="rounded bg-blue-950/80 hover:bg-blue-900 px-1.5 py-0.5 text-[10px] text-white"
                       >

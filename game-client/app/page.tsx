@@ -6,6 +6,7 @@ import { playerApi } from "@/services/playerApi";
 import {
   CombatSession,
   EnemyType,
+  GameMap,
   InventoryItem,
   PlayerInfo,
   PlayerStats,
@@ -52,6 +53,8 @@ export default function GameMapPage() {
   const [activeNpc, setActiveNpc] = useState<NpcInfo | null>(null);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [worldCells, setWorldCells] = useState<WorldCell[]>([]);
+  const [gameMaps, setGameMaps] = useState<GameMap[]>([]);
+  const [activeMap, setActiveMap] = useState<GameMap | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [quests, setQuests] = useState<QuestProgress[]>([]);
   const [playerRole, setPlayerRole] = useState<string | null>(null);
@@ -126,6 +129,10 @@ export default function GameMapPage() {
     void playerApi
       .getWorldCells()
       .then(setWorldCells)
+      .catch(() => {});
+    void playerApi
+      .getGameMaps()
+      .then(setGameMaps)
       .catch(() => {});
   }, []);
 
@@ -254,6 +261,39 @@ export default function GameMapPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Movement failed");
     }
+  };
+
+  /** Maps the player can actually open (item present in the inventory). */
+  const ownedMaps = gameMaps.filter((gm) =>
+    inventory.some((item) => item.code === gm.itemCode),
+  );
+
+  /**
+   * Open the world map modal. When an inventory item code is supplied it opens
+   * the map bound to that item; otherwise it defaults to the first owned map
+   * and falls back to the first map on the server.
+   */
+  const openMap = (itemCode?: string) => {
+    setError("");
+    if (itemCode) {
+      const byItem =
+        gameMaps.find((gm) => gm.itemCode.toLowerCase() === itemCode.toLowerCase()) ?? null;
+      if (byItem) {
+        setActiveMap(byItem);
+        setIsMapOpen(true);
+        return;
+      }
+      setNotice(`No map found for item "${itemCode}"`);
+      return;
+    }
+    const next = ownedMaps[0] ?? gameMaps[0] ?? null;
+    if (!next) {
+      setNotice("You don't have a map yet");
+      return;
+    }
+    setActiveMap(next);
+    setNotice("");
+    setIsMapOpen(true);
   };
 
   if (status === "loading") {
@@ -419,7 +459,7 @@ export default function GameMapPage() {
                         items={inventory}
                         playerId={playerId}
                         onItemsChange={setInventory}
-                        onOpenMap={() => setIsMapOpen(true)}
+                        onOpenMap={openMap}
                       />
                     )}
 
@@ -545,7 +585,7 @@ export default function GameMapPage() {
                   {safeZone && (
                     <button
                       type="button"
-                      onClick={() => setIsMapOpen(true)}
+                      onClick={() => openMap()}
                       className="w-full mt-2 py-2.5 px-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-200 transition flex items-center justify-center gap-2"
                     >
                       🗺️ Open World Map
@@ -559,13 +599,18 @@ export default function GameMapPage() {
       )}
 
       {/* МОДАЛЬНОЕ ОКНО КАРТЫ */}
-      {isMapOpen && safeZone && !combatSession && (
+      {isMapOpen && activeMap && !combatSession && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
           <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-800">
-              <h3 className="font-bold text-gray-200 text-sm uppercase tracking-wider">
-                World Map [{positionX}:{positionY}]
-              </h3>
+              <div>
+                <h3 className="font-bold text-gray-200 text-sm uppercase tracking-wider">
+                  🗺️ {activeMap.name} [{positionX}:{positionY}]
+                </h3>
+                <p className="text-[10px] text-gray-500">
+                  You are at [{positionX}:{positionY}] · map center [{activeMap.centerX}:{activeMap.centerY}]
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsMapOpen(false)}
@@ -575,11 +620,34 @@ export default function GameMapPage() {
               </button>
             </div>
 
+            {ownedMaps.length > 1 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mr-1">
+                  Maps:
+                </span>
+                {ownedMaps.map((gm) => (
+                  <button
+                    key={gm.id}
+                    type="button"
+                    onClick={() => setActiveMap(gm)}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition ${
+                      activeMap.id === gm.id
+                        ? "border-blue-500 bg-blue-950/60 text-blue-200"
+                        : "border-gray-700 bg-gray-800/40 text-gray-400 hover:bg-gray-800"
+                    }`}
+                  >
+                    {gm.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex-1 overflow-auto bg-black/50 rounded-xl p-2 flex justify-center items-center min-h-[300px]">
               <WorldMap
                 positionX={positionX}
                 positionY={positionY}
-                zone={safeZone}
+                map={activeMap}
+                safeZone={safeZone}
                 npcs={npcs}
                 cells={worldCells}
                 onTalk={setActiveNpc}

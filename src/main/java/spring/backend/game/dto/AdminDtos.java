@@ -90,6 +90,17 @@ public final class AdminDtos {
             AdminEnemyTypeDto enemyType) {
     }
 
+    public record AdminGameMapDto(
+            java.util.UUID id,
+            String code,
+            String name,
+            String description,
+            int centerX,
+            int centerY,
+            int radius,
+            String itemCode) {
+    }
+
     // --- REQUESTS ---
 
     public record CreateNpcRequest(String code, String name, Integer positionX, Integer positionY) {
@@ -171,6 +182,26 @@ public final class AdminDtos {
             Integer radiation,
             Integer ambushChance,
             UUID enemyTypeId) {
+    }
+
+    public record CreateGameMapRequest(
+            String code,
+            String name,
+            String description,
+            Integer centerX,
+            Integer centerY,
+            Integer radius,
+            String itemCode) {
+    }
+
+    public record UpdateGameMapRequest(
+            String code,
+            String name,
+            String description,
+            Integer centerX,
+            Integer centerY,
+            Integer radius,
+            String itemCode) {
     }
 
     public record BootstrapAdminRequest(String playerId, String code) {

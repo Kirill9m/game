@@ -1,4 +1,5 @@
 import {
+  GameMap,
   InventoryItem,
   MoveResponse,
   PlayerStateResponse,
@@ -116,6 +117,22 @@ export const playerApi = {
   async getWorldBounds(): Promise<WorldBounds> {
     const response = await fetch(`${API_URL}/api/v1/world/bounds`);
     if (!response.ok) throw new Error("Failed to load world bounds");
+    return response.json();
+  },
+
+  /** Every map definition known to the server (world areas shown to players). */
+  async getGameMaps(): Promise<GameMap[]> {
+    const response = await fetch(`${API_URL}/api/v1/world/maps`);
+    if (!response.ok) throw new Error("Failed to load game maps");
+    return response.json();
+  },
+
+  /** The map bound to a specific inventory item code (e.g. WORLD_MAP). */
+  async getGameMapByItemCode(itemCode: string): Promise<GameMap> {
+    const response = await fetch(
+      `${API_URL}/api/v1/world/maps/item/${encodeURIComponent(itemCode)}`,
+    );
+    if (!response.ok) throw new Error(`No map found for item: ${itemCode}`);
     return response.json();
   },
 };

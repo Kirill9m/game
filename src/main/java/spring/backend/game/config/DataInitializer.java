@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -14,7 +15,9 @@ import spring.backend.game.entity.QuestSystem.DialogueChoiceEntity;
 import spring.backend.game.entity.QuestSystem.DialogueNodeEntity;
 import spring.backend.game.entity.QuestSystem.NpcEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
+import spring.backend.game.entity.GameMapEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.repository.GameMapRepository;
 import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
@@ -30,7 +33,9 @@ public class DataInitializer implements CommandLineRunner {
     private final QuestRepository questRepository;
     private final DialogueNodeRepository dialogueNodeRepository;
     private final ItemRepository itemRepository;
+    private final GameMapRepository mapRepository;
     private final JdbcTemplate jdbcTemplate;
+    @Lazy
     private final AdminService adminService;
 
     @Override
@@ -43,6 +48,7 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void seedData() {
         seedItems();
+        seedMaps();
 
         if (npcRepository.count() > 0) {
             npcRepository.findByCodeIgnoreCase("ELDER").ifPresent(this::seedElderDialogue);
@@ -259,6 +265,36 @@ public class DataInitializer implements CommandLineRunner {
                 saveItemIfMissing("KNIFE", "Knife", "WEAPON", 15, 1, 1, 2);
                 saveItemIfMissing("PISTOL", "Pistol", "WEAPON", 25, 3, 1, 2);
                 saveItemIfMissing("WORLD_MAP", "World Map", "UTILITY", 0, 0, 2, 2);
+                saveItemIfMissing("DESERT_MAP", "Desert Map", "UTILITY", 0, 0, 2, 2);
+        }
+
+        /**
+         * Seed the plugin-generated world maps. Each map is a separate world
+         * area with its own center / radius, bound to an inventory item code.
+         */
+        private void seedMaps() {
+                saveMapIfMissing("WORLD_MAP", "World Map",
+                        "The wilderness around the village. Blue is safe, red is dangerous.",
+                        0, 0, 4, "WORLD_MAP");
+                saveMapIfMissing("DESERT_MAP", "Desert Map",
+                        "Scorched dunes far to the east — watch out for radiation and raiders.",
+                        40, -20, 6, "DESERT_MAP");
+        }
+
+        private void saveMapIfMissing(String code, String name, String description,
+                        int centerX, int centerY, int radius, String itemCode) {
+                if (mapRepository.findByCodeIgnoreCase(code).isPresent()) {
+                        return;
+                }
+                mapRepository.save(GameMapEntity.builder()
+                                .code(code)
+                                .name(name)
+                                .description(description)
+                                .centerX(centerX)
+                                .centerY(centerY)
+                                .radius(radius)
+                                .itemCode(itemCode)
+                                .build());
         }
 
         private void saveItemIfMissing(

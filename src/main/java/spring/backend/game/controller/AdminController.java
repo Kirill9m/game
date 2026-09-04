@@ -26,16 +26,20 @@ import spring.backend.game.dto.AdminDtos.AdminWorldCellDto;
 import spring.backend.game.dto.AdminDtos.BootstrapAdminRequest;
 import spring.backend.game.dto.AdminDtos.CreateDialogueNodeRequest;
 import spring.backend.game.dto.AdminDtos.CreateEnemyTypeRequest;
+import spring.backend.game.dto.AdminDtos.CreateGameMapRequest;
 import spring.backend.game.dto.AdminDtos.CreateItemRequest;
 import spring.backend.game.dto.AdminDtos.CreateNpcRequest;
 import spring.backend.game.dto.AdminDtos.CreateQuestRequest;
 import spring.backend.game.dto.AdminDtos.SetRoleRequest;
 import spring.backend.game.dto.AdminDtos.UpdateEnemyTypeRequest;
+import spring.backend.game.dto.AdminDtos.UpdateGameMapRequest;
 import spring.backend.game.dto.AdminDtos.UpdateNpcRequest;
 import spring.backend.game.dto.AdminDtos.UpdatePlayerRequest;
 import spring.backend.game.dto.AdminDtos.UpdateQuestRequest;
 import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
+import spring.backend.game.dto.GameMapResponse;
 import spring.backend.game.service.AdminService;
+import spring.backend.game.service.GameMapService;
 import spring.backend.game.service.WorldCellService;
 
 /**
@@ -51,6 +55,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final WorldCellService worldCellService;
+    private final GameMapService gameMapService;
 
     // --- BOOTSTRAP (first admin) ---
 
@@ -328,6 +333,59 @@ public class AdminController {
     public ResponseEntity<Void> deleteWorldCell(@PathVariable Long cellId, @RequestParam String playerId) {
         adminService.requireAdmin(playerId);
         worldCellService.deleteCell(cellId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // --- GAME MAPS (player-viewable maps opened from the inventory) ---
+
+    @GetMapping("/maps")
+    public ResponseEntity<List<GameMapResponse>> getMaps(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(gameMapService.getAllMaps());
+    }
+
+    @PostMapping("/maps")
+    public ResponseEntity<GameMapResponse> createMap(
+            @RequestParam String playerId,
+            @RequestBody CreateGameMapRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(gameMapService.createMap(
+                request.code(),
+                request.name(),
+                request.description(),
+                request.centerX() == null ? 0 : request.centerX(),
+                request.centerY() == null ? 0 : request.centerY(),
+                request.radius() == null ? 3 : request.radius(),
+                request.itemCode()));
+    }
+
+    @PatchMapping("/maps/{mapId}")
+    public ResponseEntity<GameMapResponse> updateMap(
+            @PathVariable UUID mapId,
+            @RequestParam String playerId,
+            @RequestBody UpdateGameMapRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(gameMapService.updateMap(
+                mapId,
+                request.code(),
+                request.name(),
+                request.description(),
+                request.centerX(),
+                request.centerY(),
+                request.radius(),
+                request.itemCode()));
+    }
+
+    @DeleteMapping("/maps/{mapId}")
+    public ResponseEntity<Void> deleteMap(@PathVariable UUID mapId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        gameMapService.deleteMap(mapId);
         return ResponseEntity.noContent().build();
     }
 }
