@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { combatApi } from "@/services/combatApi";
 import { CombatActions } from "./combat/CombatActions";
@@ -9,11 +9,10 @@ import { CombatLog } from "./combat/CombatLog";
 import { CombatModeControls } from "./combat/CombatModeControls";
 import { CombatStatus } from "./combat/CombatStatus";
 import {
-  getShootableCells,
+  getAttackRangeCells,
   getLatestMove,
   getLatestPosture,
   getReachableCells,
-  isLineOfSightBlocked,
   isMovementBlocked,
   postureMovement,
 } from "./combat/board";
@@ -124,10 +123,12 @@ export default function CombatArena({
       ? postureMovement(plannedPosture)
       : 0;
   const plannedEnd = getLatestMove(plannedActions);
+  const obstacles = useMemo(() => combat.obstacles ?? [], [combat.obstacles]);
   const reachableCells = getReachableCells(
     plannedEnd?.x ?? myX,
     plannedEnd?.y ?? myY,
     movementRemaining,
+    obstacles,
   );
 
   // Дальность текущего (или запланированного к экипировке) оружия.
@@ -135,14 +136,13 @@ export default function CombatArena({
   const myAttackRange =
     inventory.find((item) => item.code === plannedEquipment)?.attackRange ?? 3;
   // Зона обстрела вокруг точки, из которой будем стрелять в этом ходе.
-  // Подсветка учитывает препятствия: клетки за стеной не входят в зону.
-  const attackRangeCells = getShootableCells(
+  // Препятствия её не ограничивают — пули проходят сквозь них, повреждая их.
+  const attackRangeCells = getAttackRangeCells(
     attackOrigin.x,
     attackOrigin.y,
     myAttackRange,
   );
-  // Сервер считает дистанцию как max(|dx|, |dy|) (Chebyshev) и блокирует
-  // выстрел стеной (raycast отрисовывается в isLineOfSightBlocked).
+  // Сервер считает дистанцию как max(|dx|, |dy|) (Chebyshev).
   const distanceToEnemy = Math.max(
     Math.abs(attackOrigin.x - enemyX),
     Math.abs(attackOrigin.y - enemyY),
@@ -151,12 +151,6 @@ export default function CombatArena({
     isMyTurn &&
     !isReplaying &&
     distanceToEnemy <= myAttackRange &&
-    !isLineOfSightBlocked(
-      attackOrigin.x,
-      attackOrigin.y,
-      enemyX,
-      enemyY,
-    ) &&
     plannedActions.length < combat.actionPoints;
   // Зону обстрела показываем только когда ей можно воспользоваться.
   const showAttackRange =
@@ -341,33 +335,9 @@ export default function CombatArena({
           return;
         }
         if (!canAttack) {
-          // Точная причина отказа: за стеной враг не «вне радиуса»,
-          // поэтому сообщаем реальный повод отдельно от дальности.
-          const origin = getLatestMove(plannedActions) ?? {
-            x: myX,
-            y: myY,
-          };
-          const distance = Math.max(
-            Math.abs(origin.x - enemyX),
-            Math.abs(origin.y - enemyY),
+          setError(
+            `Enemy is out of weapon range (${myAttackRange} cells or closer)`,
           );
-          const losBlocked = isLineOfSightBlocked(
-            origin.x,
-            origin.y,
-            enemyX,
-            enemyY,
-          );
-          if (distance > myAttackRange) {
-            setError(
-              `Enemy is out of weapon range (${myAttackRange} cells or closer)`,
-            );
-          } else if (losBlocked) {
-            setError(
-              "Line of sight is blocked by a wall — move to get a clear shot",
-            );
-          } else {
-            setError("You cannot attack right now");
-          }
           return;
         }
         setPlannedActions((actions) => [
@@ -377,8 +347,8 @@ export default function CombatArena({
         return;
       }
 
-      if (isMovementBlocked(targetX, targetY)) {
-        setError("This cell is blocked by terrain");
+      if (isMovementBlocked(targetX, targetY, obstacles)) {
+        setError("This cell is blocked by an obstacle — shoot it to destroy it");
         return;
       }
       if (!reachableCells.has(targetKey)) {
@@ -406,8 +376,7 @@ export default function CombatArena({
       isActing,
       isMyTurn,
       myAttackRange,
-      myX,
-      myY,
+      obstacles,
       plannedActions,
       plannedPosture,
       reachableCells,

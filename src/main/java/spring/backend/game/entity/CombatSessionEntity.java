@@ -1,5 +1,7 @@
 package spring.backend.game.entity;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -109,6 +111,79 @@ public class CombatSessionEntity {
     public void setLastRoundActions(String[] actions) {
         lastRoundActions = actions == null ? new String[0] : actions;
         lastRoundActionsData = String.join("\n", lastRoundActions);
+    }
+
+@Column(name = "obstacles_data", length = 4000)
+    @JsonIgnore
+    private String obstaclesData;
+
+    @Transient
+    private List<CombatObstacle> obstacles;
+
+    @Transient
+    @JsonIgnore
+    private boolean obstaclesParsed = false;
+
+    /** Destructible obstacles currently placed on this combat board. */
+    public List<CombatObstacle> getObstacles() {
+        if (!obstaclesParsed) {
+            obstacles = parseObstacles(obstaclesData);
+            obstaclesParsed = true;
+        }
+        return obstacles == null ? List.of() : obstacles;
+    }
+
+    public void setObstacles(List<CombatObstacle> newObstacles) {
+        obstacles = newObstacles == null ? new ArrayList<>() : new ArrayList<>(newObstacles);
+        obstaclesData = writeObstacles(obstacles);
+        obstaclesParsed = true;
+    }
+
+    /**
+     * Obstacles are stored as "x|y|code|name|maxHealth|currentHealth" lines
+     * separated by newlines — same plain text pattern as lastRoundActions.
+     * Newlines and pipes in the display name are sanitised so the format is
+     * always parseable regardless of what an admin typed.
+     */
+    private static List<CombatObstacle> parseObstacles(String data) {
+        if (data == null || data.isBlank()) {
+            return List.of();
+        }
+        List<CombatObstacle> result = new ArrayList<>();
+        for (String line : data.split("\n", -1)) {
+            String[] parts = line.split("\\|", -1);
+            if (parts.length != 6) {
+                continue;
+            }
+            try {
+                result.add(new CombatObstacle(
+                        Integer.parseInt(parts[0].trim()),
+                        Integer.parseInt(parts[1].trim()),
+                        parts[2].trim(),
+                        parts[3].trim(),
+                        Integer.parseInt(parts[4].trim()),
+                        Integer.parseInt(parts[5].trim())));
+            } catch (NumberFormatException ignored) {
+                // Skip malformed lines instead of losing the whole board.
+            }
+        }
+        return result;
+    }
+
+    private static String writeObstacles(List<CombatObstacle> value) {
+        StringBuilder builder = new StringBuilder();
+        for (CombatObstacle obstacle : value) {
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append(obstacle.x()).append('|')
+                    .append(obstacle.y()).append('|')
+                    .append(obstacle.code()).append('|')
+                    .append(obstacle.name().replace('|', '/').replace('\n', ' ')).append('|')
+                    .append(obstacle.maxHealth()).append('|')
+                    .append(obstacle.currentHealth());
+        }
+        return builder.toString();
     }
 
     @Transient

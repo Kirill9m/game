@@ -4,6 +4,7 @@ import type {
   AdminGameMap,
   AdminItem,
   AdminNpc,
+  AdminObstacleType,
   AdminPlayer,
   AdminProficiency,
   AdminQuest,
@@ -14,11 +15,13 @@ import type {
   CreateGameMapPayload,
   CreateItemPayload,
   CreateNpcPayload,
+  CreateObstacleTypePayload,
   CreateQuestPayload,
   CreateWeaponTypePayload,
   SetProficiencyPayload,
   UpdateEnemyTypePayload,
   UpdateGameMapPayload,
+  UpdateObstacleTypePayload,
   UpdatePlayerPayload,
   UpdateWeaponTypePayload,
   UpsertWorldCellPayload,
@@ -410,6 +413,45 @@ export const adminApi = {
   async deleteMap(playerId: string, mapId: string): Promise<void> {
     await request<void>(
       `${API_URL}/api/admin/maps/${encodeURIComponent(mapId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  // --- Obstacle types (destructible combat obstacles) ---
+  async getObstacleTypes(playerId: string): Promise<AdminObstacleType[]> {
+    return request<AdminObstacleType[]>(
+      `${API_URL}/api/admin/obstacle-types?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async createObstacleType(
+    playerId: string,
+    payload: CreateObstacleTypePayload,
+  ): Promise<AdminObstacleType> {
+    return request<AdminObstacleType>(
+      `${API_URL}/api/admin/obstacle-types?${withPlayerId(playerId)}`,
+      jsonBody(payload),
+    );
+  },
+
+  async updateObstacleType(
+    playerId: string,
+    obstacleTypeId: string,
+    payload: UpdateObstacleTypePayload,
+  ): Promise<AdminObstacleType> {
+    return request<AdminObstacleType>(
+      `${API_URL}/api/admin/obstacle-types/${encodeURIComponent(obstacleTypeId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteObstacleType(playerId: string, obstacleTypeId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/obstacle-types/${encodeURIComponent(obstacleTypeId)}?${withPlayerId(playerId)}`,
       { method: "DELETE" },
     );
   },

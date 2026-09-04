@@ -20,6 +20,7 @@ import spring.backend.game.dto.AdminDtos;
 import spring.backend.game.entity.CombatSessionEntity;
 import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.PlayerInventoryEntity;
 import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
@@ -33,6 +34,7 @@ import spring.backend.game.entity.QuestSystem.QuestLogEntryEntity;
 import spring.backend.game.repository.CombatRepository;
 import spring.backend.game.repository.EnemyTypeRepository;
 import spring.backend.game.repository.ItemRepository;
+import spring.backend.game.repository.ObstacleTypeRepository;
 import spring.backend.game.repository.PlayerInventoryRepository;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.DialogueChoiceRepository;
@@ -43,6 +45,7 @@ import spring.backend.game.repository.QuestSystem.QuestLogEntryRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
 import spring.backend.game.repository.WeaponProficiencyRepository;
 import spring.backend.game.repository.WeaponTypeRepository;
+import spring.backend.game.repository.WorldCellRepository;
 
 /**
  * Admin-only service: manages players/roles, NPCs, quests (including a random
@@ -116,6 +119,8 @@ public class AdminService {
     private final CombatRepository combatRepository;
     private final WeaponTypeRepository weaponTypeRepository;
     private final WeaponProficiencyRepository weaponProficiencyRepository;
+    private final ObstacleTypeRepository obstacleTypeRepository;
+    private final WorldCellRepository worldCellRepository;
     private final WorldCellService worldCellService;
     private final Random random = new Random();
 
@@ -683,6 +688,63 @@ public class AdminService {
         });
         weaponTypeRepository.delete(weaponType);
         log.info("Admin deleted weapon type '{}'", weaponType.getCode());
+    }
+
+    // --- OBSTACLE TYPES (destructible combat obstacles) ---
+
+    @Transactional(readOnly = true)
+    public List<AdminDtos.AdminObstacleTypeDto> getAllObstacleTypes() {
+        return obstacleTypeRepository.findAllByOrderByNameAsc().stream()
+                .map(this::toObstacleTypeDto)
+                .toList();
+    }
+
+    @Transactional
+    public AdminDtos.AdminObstacleTypeDto createObstacleType(String code, String name, Integer maxHealth) {
+        String normalizedCode = requireNonBlank(code, "Obstacle type code is required").trim().toUpperCase(Locale.ROOT);
+        if (obstacleTypeRepository.existsByCodeIgnoreCase(normalizedCode)) {
+            throw new IllegalArgumentException("Obstacle type code already exists: " + normalizedCode);
+        }
+        ObstacleTypeEntity type = obstacleTypeRepository.save(ObstacleTypeEntity.builder()
+                .code(normalizedCode)
+                .name(requireNonBlank(name, "Obstacle type name is required").trim())
+                .maxHealth(Math.max(1, maxHealth == null ? 30 : maxHealth))
+                .build());
+        log.info("Admin created obstacle type '{}' ({}, {} HP)", type.getName(), type.getCode(), type.getMaxHealth());
+        return toObstacleTypeDto(type);
+    }
+
+    @Transactional
+    public AdminDtos.AdminObstacleTypeDto updateObstacleType(UUID obstacleTypeId, String name, Integer maxHealth) {
+        ObstacleTypeEntity type = obstacleTypeRepository.findById(obstacleTypeId)
+                .orElseThrow(() -> new EntityNotFoundException("Obstacle type not found: " + obstacleTypeId));
+        if (name != null && !name.isBlank()) {
+            type.setName(name.trim());
+        }
+        if (maxHealth != null) {
+            type.setMaxHealth(Math.max(1, maxHealth));
+        }
+        obstacleTypeRepository.save(type);
+        log.info("Admin updated obstacle type '{}' ({})", type.getName(), type.getCode());
+        return toObstacleTypeDto(type);
+    }
+
+    @Transactional
+    public void deleteObstacleType(UUID obstacleTypeId) {
+        ObstacleTypeEntity type = obstacleTypeRepository.findById(obstacleTypeId)
+                .orElseThrow(() -> new EntityNotFoundException("Obstacle type not found: " + obstacleTypeId));
+        // Detach the type from every world cell before deleting it.
+        worldCellRepository.findAll().forEach(cell -> {
+            if (cell.getObstacleTypes().removeIf(obstacle -> obstacle.getId().equals(type.getId()))) {
+                worldCellRepository.save(cell);
+            }
+        });
+        obstacleTypeRepository.delete(type);
+        log.info("Admin deleted obstacle type '{}'", type.getCode());
+    }
+
+    private AdminDtos.AdminObstacleTypeDto toObstacleTypeDto(ObstacleTypeEntity type) {
+        return new AdminDtos.AdminObstacleTypeDto(type.getId(), type.getCode(), type.getName(), type.getMaxHealth());
     }
 
     // --- PLAYER WEAPON PROFICIENCY ---

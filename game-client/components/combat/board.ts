@@ -1,13 +1,23 @@
+import { CombatObstacle } from "@/types/game";
 import { PlannedAction, Posture } from "./types";
 
 export const GRID_SIZE = 10;
-export const WATER_CELLS = new Set(["1:6", "2:6", "1:7", "2:7", "1:8", "2:8"]);
-export const WALL_CELLS = new Set(["3:3", "3:4", "3:5", "6:6", "7:6"]);
 
 export const cellKey = (x: number, y: number) => `${x}:${y}`;
 
-export const isMovementBlocked = (x: number, y: number) =>
-  WATER_CELLS.has(cellKey(x, y)) || WALL_CELLS.has(cellKey(x, y));
+/**
+ * A cell is blocked for movement only when an alive destructible obstacle
+ * stands on it. Destroyed obstacles free the cell.
+ */
+export const isMovementBlocked = (
+  x: number,
+  y: number,
+  obstacles: CombatObstacle[],
+) =>
+  obstacles.some(
+    (obstacle) =>
+      obstacle.x === x && obstacle.y === y && obstacle.currentHealth > 0,
+  );
 
 export const postureMovement = (posture: Posture) =>
   posture === "STANDING" ? 3 : posture === "CROUCHING" ? 2 : 1;
@@ -32,6 +42,7 @@ export const getReachableCells = (
   startX: number,
   startY: number,
   maxSteps: number,
+  obstacles: CombatObstacle[],
 ) => {
   const reachable = new Set<string>();
   const queue = [{ x: startX, y: startY, steps: 0 }];
@@ -54,7 +65,7 @@ export const getReachableCells = (
         y < 0 ||
         y >= GRID_SIZE ||
         visited.has(key) ||
-        isMovementBlocked(x, y)
+        isMovementBlocked(x, y, obstacles)
       )
         continue;
       visited.add(key);
@@ -67,7 +78,7 @@ export const getReachableCells = (
 
 /**
  * Все клетки в квадрате дальности (Chebyshev) вокруг точки — зона обстрела.
- * Включая саму точку; не исключает стены/воду — это чисто визуальная зона.
+ * Препятствия зону не ограничивают: пули проходят сквозь них и разрушают их.
  */
 export const getAttackRangeCells = (
   originX: number,
@@ -87,45 +98,4 @@ export const getAttackRangeCells = (
     }
   }
   return cells;
-};
-
-/**
- * Зона обстрела с учётом препятствий: только те клетки квадрата дальности,
- * до которых линия огня не перекрыта стеной. Используется для подсветки,
- * чтобы враг за стеной не выглядел «в радиусе» оружия.
- */
-export const getShootableCells = (
-  originX: number,
-  originY: number,
-  range: number,
-) => {
-  const shootable = new Set<string>();
-  for (const key of getAttackRangeCells(originX, originY, range)) {
-    const separator = key.indexOf(":");
-    const x = Number(key.slice(0, separator));
-    const y = Number(key.slice(separator + 1));
-    if (!isLineOfSightBlocked(originX, originY, x, y)) {
-      shootable.add(key);
-    }
-  }
-  return shootable;
-};
-
-/**
- * Точная копия серверного raycast: линию обстрела блокируют только стены,
- * точка попадания - интерполяция по шагам max(|dx|, |dy|).
- */
-export const isLineOfSightBlocked = (
-  fromX: number,
-  fromY: number,
-  toX: number,
-  toY: number,
-) => {
-  const steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
-  for (let step = 1; step < steps; step++) {
-    const x = fromX + Math.round(((toX - fromX) * step) / steps);
-    const y = fromY + Math.round(((toY - fromY) * step) / steps);
-    if (WALL_CELLS.has(cellKey(x, y))) return true;
-  }
-  return false;
 };

@@ -168,6 +168,8 @@ export interface AdminWorldCell {
   radiation: number;
   ambushChance: number;
   enemyType: AdminEnemyType | null;
+  /** Obstacle types that may spawn when a combat starts on this cell. */
+  obstacleTypes: AdminObstacleType[];
 }
 
 export interface UpsertWorldCellPayload {
@@ -177,6 +179,7 @@ export interface UpsertWorldCellPayload {
   radiation: number;
   ambushChance: number;
   enemyTypeId: string | null;
+  obstacleTypeIds: string[];
 }
 
 /** Admin view of a player map (world area opened from the inventory). */
@@ -202,3 +205,22 @@ export interface CreateGameMapPayload {
 }
 
 export type UpdateGameMapPayload = Partial<CreateGameMapPayload>;
+
+/** A destructible combat obstacle type (configurable durability). */
+export interface AdminObstacleType {
+  id: string;
+  code: string;
+  name: string;
+  maxHealth: number;
+}
+
+export interface CreateObstacleTypePayload {
+  code: string;
+  name: string;
+  maxHealth?: number;
+}
+
+export interface UpdateObstacleTypePayload {
+  name?: string;
+  maxHealth?: number;
+}

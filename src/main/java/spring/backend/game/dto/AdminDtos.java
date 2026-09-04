@@ -103,7 +103,8 @@ public final class AdminDtos {
             boolean blocked,
             int radiation,
             int ambushChance,
-            AdminEnemyTypeDto enemyType) {
+            AdminEnemyTypeDto enemyType,
+            List<AdminObstacleTypeDto> obstacleTypes) {
     }
 
     public record AdminGameMapDto(
@@ -115,6 +116,13 @@ public final class AdminDtos {
             int centerY,
             int radius,
             String itemCode) {
+    }
+
+    public record AdminObstacleTypeDto(
+            UUID id,
+            String code,
+            String name,
+            int maxHealth) {
     }
 
     // --- REQUESTS ---
@@ -195,6 +203,17 @@ public final class AdminDtos {
             Integer movementRange) {
     }
 
+    public record CreateObstacleTypeRequest(
+            String code,
+            String name,
+            Integer maxHealth) {
+    }
+
+    public record UpdateObstacleTypeRequest(
+            String name,
+            Integer maxHealth) {
+    }
+
     public record UpdatePlayerRequest(
             String username,
             Integer level,
@@ -214,7 +233,8 @@ public final class AdminDtos {
             Boolean blocked,
             Integer radiation,
             Integer ambushChance,
-            UUID enemyTypeId) {
+            UUID enemyTypeId,
+            Set<UUID> obstacleTypeIds) {
     }
 
     public record CreateGameMapRequest(

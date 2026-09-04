@@ -14,9 +14,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import spring.backend.game.entity.CombatObstacle;
 import spring.backend.game.entity.CombatSessionEntity;
 import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.entity.ObstacleTypeEntity;
+import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
 import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.dto.CombatPlanRequest;
@@ -38,8 +41,6 @@ public class CombatService {
     private static final String STANDING = "STANDING";
     private static final String CROUCHING = "CROUCHING";
     private static final String PRONE = "PRONE";
-    private static final Set<String> WATER = Set.of("1:6", "2:6", "1:7", "2:7", "1:8", "2:8");
-    private static final Set<String> WALLS = Set.of("3:3", "3:4", "3:5", "6:6", "7:6");
 
     private final CombatRepository combatRepository;
     private final EnemyTypeRepository enemyTypeRepository;
@@ -48,6 +49,7 @@ public class CombatService {
     private final PlayerRepository playerRepository;
     private final WeaponTypeRepository weaponTypeRepository;
     private final WeaponProficiencyRepository weaponProficiencyRepository;
+    private final WorldCellService worldCellService;
     private final WorldZoneService worldZoneService;
 
     @Transactional
@@ -73,6 +75,7 @@ public class CombatService {
                 .p2X(8)
                 .p2Y(5)
                 .build();
+        combat.setObstacles(generateObstacles(attacker.getPositionX(), attacker.getPositionY()));
         return combatRepository.save(combat);
     }
 
@@ -85,6 +88,8 @@ public class CombatService {
     public CombatSessionEntity startBotCombat(String playerId, String enemyCode) {
         EnemyTypeEntity enemy = enemyTypeRepository.findByCodeIgnoreCase(enemyCode)
                 .orElseThrow(() -> new RuntimeException("Enemy type not found: " + enemyCode));
+        PlayerEntity player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(playerId)
                 .player2Id("bot_" + enemy.getCode().toLowerCase())
@@ -98,6 +103,7 @@ public class CombatService {
                 .p2Y(5)
                 .p2Health(enemy.getMaxHealth())
                 .build();
+        combat.setObstacles(generateObstacles(player.getPositionX(), player.getPositionY()));
         return combatRepository.save(combat);
     }
 
@@ -146,31 +152,96 @@ public class CombatService {
     private String createBotPlan(CombatSessionEntity combat) {
         EnemyTypeEntity enemy = combat.getEnemyType();
         List<String> plan = new ArrayList<>();
-        int wolfX = combat.getP2X();
-        int wolfY = combat.getP2Y();
-        int movementLimit = Math.min(enemy.getMovementRange(), enemy.getActionPoints());
-        List<int[]> path = findMovementPath(wolfX, wolfY, combat.getP1X(), combat.getP1Y(), movementLimit);
-        int maxMoves = enemy.getActionPoints();
-        if (path != null && path.size() > 1) {
-            maxMoves = Math.min(enemy.getActionPoints(), path.size() - 1);
-            for (int index = 1; index < path.size() && plan.size() < maxMoves; index++) {
-                int[] previous = path.get(index - 1);
-                int[] current = path.get(index);
-                plan.add("M:" + (current[0] - previous[0]) + ":" + (current[1] - previous[1]));
-                wolfX = current[0];
-                wolfY = current[1];
-                int distance = Math.max(Math.abs(combat.getP1X() - wolfX), Math.abs(combat.getP1Y() - wolfY));
-                if (distance <= enemy.getAttackRange() && plan.size() < enemy.getActionPoints()
-                        && !isShotBlocked(wolfX, wolfY, combat.getP1X(), combat.getP1Y())) {
-                    plan.add("A:" + combat.getP1X() + ":" + combat.getP1Y());
-                    break;
-                }
+        int botX = combat.getP2X();
+        int botY = combat.getP2Y();
+        int playerX = combat.getP1X();
+        int playerY = combat.getP1Y();
+        int maxMoves = Math.min(enemy.getMovementRange(), enemy.getActionPoints());
+
+        // Уже в зоне поражения — сразу атакуем, не тратя очки на перемещение.
+        int initialDistance = Math.max(Math.abs(playerX - botX), Math.abs(playerY - botY));
+        if (initialDistance <= enemy.getAttackRange() && enemy.getActionPoints() > 0) {
+            plan.add("A:" + playerX + ":" + playerY);
+            return String.join(";", plan);
+        }
+
+        // Сначала пробуем дойти до игрока. Если за этот ход до него не добраться,
+        // идём к ближайшей достижимой клетке — бот должен двигаться каждый раунд.
+        List<int[]> path = findMovementPath(combat, botX, botY, playerX, playerY, maxMoves);
+        if (path == null || path.size() <= 1) {
+            path = findClosestApproachPath(combat, botX, botY, playerX, playerY, maxMoves);
+        }
+        if (path == null || path.size() <= 1) {
+            // Не можем ни подойти, ни атаковать — просто пропускаем ход.
+            return "";
+        }
+        int steps = Math.min(maxMoves, path.size() - 1);
+        for (int index = 1; index <= steps && plan.size() < maxMoves; index++) {
+            int[] previous = path.get(index - 1);
+            int[] current = path.get(index);
+            plan.add("M:" + (current[0] - previous[0]) + ":" + (current[1] - previous[1]));
+            botX = current[0];
+            botY = current[1];
+            int distance = Math.max(Math.abs(playerX - botX), Math.abs(playerY - botY));
+            // Атакуем только будучи в зоне поражения и если хватает очков действия.
+            if (distance <= enemy.getAttackRange() && plan.size() < enemy.getActionPoints()) {
+                plan.add("A:" + playerX + ":" + playerY);
+                break;
             }
         }
-        if (plan.isEmpty()) {
-            plan.add("A:" + combat.getP1X() + ":" + combat.getP1Y());
-        }
         return String.join(";", plan);
+    }
+
+    /**
+     * BFS-поход как в {@link #findMovementPath}, но не требующий полного пути до
+     * целевой клетки: возвращает путь до достижимой клетки, минимально удалённой
+     * от цели (по шахматному расстоянию). Нужно, чтобы бот подбирался к игроку,
+     * даже когда за текущий ход до него не дойти.
+     */
+    private List<int[]> findClosestApproachPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
+        ArrayDeque<int[]> queue = new ArrayDeque<>();
+        ArrayDeque<Integer> distances = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        Map<String, String> parents = new HashMap<>();
+        queue.add(new int[] { startX, startY });
+        distances.add(0);
+        visited.add(cell(startX, startY));
+        int[] best = new int[] { startX, startY };
+        int bestDistance = Math.max(Math.abs(targetX - startX), Math.abs(targetY - startY));
+        while (!queue.isEmpty()) {
+            int[] current = queue.remove();
+            int distance = distances.remove();
+            int currentDistance = Math.max(Math.abs(targetX - current[0]), Math.abs(targetY - current[1]));
+            if (currentDistance < bestDistance) {
+                bestDistance = currentDistance;
+                best = current;
+                if (bestDistance == 0) break;
+            }
+            if (distance >= maxSteps) continue;
+            for (int[] direction : new int[][] { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) {
+                int nextX = current[0] + direction[0];
+                int nextY = current[1] + direction[1];
+                String nextCell = cell(nextX, nextY);
+                if (nextX < 0 || nextX >= BOARD_SIZE || nextY < 0 || nextY >= BOARD_SIZE
+                        || visited.contains(nextCell) || isObstacle(combat, nextX, nextY)) continue;
+                visited.add(nextCell);
+                parents.put(nextCell, cell(current[0], current[1]));
+                queue.add(new int[] { nextX, nextY });
+                distances.add(distance + 1);
+            }
+        }
+        if (best[0] == startX && best[1] == startY) {
+            return null;
+        }
+        List<int[]> path = new ArrayList<>();
+        String currentCell = cell(best[0], best[1]);
+        while (currentCell != null) {
+            String[] coordinates = currentCell.split(":");
+            path.add(new int[] { Integer.parseInt(coordinates[0]), Integer.parseInt(coordinates[1]) });
+            currentCell = parents.get(currentCell);
+        }
+        Collections.reverse(path);
+        return path;
     }
 
     @Transactional
@@ -277,7 +348,7 @@ public class CombatService {
                 if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
                     throw new RuntimeException("You cannot leave the combat board");
                 }
-                validateMovementPath(x - dx, y - dy, x, y, movementRange(posture));
+                validateMovementPath(combat, x - dx, y - dy, x, y, movementRange(posture));
             } else if (!"A".equals(parts[0]) || parts.length != 3) {
                 throw new RuntimeException("Invalid combat plan");
             }
@@ -342,7 +413,7 @@ public class CombatService {
         int dy = Integer.parseInt(parts[2]);
         int endX = player1 ? combat.getP1X() : combat.getP2X();
         int endY = player1 ? combat.getP1Y() : combat.getP2Y();
-        List<int[]> path = findMovementPath(endX - dx, endY - dy, endX, endY, BOARD_SIZE * BOARD_SIZE);
+        List<int[]> path = findMovementPath(combat, endX - dx, endY - dy, endX, endY, BOARD_SIZE * BOARD_SIZE);
         if (path == null) return;
         for (int index = 1; index < path.size(); index++) {
             int[] previous = path.get(index - 1);
@@ -398,10 +469,12 @@ public class CombatService {
         ItemEntity weapon = player1 || enemy == null ? getWeapon(combat, player1) : null;
         int maxShotDistance = enemy != null ? enemy.getAttackRange() : weapon.getAttackRange();
         int shotDamage = enemy != null ? enemy.getDamage() : weapon.getDamage();
-        if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > maxShotDistance
-            || isShotBlocked(attackerX, attackerY, actualTargetX, actualTargetY)) return 0;
+        if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > maxShotDistance) return 0;
         String targetPosture = player1 ? combat.getP2Posture() : combat.getP1Posture();
         if (ThreadLocalRandom.current().nextInt(100) >= hitChance(combat, player1, weapon, targetPosture)) return 0;
+        // Пуля не блокируется препятствиями — она проходит насквозь, но каждое
+        // препятствие на линии огня получает урон и может разрушиться.
+        damageObstaclesAlongLine(combat, attackerX, attackerY, actualTargetX, actualTargetY, shotDamage);
         if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - shotDamage));
         else combat.setP1Health(Math.max(0, combat.getP1Health() - shotDamage));
         return shotDamage;
@@ -411,13 +484,13 @@ public class CombatService {
         return STANDING.equals(posture) ? 3 : CROUCHING.equals(posture) ? 2 : 1;
     }
 
-    private void validateMovementPath(int startX, int startY, int targetX, int targetY, int maxSteps) {
-        if (findMovementPath(startX, startY, targetX, targetY, maxSteps) == null) {
+    private void validateMovementPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
+        if (findMovementPath(combat, startX, startY, targetX, targetY, maxSteps) == null) {
             throw new RuntimeException("This cell is blocked by terrain");
         }
     }
 
-    private List<int[]> findMovementPath(int startX, int startY, int targetX, int targetY, int maxSteps) {
+    private List<int[]> findMovementPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
         ArrayDeque<int[]> queue = new ArrayDeque<>();
         ArrayDeque<Integer> distances = new ArrayDeque<>();
         Set<String> visited = new HashSet<>();
@@ -445,7 +518,7 @@ public class CombatService {
                 int nextY = current[1] + direction[1];
                 String nextCell = cell(nextX, nextY);
                 if (nextX < 0 || nextX >= BOARD_SIZE || nextY < 0 || nextY >= BOARD_SIZE
-                        || visited.contains(nextCell) || isObstacle(nextX, nextY)) continue;
+                        || visited.contains(nextCell) || isObstacle(combat, nextX, nextY)) continue;
                 visited.add(nextCell);
                 parents.put(nextCell, cell(current[0], current[1]));
                 queue.add(new int[] { nextX, nextY });
@@ -487,18 +560,63 @@ public class CombatService {
         return normalized;
     }
 
-    private boolean isObstacle(int x, int y) {
-        return WATER.contains(cell(x, y)) || WALLS.contains(cell(x, y));
+    private boolean isObstacle(CombatSessionEntity combat, int x, int y) {
+        return combat.getObstacles().stream()
+                .anyMatch(obstacle -> obstacle.isAlive() && obstacle.x() == x && obstacle.y() == y);
     }
 
-    private boolean isShotBlocked(int fromX, int fromY, int toX, int toY) {
+    /** Damages every alive obstacle crossed by the shot and removes destroyed ones. */
+    private void damageObstaclesAlongLine(CombatSessionEntity combat, int fromX, int fromY, int toX, int toY, int damage) {
         int steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
+        Set<String> hitCells = new HashSet<>();
         for (int step = 1; step < steps; step++) {
             int x = fromX + Math.round((toX - fromX) * step / (float) steps);
             int y = fromY + Math.round((toY - fromY) * step / (float) steps);
-            if (WALLS.contains(cell(x, y))) return true;
+            hitCells.add(cell(x, y));
         }
-        return false;
+        List<CombatObstacle> obstacles = new ArrayList<>(combat.getObstacles());
+        boolean changed = false;
+        for (int index = 0; index < obstacles.size(); index++) {
+            CombatObstacle current = obstacles.get(index);
+            if (!current.isAlive() || !hitCells.contains(cell(current.x(), current.y()))) continue;
+            int remaining = Math.max(0, current.currentHealth() - damage);
+            obstacles.set(index, new CombatObstacle(
+                    current.x(), current.y(), current.code(), current.name(),
+                    current.maxHealth(), remaining));
+            changed = true;
+        }
+        if (changed) {
+            combat.setObstacles(obstacles.stream().filter(CombatObstacle::isAlive).toList());
+        }
+    }
+
+    /**
+     * Randomly spawns obstacles for a new combat, using only the obstacle types
+     * configured on the world cell the fight starts in. Nothing spawns on the
+     * two fighters' starting cells.
+     */
+    private List<CombatObstacle> generateObstacles(int worldX, int worldY) {
+        List<ObstacleTypeEntity> types = worldCellService.getSettings(worldX, worldY)
+                .map(cell -> new ArrayList<>(cell.getObstacleTypes()))
+                .orElseGet(ArrayList::new);
+        if (types.isEmpty()) {
+            return List.of();
+        }
+        int count = 4 + ThreadLocalRandom.current().nextInt(5); // 4..8 препятствий
+        Set<String> occupied = new HashSet<>();
+        occupied.add(cell(1, 5));
+        occupied.add(cell(8, 5));
+        List<CombatObstacle> result = new ArrayList<>();
+        for (int attempt = 0; attempt < 200 && result.size() < count; attempt++) {
+            int x = ThreadLocalRandom.current().nextInt(BOARD_SIZE);
+            int y = ThreadLocalRandom.current().nextInt(BOARD_SIZE);
+            String key = cell(x, y);
+            if (!occupied.add(key)) continue;
+            ObstacleTypeEntity type = types.get(ThreadLocalRandom.current().nextInt(types.size()));
+            result.add(new CombatObstacle(x, y, type.getCode(), type.getName(),
+                    type.getMaxHealth(), type.getMaxHealth()));
+        }
+        return result;
     }
 
     private String cell(int x, int y) {

@@ -17,9 +17,11 @@ import spring.backend.game.entity.QuestSystem.NpcEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
 import spring.backend.game.entity.GameMapEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.repository.GameMapRepository;
 import spring.backend.game.repository.ItemRepository;
+import spring.backend.game.repository.ObstacleTypeRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
@@ -37,6 +39,7 @@ public class DataInitializer implements CommandLineRunner {
     private final ItemRepository itemRepository;
     private final GameMapRepository mapRepository;
     private final WeaponTypeRepository weaponTypeRepository;
+    private final ObstacleTypeRepository obstacleTypeRepository;
     private final JdbcTemplate jdbcTemplate;
     @Lazy
     private final AdminService adminService;
@@ -52,6 +55,7 @@ public class DataInitializer implements CommandLineRunner {
     public void seedData() {
         seedWeaponTypes();
         seedItems();
+        seedObstacleTypes();
         seedMaps();
 
         if (npcRepository.count() > 0) {
@@ -314,6 +318,24 @@ public class DataInitializer implements CommandLineRunner {
          * Seed the plugin-generated world maps. Each map is a separate world
          * area with its own center / radius, bound to an inventory item code.
          */
+        private void seedObstacleTypes() {
+                saveObstacleTypeIfMissing("CRATE", "Crate", 20);
+                saveObstacleTypeIfMissing("BARREL", "Barrel", 15);
+                saveObstacleTypeIfMissing("WALL", "Concrete Wall", 40);
+                saveObstacleTypeIfMissing("ROCK", "Boulder", 50);
+        }
+
+        private void saveObstacleTypeIfMissing(String code, String name, int maxHealth) {
+                if (obstacleTypeRepository.existsByCodeIgnoreCase(code)) {
+                        return;
+                }
+                obstacleTypeRepository.save(ObstacleTypeEntity.builder()
+                                .code(code)
+                                .name(name)
+                                .maxHealth(maxHealth)
+                                .build());
+        }
+
         private void seedMaps() {
                 saveMapIfMissing("WORLD_MAP", "World Map",
                         "The wilderness around the village. Blue is safe, red is dangerous.",

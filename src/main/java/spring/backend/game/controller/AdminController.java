@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import spring.backend.game.dto.AdminDtos.AdminEnemyTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminItemDto;
 import spring.backend.game.dto.AdminDtos.AdminNpcDto;
+import spring.backend.game.dto.AdminDtos.AdminObstacleTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminPlayerDto;
 import spring.backend.game.dto.AdminDtos.AdminProficiencyDto;
 import spring.backend.game.dto.AdminDtos.AdminQuestDto;
@@ -31,6 +32,7 @@ import spring.backend.game.dto.AdminDtos.CreateEnemyTypeRequest;
 import spring.backend.game.dto.AdminDtos.CreateGameMapRequest;
 import spring.backend.game.dto.AdminDtos.CreateItemRequest;
 import spring.backend.game.dto.AdminDtos.CreateNpcRequest;
+import spring.backend.game.dto.AdminDtos.CreateObstacleTypeRequest;
 import spring.backend.game.dto.AdminDtos.CreateQuestRequest;
 import spring.backend.game.dto.AdminDtos.CreateWeaponTypeRequest;
 import spring.backend.game.dto.AdminDtos.SetProficiencyRequest;
@@ -38,6 +40,7 @@ import spring.backend.game.dto.AdminDtos.SetRoleRequest;
 import spring.backend.game.dto.AdminDtos.UpdateEnemyTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpdateGameMapRequest;
 import spring.backend.game.dto.AdminDtos.UpdateNpcRequest;
+import spring.backend.game.dto.AdminDtos.UpdateObstacleTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpdatePlayerRequest;
 import spring.backend.game.dto.AdminDtos.UpdateQuestRequest;
 import spring.backend.game.dto.AdminDtos.UpdateWeaponTypeRequest;
@@ -407,6 +410,46 @@ public class AdminController {
     public ResponseEntity<List<GameMapResponse>> getMaps(@RequestParam String playerId) {
         adminService.requireAdmin(playerId);
         return ResponseEntity.ok(gameMapService.getAllMaps());
+    }
+
+    // --- OBSTACLE TYPES (destructible combat obstacles) ---
+
+    @GetMapping("/obstacle-types")
+    public ResponseEntity<List<AdminObstacleTypeDto>> getObstacleTypes(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.getAllObstacleTypes());
+    }
+
+    @PostMapping("/obstacle-types")
+    public ResponseEntity<AdminObstacleTypeDto> createObstacleType(
+            @RequestParam String playerId,
+            @RequestBody CreateObstacleTypeRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(adminService.createObstacleType(request.code(), request.name(), request.maxHealth()));
+    }
+
+    @PatchMapping("/obstacle-types/{obstacleTypeId}")
+    public ResponseEntity<AdminObstacleTypeDto> updateObstacleType(
+            @PathVariable UUID obstacleTypeId,
+            @RequestParam String playerId,
+            @RequestBody UpdateObstacleTypeRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(adminService.updateObstacleType(obstacleTypeId, request.name(), request.maxHealth()));
+    }
+
+    @DeleteMapping("/obstacle-types/{obstacleTypeId}")
+    public ResponseEntity<Void> deleteObstacleType(
+            @PathVariable UUID obstacleTypeId,
+            @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        adminService.deleteObstacleType(obstacleTypeId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/maps")

@@ -76,6 +76,20 @@ export interface GameMap {
   itemCode: string;
 }
 
+/**
+ * A destructible obstacle on the combat board. Bullets pass through it but
+ * damage it; at currentHealth <= 0 the obstacle is destroyed and the cell
+ * becomes passable.
+ */
+export interface CombatObstacle {
+  x: number;
+  y: number;
+  code: string;
+  name: string;
+  maxHealth: number;
+  currentHealth: number;
+}
+
 export interface PlayerStats {
   questPoints: number;
   health: number;
@@ -134,6 +148,8 @@ export interface CombatSession {
   enemyName?: string | null;
   p1EquippedItemCode?: string | null;
   p2EquippedItemCode?: string | null;
+  /** Destructible obstacles on this combat board (re-generated every combat). */
+  obstacles?: CombatObstacle[];
 }
 
 export interface EnemyType {

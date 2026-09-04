@@ -220,6 +220,86 @@
   border-color: rgba(186, 230, 253, 0.78);
 }
 /* ============================================================
+   COMBAT OBSTACLES (destructible, regenerated every combat)
+   ============================================================ */
+.combat-obstacle {
+  position: absolute;
+  inset: 4%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.4), transparent 18%),
+    linear-gradient(145deg, #a16207, #854d0e 55%, #713f12);
+  border: 1px solid rgba(253, 230, 138, 0.45);
+  box-shadow: 2px 3px 4px rgba(2, 6, 23, 0.55), inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.combat-obstacle-icon {
+  font-size: 15px;
+  line-height: 1;
+  color: rgba(255, 247, 205, 0.95);
+}
+
+.combat-obstacle-label {
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: rgba(255, 247, 205, 0.92);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.65);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.combat-obstacle-hp {
+  width: 70%;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(2, 6, 23, 0.7);
+  overflow: hidden;
+}
+
+.combat-obstacle-hp-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f87171, #fbbf24);
+  transition: width 0.35s ease;
+}
+
+.combat-obstacle-barrel {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 230, 230, 0.45), transparent 18%),
+    linear-gradient(145deg, #b91c1c, #7f1d1d 60%, #450a0a);
+  border-color: rgba(252, 165, 165, 0.5);
+}
+
+.combat-obstacle-crate {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 240, 200, 0.42), transparent 18%),
+    linear-gradient(145deg, #92400e, #78350f 55%, #451a03);
+}
+
+.combat-obstacle-rock {
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.55), transparent 16%),
+    linear-gradient(145deg, #d6d3d1, #78716c 55%, #44403c);
+  border-color: rgba(231, 229, 228, 0.5);
+}
+
+.combat-obstacle-wall {
+  background:
+    linear-gradient(135deg, rgba(28, 25, 23, 0.96), rgba(87, 83, 78, 0.88) 55%, rgba(41, 37, 36, 0.98));
+  border-color: rgba(214, 211, 209, 0.4);
+}
+/* ============================================================
    CHARACTER TOKENS
    ============================================================ */
 .combat-marker-wrap {

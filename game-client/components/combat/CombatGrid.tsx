@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CombatSession } from "@/types/game";
-import { GRID_SIZE, cellKey, WALL_CELLS, WATER_CELLS } from "./board";
+import { CombatObstacle, CombatSession } from "@/types/game";
+import { GRID_SIZE, cellKey } from "./board";
 import { CharacterToken } from "./CharacterToken";
 import {
   DamagePopup,
@@ -90,6 +90,12 @@ export function CombatGrid({
           const x = index % GRID_SIZE;
           const y = Math.floor(index / GRID_SIZE);
           const key = cellKey(x, y);
+          const obstacle = combat.obstacles?.find(
+            (candidate) =>
+              candidate.x === x &&
+              candidate.y === y &&
+              candidate.currentHealth > 0,
+          );
           const stepIndex = moveActions.findIndex(
             (cell) => cell.x === x && cell.y === y,
           );
@@ -108,8 +114,7 @@ export function CombatGrid({
               onClick={() => onTileClick(x, y)}
               className={`combat-cell ${(x + y) % 2 === 0 ? "combat-cell-checker" : ""} ${reachable ? "combat-cell-reachable" : ""} ${attackable ? "combat-cell-attackable" : ""} ${planned ? "combat-cell-planned" : ""} ${inRange ? "combat-cell-in-range" : ""}`}
             >
-              {WATER_CELLS.has(key) && <TerrainTile variant="water" />}
-              {WALL_CELLS.has(key) && <TerrainTile variant="wall" />}
+              {obstacle && <ObstacleTile obstacle={obstacle} />}
               {planned && (
                 <motion.span
                   className="move-step-chip"
@@ -199,15 +204,31 @@ export function CombatGrid({
   );
 }
 
-function TerrainTile({ variant }: { variant: "water" | "wall" }) {
+function ObstacleTile({ obstacle }: { obstacle: CombatObstacle }) {
+  const healthPercent = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round((obstacle.currentHealth / Math.max(1, obstacle.maxHealth)) * 100),
+    ),
+  );
+  const variant = obstacle.code.toLowerCase();
   return (
-    <span
-      className={`terrain-tile terrain-${variant}`}
-      aria-label={variant === "water" ? "Water" : "Wall"}
+    <motion.span
+      className={`combat-obstacle combat-obstacle-${variant}`}
+      initial={{ scale: 0.7, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 340, damping: 22 }}
+      aria-label={`${obstacle.name} (${obstacle.currentHealth}/${obstacle.maxHealth} HP)`}
     >
-      <span className="terrain-rock rock-one" />
-      <span className="terrain-rock rock-two" />
-      <span className="terrain-rock rock-three" />
-    </span>
+      <span className="combat-obstacle-icon">▦</span>
+      <span className="combat-obstacle-label">{obstacle.name}</span>
+      <span className="combat-obstacle-hp">
+        <span
+          className="combat-obstacle-hp-fill"
+          style={{ width: `${healthPercent}%` }}
+        />
+      </span>
+    </motion.span>
   );
 }

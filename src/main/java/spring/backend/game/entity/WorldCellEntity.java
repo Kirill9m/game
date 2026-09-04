@@ -7,6 +7,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -57,4 +59,12 @@ public class WorldCellEntity {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "enemy_type_id")
     private EnemyTypeEntity enemyType;
+
+    /** Obstacle types that may spawn when a combat starts on this cell. */
+    @ManyToMany
+    @JoinTable(name = "world_cell_obstacles",
+            joinColumns = @JoinColumn(name = "cell_id"),
+            inverseJoinColumns = @JoinColumn(name = "obstacle_type_id"))
+    @Builder.Default
+    private java.util.Set<ObstacleTypeEntity> obstacleTypes = new java.util.HashSet<>();
 }

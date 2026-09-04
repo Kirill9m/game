@@ -1,7 +1,10 @@
 package spring.backend.game.service;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -11,12 +14,15 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import spring.backend.game.dto.AdminDtos.AdminEnemyTypeDto;
+import spring.backend.game.dto.AdminDtos.AdminObstacleTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminWorldCellDto;
 import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
 import spring.backend.game.dto.WorldCellResponse;
 import spring.backend.game.entity.EnemyTypeEntity;
+import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.WorldCellEntity;
 import spring.backend.game.repository.EnemyTypeRepository;
+import spring.backend.game.repository.ObstacleTypeRepository;
 import spring.backend.game.repository.WorldCellRepository;
 
 /**
@@ -30,6 +36,7 @@ public class WorldCellService {
 
     private final WorldCellRepository worldCellRepository;
     private final EnemyTypeRepository enemyTypeRepository;
+    private final ObstacleTypeRepository obstacleTypeRepository;
 
     // --- Player-facing queries ---
 
@@ -79,6 +86,7 @@ public class WorldCellService {
         int radiation = clamp(request.radiation(), 0, 1000, 0);
         int ambushChance = clamp(request.ambushChance(), 0, 100, 0);
         EnemyTypeEntity enemy = resolveEnemy(request.enemyTypeId(), ambushChance);
+        Set<ObstacleTypeEntity> obstacleTypes = resolveObstacleTypes(request.obstacleTypeIds());
 
         WorldCellEntity cell = worldCellRepository.findByPositionXAndPositionY(x, y)
                 .orElseGet(() -> WorldCellEntity.builder().positionX(x).positionY(y).build());
@@ -86,9 +94,11 @@ public class WorldCellService {
         cell.setRadiation(radiation);
         cell.setAmbushChance(ambushChance);
         cell.setEnemyType(enemy);
+        cell.setObstacleTypes(obstacleTypes);
         WorldCellEntity saved = worldCellRepository.save(cell);
-        log.info("World cell [{},{}] configured: blocked={}, radiation={}, ambush={}%, enemy={}",
-                x, y, blocked, radiation, ambushChance, enemy == null ? "none" : enemy.getCode());
+        log.info("World cell [{},{}] configured: blocked={}, radiation={}, ambush={}%, enemy={}, obstacles={}",
+                x, y, blocked, radiation, ambushChance, enemy == null ? "none" : enemy.getCode(),
+                obstacleTypes.isEmpty() ? "none" : obstacleTypes.stream().map(ObstacleTypeEntity::getCode).toList());
         return toAdminDto(saved);
     }
 
@@ -122,6 +132,18 @@ public class WorldCellService {
         return enemy;
     }
 
+    private Set<ObstacleTypeEntity> resolveObstacleTypes(Set<UUID> obstacleTypeIds) {
+        if (obstacleTypeIds == null || obstacleTypeIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<ObstacleTypeEntity> result = new HashSet<>();
+        for (UUID id : obstacleTypeIds) {
+            result.add(obstacleTypeRepository.findById(id)
+                    .orElseThrow(() -> new EntityNotFoundException("Obstacle type not found: " + id)));
+        }
+        return result;
+    }
+
     private static int clamp(Integer value, int min, int max, int fallback) {
         int v = value == null ? fallback : value;
         return Math.max(min, Math.min(max, v));
@@ -149,6 +171,10 @@ public class WorldCellService {
                 cell.getEnemyType().getActionPoints(),
                 cell.getEnemyType().getMovementRange());
         return new AdminWorldCellDto(cell.getId(), cell.getPositionX(), cell.getPositionY(),
-                cell.isBlocked(), cell.getRadiation(), cell.getAmbushChance(), enemy);
+                cell.isBlocked(), cell.getRadiation(), cell.getAmbushChance(), enemy,
+                cell.getObstacleTypes().stream()
+                        .sorted(java.util.Comparator.comparing(ObstacleTypeEntity::getName))
+                        .map(type -> new AdminObstacleTypeDto(type.getId(), type.getCode(), type.getName(), type.getMaxHealth()))
+                        .toList());
     }
 }

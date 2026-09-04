@@ -9,6 +9,7 @@ import type {
   AdminGameMap,
   AdminItem,
   AdminNpc,
+  AdminObstacleType,
   AdminPlayer,
   AdminQuest,
   AdminWeaponType,
@@ -28,7 +29,8 @@ type Section =
   | "enemies"
   | "players"
   | "world"
-  | "maps";
+  | "maps"
+  | "obstacles";
 
 // --- World map (admin cell editor): big map, movable viewport ---
 // Matches the game world (WorldConstants): 1000×1000 cells, negative allowed.
@@ -66,6 +68,7 @@ export default function AdminPanel({ playerId }: Props) {
   const [worldCells, setWorldCells] = useState<AdminWorldCell[]>([]);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [maps, setMaps] = useState<AdminGameMap[]>([]);
+  const [obstacleTypes, setObstacleTypes] = useState<AdminObstacleType[]>([]);
   const [selectedNpcId, setSelectedNpcId] = useState<string>("");
   const [nodesData, setNodesData] = useState<{ npcId: string; nodes: AdminDialogueNode[] }>({
     npcId: "",
@@ -128,6 +131,7 @@ export default function AdminPanel({ playerId }: Props) {
   const [cellRadiation, setCellRadiation] = useState(0);
   const [cellAmbush, setCellAmbush] = useState(0);
   const [cellEnemyId, setCellEnemyId] = useState<string>("");
+  const [cellObstacleIds, setCellObstacleIds] = useState<string[]>([]);
 
   // --- Map form state ---
   const [mapCode, setMapCode] = useState("");
@@ -138,6 +142,12 @@ export default function AdminPanel({ playerId }: Props) {
   const [mapRadius, setMapRadius] = useState(4);
   const [mapItemCode, setMapItemCode] = useState("WORLD_MAP");
   const [editingMapId, setEditingMapId] = useState<string>("");
+
+  // --- Obstacle type form state ---
+  const [obstacleCode, setObstacleCode] = useState("");
+  const [obstacleName, setObstacleName] = useState("");
+  const [obstacleHealth, setObstacleHealth] = useState(30);
+  const [editingObstacleId, setEditingObstacleId] = useState<string>("");
 
   // --- World map navigation state ---
   const [viewOrigin, setViewOrigin] = useState({ x: 0, y: 0 });
@@ -176,7 +186,7 @@ export default function AdminPanel({ playerId }: Props) {
   );
 
   const loadAll = useCallback(async () => {
-    const [p, n, q, i, wt, e, w, m] = await Promise.all([
+    const [p, n, q, i, wt, e, w, m, ot] = await Promise.all([
       adminApi.getPlayers(playerId),
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
@@ -185,6 +195,7 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getEnemyTypes(playerId),
       adminApi.getWorldCells(playerId),
       adminApi.getMaps(playerId),
+      adminApi.getObstacleTypes(playerId),
     ]);
     setPlayers(p);
     setNpcs(n);
@@ -194,6 +205,7 @@ export default function AdminPanel({ playerId }: Props) {
     setEnemies(e);
     setWorldCells(w);
     setMaps(m);
+    setObstacleTypes(ot);
     setSelectedNpcId((current) => current || n[0]?.id || "");
   }, [playerId]);
 
@@ -209,9 +221,10 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getEnemyTypes(playerId),
       adminApi.getWorldCells(playerId),
       adminApi.getMaps(playerId),
+      adminApi.getObstacleTypes(playerId),
       playerApi.getSafeZone().catch(() => null),
     ])
-      .then(([p, n, q, i, wt, e, w, m, zone]) => {
+      .then(([p, n, q, i, wt, e, w, m, ot, zone]) => {
         if (cancelled) return;
         setPlayers(p);
         setNpcs(n);
@@ -221,6 +234,7 @@ export default function AdminPanel({ playerId }: Props) {
         setEnemies(e);
         setWorldCells(w);
         setMaps(m);
+        setObstacleTypes(ot);
         setSafeZone(zone);
         setSelectedNpcId((current) => current || n[0]?.id || "");
       })
@@ -535,6 +549,9 @@ export default function AdminPanel({ playerId }: Props) {
     setCellRadiation(existing?.radiation ?? 0);
     setCellAmbush(existing?.ambushChance ?? 0);
     setCellEnemyId(existing?.enemyType?.id ?? "");
+    setCellObstacleIds(
+      existing?.obstacleTypes?.map((obstacle) => obstacle.id) ?? [],
+    );
   };
 
   // World map navigation helpers
@@ -581,12 +598,21 @@ export default function AdminPanel({ playerId }: Props) {
         radiation: cellRadiation,
         ambushChance: cellEnemyId ? cellAmbush : 0,
         enemyTypeId: cellEnemyId || null,
+        obstacleTypeIds: cellObstacleIds,
       });
       await loadAll();
       setNotice(
         `Cell [${saved.positionX}:${saved.positionY}] saved`,
       );
     });
+
+  const toggleCellObstacle = (obstacleTypeId: string) => {
+    setCellObstacleIds((current) =>
+      current.includes(obstacleTypeId)
+        ? current.filter((id) => id !== obstacleTypeId)
+        : [...current, obstacleTypeId],
+    );
+  };
 
   const handleDeleteCell = (cellId: string) =>
     run(async () => {
@@ -652,6 +678,51 @@ export default function AdminPanel({ playerId }: Props) {
       setNotice("Map deleted");
     });
 
+  const resetObstacleForm = () => {
+    setObstacleCode("");
+    setObstacleName("");
+    setObstacleHealth(30);
+    setEditingObstacleId("");
+  };
+
+  const handleStartEditObstacle = (obstacle: AdminObstacleType) => {
+    setEditingObstacleId(obstacle.id);
+    setObstacleCode(obstacle.code);
+    setObstacleName(obstacle.name);
+    setObstacleHealth(obstacle.maxHealth);
+  };
+
+  const handleSaveObstacle = () =>
+    run(async () => {
+      if (!obstacleCode.trim() || !obstacleName.trim()) {
+        throw new Error("Obstacle code and name are required");
+      }
+      if (editingObstacleId) {
+        await adminApi.updateObstacleType(playerId, editingObstacleId, {
+          name: obstacleName.trim(),
+          maxHealth: obstacleHealth,
+        });
+        setNotice("Obstacle type updated");
+      } else {
+        await adminApi.createObstacleType(playerId, {
+          code: obstacleCode.trim().toUpperCase(),
+          name: obstacleName.trim(),
+          maxHealth: obstacleHealth,
+        });
+        setNotice("Obstacle type created");
+      }
+      resetObstacleForm();
+      await loadAll();
+    });
+
+  const handleDeleteObstacle = (obstacleTypeId: string) =>
+    run(async () => {
+      await adminApi.deleteObstacleType(playerId, obstacleTypeId);
+      if (editingObstacleId === obstacleTypeId) resetObstacleForm();
+      await loadAll();
+      setNotice("Obstacle type deleted");
+    });
+
   const handleStartEditPlayer = (player: AdminPlayer) => {
     setEditingPlayerId(player.id);
     setPlayerDraft({
@@ -702,6 +773,7 @@ export default function AdminPanel({ playerId }: Props) {
                 { id: "enemies", icon: "👹", label: "Enemies" },
                 { id: "world", icon: "🗺️", label: "World Cells" },
                 { id: "maps", icon: "🧭", label: "Maps" },
+                { id: "obstacles", icon: "🧱", label: "Obstacles" },
                 { id: "players", icon: "🛡️", label: "Players" },
               ] as const
             ).map((tab) => (
@@ -1299,7 +1371,7 @@ export default function AdminPanel({ playerId }: Props) {
             </span>
             <p className="text-[11px] text-gray-500">
               Each weapon type has an accuracy bonus per proficiency level and a maximum
-              accuracy bonus. A character's proficiency in a type raises their hit chance
+              accuracy bonus. A character’s proficiency in a type raises their hit chance
               in combat (set it in the Players tab).
             </p>
             {editingWtId && (
@@ -1907,6 +1979,36 @@ export default function AdminPanel({ playerId }: Props) {
                 ))}
               </select>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <span className={labelClass}>
+                🧱 Obstacles that may spawn here (empty = no obstacles in combat)
+              </span>
+              {obstacleTypes.length === 0 ? (
+                <p className="text-[11px] text-gray-600">
+                  No obstacle types yet — create them in the “Obstacles” tab first.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {obstacleTypes.map((obstacle) => {
+                    const selected = cellObstacleIds.includes(obstacle.id);
+                    return (
+                      <button
+                        key={obstacle.id}
+                        type="button"
+                        onClick={() => toggleCellObstacle(obstacle.id)}
+                        className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition ${
+                          selected
+                            ? "border-amber-400 bg-amber-900/60 text-amber-100"
+                            : "border-gray-700 bg-gray-800/40 text-gray-400 hover:bg-gray-800"
+                        }`}
+                      >
+                        {obstacle.name} ({obstacle.maxHealth} HP)
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button type="button" disabled={busy} onClick={handleSaveCell} className={primaryBtn}>
               💾 Save Cell Settings
             </button>
@@ -1940,6 +2042,11 @@ export default function AdminPanel({ playerId }: Props) {
                     {cell.ambushChance > 0 && (
                       <span className="bg-orange-900/40 border border-orange-700 text-orange-200 px-2 py-0.5 rounded-full text-[10px]">
                         👹 {cell.ambushChance}% {cell.enemyType?.name ?? ""}
+                      </span>
+                    )}
+                    {cell.obstacleTypes.length > 0 && (
+                      <span className="bg-amber-900/40 border border-amber-700 text-amber-200 px-2 py-0.5 rounded-full text-[10px]">
+                        🧱 {cell.obstacleTypes.map((obstacle) => obstacle.name).join(", ")}
                       </span>
                     )}
                   </div>
@@ -2124,6 +2231,107 @@ export default function AdminPanel({ playerId }: Props) {
         </div>
       )}
 
+      {/* ================= OBSTACLE TYPES (destructible combat obstacles) ================= */}
+      {section === "obstacles" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                {editingObstacleId ? "✏️ Edit Obstacle Type" : "➕ New Obstacle Type"}
+              </span>
+              {editingObstacleId && (
+                <button type="button" onClick={resetObstacleForm} className={dangerBtn}>
+                  Cancel edit
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Obstacles are destructible. They never block shots — every bullet that passes
+              through a cell with an obstacle damages it, and at 0 HP the obstacle is removed
+              from the board. Pick which types each location may spawn in the “Maps” tab.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Code</label>
+                <input
+                  className={inputClass}
+                  value={obstacleCode}
+                  onChange={(e) => setObstacleCode(e.target.value.toUpperCase())}
+                  disabled={Boolean(editingObstacleId)}
+                  placeholder="CRATE"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Name</label>
+                <input
+                  className={inputClass}
+                  value={obstacleName}
+                  onChange={(e) => setObstacleName(e.target.value)}
+                  placeholder="Crate"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Max health (how much damage it can absorb)</label>
+                <input
+                  type="number"
+                  min={1}
+                  className={inputClass}
+                  value={obstacleHealth}
+                  onChange={(e) => setObstacleHealth(Number(e.target.value) || 1)}
+                />
+              </div>
+            </div>
+            <button type="button" disabled={busy} onClick={handleSaveObstacle} className={primaryBtn}>
+              {editingObstacleId ? "💾 Save changes" : "➕ Create obstacle type"}
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              🧱 Obstacle Types ({obstacleTypes.length})
+            </span>
+            {obstacleTypes.map((obstacle) => (
+              <div
+                key={obstacle.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">
+                    {obstacle.name}{" "}
+                    <span className="text-[10px] text-gray-500 font-mono">{obstacle.code}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    {obstacle.maxHealth} HP durability
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleStartEditObstacle(obstacle)}
+                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[10px] font-bold px-2 py-1 rounded-lg transition"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleDeleteObstacle(obstacle.id)}
+                    className={dangerBtn}
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))}
+            {obstacleTypes.length === 0 && (
+              <div className="text-center text-gray-600 text-xs py-4">
+                No obstacle types yet — create one above.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ================= PLAYERS ================= */}
       {section === "players" && (
         <div className="flex flex-col gap-2">
@@ -2203,7 +2411,7 @@ export default function AdminPanel({ playerId }: Props) {
                   </span>
                   {weaponTypes.length === 0 ? (
                     <span className="text-[10px] text-gray-500">
-                      No weapon types yet. Create them in the "Weapon Types" tab first.
+                      No weapon types yet. Create them in the “Weapon Types” tab first.
                     </span>
                   ) : (
                     weaponTypes.map((weaponType) => (
