@@ -143,11 +143,19 @@ export default function CombatArena({
     });
     return piles;
   }, [combat.loot, myX, myY]);
+  const enemyCellBlocked = useMemo(() => {
+    const cells = new Set<string>();
+    if (enemyHealth > 0) {
+      cells.add(`${enemyX}:${enemyY}`);
+    }
+    return cells;
+  }, [enemyX, enemyY, enemyHealth]);
   const reachableCells = getReachableCells(
     plannedEnd?.x ?? myX,
     plannedEnd?.y ?? myY,
     movementRemaining,
     obstacles,
+    enemyCellBlocked,
   );
 
   // Дальность текущего (или запланированного к экипировке) оружия.

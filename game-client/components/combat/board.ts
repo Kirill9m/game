@@ -43,6 +43,7 @@ export const getReachableCells = (
   startY: number,
   maxSteps: number,
   obstacles: CombatObstacle[],
+  blockedCells?: Set<string>,
 ) => {
   const reachable = new Set<string>();
   const queue = [{ x: startX, y: startY, steps: 0 }];
@@ -65,7 +66,8 @@ export const getReachableCells = (
         y < 0 ||
         y >= GRID_SIZE ||
         visited.has(key) ||
-        isMovementBlocked(x, y, obstacles)
+        isMovementBlocked(x, y, obstacles) ||
+        blockedCells?.has(key)
       )
         continue;
       visited.add(key);

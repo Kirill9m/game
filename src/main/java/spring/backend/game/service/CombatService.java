@@ -180,8 +180,22 @@ public class CombatService {
         // Сначала пробуем дойти до игрока. Если за этот ход до него не добраться,
         // идём к ближайшей достижимой клетке — бот должен двигаться каждый раунд.
         List<int[]> path = findMovementPath(combat, botX, botY, playerX, playerY, maxMoves);
+        // Bot should not move onto the player's cell
+        if (path != null && path.size() > 1) {
+            int[] lastStep = path.get(path.size() - 1);
+            if (lastStep[0] == playerX && lastStep[1] == playerY) {
+                path = path.subList(0, path.size() - 1);
+            }
+        }
         if (path == null || path.size() <= 1) {
             path = findClosestApproachPath(combat, botX, botY, playerX, playerY, maxMoves);
+            // Also prevent closest approach from landing on the player's cell
+            if (path != null && path.size() > 1) {
+                int[] lastStep = path.get(path.size() - 1);
+                if (lastStep[0] == playerX && lastStep[1] == playerY) {
+                    path = path.subList(0, path.size() - 1);
+                }
+            }
         }
         if (path == null || path.size() <= 1) {
             // Не можем ни подойти, ни атаковать — просто пропускаем ход.
@@ -361,6 +375,11 @@ public class CombatService {
                 y += dy;
                 if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
                     throw new RuntimeException("You cannot leave the combat board");
+                }
+                int opponentX = playerId.equals(combat.getPlayer1Id()) ? combat.getP2X() : combat.getP1X();
+                int opponentY = playerId.equals(combat.getPlayer1Id()) ? combat.getP2Y() : combat.getP1Y();
+                if (x == opponentX && y == opponentY) {
+                    throw new RuntimeException("You cannot move to the opponent's cell");
                 }
                 validateMovementPath(combat, x - dx, y - dy, x, y, movementRange(posture));
             } else if ("A".equals(parts[0])) {
@@ -677,12 +696,20 @@ public class CombatService {
     private void applyMovement(CombatSessionEntity combat, boolean player1, String action) {
         if (action == null || !action.startsWith("M:")) return;
         String[] parts = action.split(":");
+        int newX = (player1 ? combat.getP1X() : combat.getP2X()) + Integer.parseInt(parts[1]);
+        int newY = (player1 ? combat.getP1Y() : combat.getP2Y()) + Integer.parseInt(parts[2]);
+        // Cannot move onto the opponent's cell
+        int opponentX = player1 ? combat.getP2X() : combat.getP1X();
+        int opponentY = player1 ? combat.getP2Y() : combat.getP1Y();
+        if (newX == opponentX && newY == opponentY) {
+            return;
+        }
         if (player1) {
-            combat.setP1X(combat.getP1X() + Integer.parseInt(parts[1]));
-            combat.setP1Y(combat.getP1Y() + Integer.parseInt(parts[2]));
+            combat.setP1X(newX);
+            combat.setP1Y(newY);
         } else {
-            combat.setP2X(combat.getP2X() + Integer.parseInt(parts[1]));
-            combat.setP2Y(combat.getP2Y() + Integer.parseInt(parts[2]));
+            combat.setP2X(newX);
+            combat.setP2Y(newY);
         }
     }
 
