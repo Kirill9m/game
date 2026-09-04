@@ -1,274 +1,499 @@
- .combat-marker {
-	height: 50px;
-	position: absolute;
-	pointer-events: none;
-	transform: translate(-50%, -50%);
-	width: 44px;
-	left: 50%;
-	top: 50%;
+/* ============================================================
+   COMBAT ARENA - JN RPG - Framer Motion redesign
+   ============================================================ */
+
+/* --- Board shell --- */
+.combat-board-inner {
+  aspect-ratio: 1 / 1;
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 2px rgba(148, 163, 184, 0.22),
+    0 0 0 1px rgba(2, 6, 23, 0.95) inset,
+    0 26px 64px rgba(2, 6, 23, 0.72);
+  background:
+    radial-gradient(ellipse at 50% 28%, rgba(51, 65, 85, 0.5), transparent 72%),
+    linear-gradient(
+      180deg,
+      rgba(8, 12, 24, 0.93),
+      rgba(17, 24, 39, 0.9),
+      rgba(2, 6, 23, 0.97)
+    );
 }
 
-.combat-marker-you {
-	--character-color: #60a5fa;
-	--character-outline: #dbeafe;
+.combat-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-rows: repeat(10, minmax(0, 1fr));
 }
 
-.combat-marker-foe {
-	--character-color: #f87171;
-	--character-outline: #fee2e2;
+.combat-cell {
+  position: relative;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 1px solid rgba(71, 85, 105, 0.12);
+}
+
+.combat-cell-checker {
+  background: rgba(30, 41, 59, 0.18);
+}
+
+.combat-cell:hover {
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .combat-cell-reachable {
-	background: rgba(45, 212, 191, 0.28) !important;
-	box-shadow: inset 0 0 0 2px rgba(153, 246, 228, 0.72);
+  background: linear-gradient(
+    135deg,
+    rgba(20, 184, 166, 0.34),
+    rgba(45, 212, 191, 0.2)
+  );
+  box-shadow: inset 0 0 0 2px rgba(45, 212, 191, 0.8);
+  animation: reachable-pulse 1.5s ease-in-out infinite;
 }
 
 .combat-cell-reachable:hover {
-	background: rgba(45, 212, 191, 0.5) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(20, 184, 166, 0.55),
+    rgba(45, 212, 191, 0.36)
+  );
 }
 
-.character-sprite {
-	bottom: 2px;
-	height: 34px;
-	left: 50%;
-	position: absolute;
-	transform: translateX(-50%);
-	width: 26px;
+.combat-cell-attackable {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.3),
+    rgba(248, 113, 113, 0.18)
+  );
+  box-shadow: inset 0 0 0 2px rgba(248, 113, 113, 0.75);
+  animation: attackable-pulse 1.1s ease-in-out infinite;
 }
 
-.character-head,
-.character-body,
-.character-arm,
-.character-leg {
-	background: var(--character-color);
-	border: 1px solid var(--character-outline);
-	position: absolute;
+.combat-cell-attackable::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 9999px;
+  background: rgba(248, 113, 113, 0.95);
+  box-shadow: 0 0 0 2px rgba(254, 202, 202, 0.7);
 }
 
-.character-head {
-	border-radius: 50%;
-	height: 10px;
-	left: 8px;
-	top: 0;
-	width: 10px;
+.combat-cell-planned {
+  background: rgba(250, 204, 21, 0.2);
+  box-shadow: inset 0 0 0 2px rgba(253, 224, 71, 0.5);
 }
 
-.character-body {
-	border-radius: 7px 7px 4px 4px;
-	height: 16px;
-	left: 6px;
-	top: 10px;
-	width: 14px;
+@keyframes reachable-pulse {
+  0%,
+  100% { background: rgba(20, 184, 166, 0.3); }
+  50% { background: rgba(45, 212, 191, 0.5); }
 }
 
-.character-arm {
-	border-radius: 4px;
-	height: 5px;
-	top: 12px;
-	width: 12px;
+@keyframes attackable-pulse {
+  0%,
+  100% { background: rgba(239, 68, 68, 0.24); }
+  50% { background: rgba(248, 113, 113, 0.42); }
 }
 
-.character-arm-left {
-	left: -3px;
-	transform: rotate(24deg);
+@keyframes water-flow {
+  from { background-position: 0 0; }
+  to { background-position: 8px 8px; }
 }
 
-.character-arm-right {
-	right: -3px;
-	transform: rotate(-24deg);
+@keyframes wall-flicker {
+  0%,
+  100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
 }
 
-.character-leg {
-	border-radius: 4px;
-	height: 12px;
-	top: 24px;
-	width: 5px;
+/* Move-step numbered chip */
+.move-step-chip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 900;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background: radial-gradient(
+    circle at 50% 32%,
+    rgba(253, 224, 71, 0.95),
+    rgba(250, 204, 21, 0.72)
+  );
+  box-shadow: 0 0 0 2px rgba(253, 224, 71, 0.85), 0 8px 18px rgba(250, 204, 21, 0.35);
 }
 
-.character-leg-left {
-	left: 7px;
-	transform: rotate(5deg);
-}
-
-.character-leg-right {
-	right: 7px;
-	transform: rotate(-5deg);
-}
-
-.character-label {
-	background: rgba(15, 23, 42, 0.9);
-	border: 1px solid var(--character-outline);
-	border-radius: 4px;
-	color: white;
-	font-size: 8px;
-	font-weight: 800;
-	left: 50%;
-	line-height: 12px;
-	padding: 0 3px;
-	position: absolute;
-	top: -11px;
-	transform: translateX(-50%);
-	white-space: nowrap;
-}
-
-.posture-crouching .character-sprite {
-	transform: translateX(-50%) scaleY(0.78);
-}
-
-.posture-prone .character-sprite {
-	height: 20px;
-	transform: translateX(-50%) translateY(7px) scale(0.9);
-	width: 38px;
-}
-
-.posture-prone .character-head {
-	height: 10px;
-	left: 1px;
-	top: 5px;
-	width: 10px;
-}
-
-.posture-prone .character-body {
-	height: 10px;
-	left: 9px;
-	top: 5px;
-	width: 19px;
-}
-
-.posture-prone .character-arm {
-	height: 4px;
-	top: 2px;
-	width: 13px;
-}
-
-.posture-prone .character-arm-left {
-	left: 10px;
-	transform: rotate(-12deg);
-}
-
-.posture-prone .character-arm-right {
-	right: 0;
-	transform: rotate(12deg);
-}
-
-.posture-prone .character-leg {
-	height: 5px;
-	top: 6px;
-	width: 11px;
-}
-
-.posture-prone .character-leg-left {
-	left: 26px;
-	transform: rotate(4deg);
-}
-
-.posture-prone .character-leg-right {
-	right: -1px;
-	transform: rotate(-4deg);
-}
-
-.damage-popup {
-	color: #fca5a5;
-	font-size: 1.15rem;
-	font-weight: 800;
-	position: absolute;
-	text-shadow: 0 2px 4px #450a0a;
-	transform: translate(-50%, -50%);
-	animation: damage-popup 700ms ease-out forwards;
-}
-
+/* ============================================================
+   TERRAIN
+   ============================================================ */
 .terrain-tile {
-	background: rgba(15, 23, 42, 0.16);
-	position: absolute;
-	inset: 0;
-	width: 100%;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .terrain-water {
-	background: radial-gradient(ellipse at 25% 30%, rgba(125, 211, 252, 0.5), transparent 38%), repeating-linear-gradient(135deg, rgba(14, 116, 144, 0.88) 0 8px, rgba(34, 211, 238, 0.45) 8px 12px);
+  border: 1px solid rgba(125, 211, 252, 0.55);
+  background: linear-gradient(
+    135deg,
+    rgba(3, 105, 161, 0.92),
+    rgba(14, 116, 144, 0.86) 45%,
+    rgba(2, 132, 199, 0.92)
+  );
+  box-shadow: inset 0 0 14px rgba(125, 211, 252, 0.6);
+}
+
+.terrain-water::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(125, 211, 252, 0.2) 0 2px,
+    transparent 2px 12px
+  );
+  animation: water-flow 5s linear infinite;
 }
 
 .terrain-wall {
-	background: radial-gradient(ellipse at 65% 25%, rgba(214, 211, 209, 0.22), transparent 32%), linear-gradient(135deg, rgba(41, 37, 36, 0.95), rgba(120, 113, 108, 0.9) 50%, rgba(28, 25, 23, 0.96));
+  border: 1px solid rgba(214, 211, 209, 0.34);
+  background: linear-gradient(
+    135deg,
+    rgba(28, 25, 23, 0.96),
+    rgba(87, 83, 78, 0.88) 55%,
+    rgba(41, 37, 36, 0.98)
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(28, 25, 23, 0.9),
+    inset 0 7px 0 rgba(231, 229, 228, 0.22);
+  animation: wall-flicker 6s ease-in-out infinite;
 }
 
 .terrain-rock {
-	background: radial-gradient(circle at 32% 25%, rgba(255, 255, 255, 0.62), transparent 16%), linear-gradient(145deg, #a8a29e, #57534e 62%, #292524);
-	border: 1px solid rgba(231, 229, 228, 0.56);
-	border-radius: 48% 42% 52% 38%;
-	box-shadow: 2px 3px 3px rgba(15, 23, 42, 0.52), inset -2px -2px 3px rgba(28, 25, 23, 0.38);
-	height: 30%;
-	position: absolute;
-	width: 34%;
+  position: absolute;
+  border-radius: 48% 42% 52% 38%;
+  background: radial-gradient(
+    circle at 32% 25%,
+    rgba(255, 255, 255, 0.6),
+    transparent 16%
+  ), linear-gradient(145deg, #a8a29e, #57534e 62%, #292524);
+  border: 1px solid rgba(231, 229, 228, 0.5);
+  box-shadow: 2px 3px 3px rgba(2, 6, 23, 0.5), inset -2px -2px 3px rgba(28, 25, 23, 0.4);
 }
 
+.rock-one { width: 34%; height: 30%; left: 13%; top: 20%; }
+.rock-two { width: 40%; height: 36%; right: 15%; top: 16%; }
+.rock-three { width: 32%; height: 27%; left: 34%; bottom: 15%; }
+
+/* Rocks floating on water */
 .terrain-water .terrain-rock {
-	background: radial-gradient(circle at 30% 22%, rgba(224, 242, 254, 0.78), transparent 16%), linear-gradient(145deg, #bae6fd, #3b82a5 58%, #164e63);
-	border-color: rgba(186, 230, 253, 0.78);
+  background: radial-gradient(
+    circle at 30% 22%,
+    rgba(224, 242, 254, 0.78),
+    transparent 16%
+  ), linear-gradient(145deg, #bae6fd, #3b82a5 58%, #164e63);
+  border-color: rgba(186, 230, 253, 0.78);
+}
+/* ============================================================
+   CHARACTER TOKENS
+   ============================================================ */
+.combat-marker-wrap {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
 }
 
-.rock-one {
-	left: 13%;
-	top: 20%;
+.combat-marker-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
-.rock-two {
-	height: 36%;
-	right: 15%;
-	top: 16%;
-	width: 40%;
+.combat-marker-figure {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -56%);
 }
 
-.rock-three {
-	bottom: 15%;
-	height: 27%;
-	left: 34%;
-	width: 32%;
+.combat-marker-shadow {
+  position: absolute;
+  left: 7px;
+  top: 34px;
+  width: 32px;
+  height: 11px;
+  border-radius: 9999px;
+  background: rgba(2, 6, 23, 0.5);
+  filter: blur(1px);
 }
 
-.combat-marker-active {
-	animation: combat-impact 700ms ease-out;
+/* Static stance transform applied by posture */
+.combat-marker-stance {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
-.combat-marker-moving {
-	transition: left 560ms cubic-bezier(0.2, 0.8, 0.2, 1), top 560ms cubic-bezier(0.2, 0.8, 0.2, 1);
-	will-change: left, top;
+.combat-posture-standing .combat-marker-stance {
+  transform: translateY(0);
 }
 
+.combat-posture-crouching .combat-marker-stance {
+  transform: translateY(8px) scaleY(0.82);
+}
+
+.combat-posture-prone .combat-marker-stance {
+  transform: translateY(6px) rotate(72deg) scale(0.72);
+}
+
+/* motion.body - the animated sprite root (framer controls transform here) */
+.combat-marker-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+}
+
+.combat-marker-active .combat-marker-figure {
+  animation: token-impact 0.6s ease-out;
+}
+
+@keyframes token-impact {
+  0% {
+    filter: brightness(1);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+  }
+  18% {
+    filter: brightness(2.4) saturate(1.7);
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.9), 0 0 26px rgba(248, 113, 113, 1);
+  }
+  45% {
+    filter: brightness(1.2);
+    box-shadow: 0 0 0 12px rgba(248, 113, 113, 0.22), 0 0 30px rgba(248, 113, 113, 0.7);
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38);
+  }
+}
+
+.combat-marker-label {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 13px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(2, 6, 23, 0.82);
+  border: 1px solid var(--tk-edge);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.tk-body {
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  width: 26px;
+  height: 24px;
+  border-radius: 10px 10px 8px 8px;
+  background: linear-gradient(160deg, var(--tk) 40%, var(--tk-dark) 90%);
+  border: 2px solid var(--tk-edge);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.55), 0 0 10px var(--tk-glow);
+}
+
+.tk-visor {
+  position: absolute;
+  left: 11px;
+  top: 9px;
+  width: 12px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tk-visor);
+  box-shadow: 0 0 10px var(--tk-glow);
+}
+
+.tk-helmet {
+  position: absolute;
+  left: 9px;
+  top: 0;
+  width: 22px;
+  height: 8px;
+  border-radius: 8px 8px 2px 2px;
+  background: var(--tk-dark);
+  border: 1px solid var(--tk-edge);
+}
+
+.tk-gun {
+  position: absolute;
+  left: 2px;
+  top: 12px;
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: #0b1220;
+  box-shadow: 0 0 4px var(--tk-glow);
+}
+
+.tk-leg-l,
+.tk-leg-r {
+  position: absolute;
+  top: 31px;
+  width: 7px;
+  height: 9px;
+  border-radius: 2px 2px 3px 3px;
+  background: var(--tk-dark);
+  border: 1px solid var(--tk-edge);
+}
+
+.tk-leg-l { left: 14px; }
+.tk-leg-r { left: 23px; }
+
+/* Token palettes */
+.combat-marker-you {
+  --tk: #38bdf8;
+  --tk-dark: #0c4a6e;
+  --tk-edge: #7dd3fc;
+  --tk-glow: rgba(56, 189, 248, 0.55);
+  --tk-visor: #d7f4ff;
+}
+
+.combat-marker-foe {
+  --tk: #f87171;
+  --tk-dark: #7f1d1d;
+  --tk-edge: #fca5a5;
+  --tk-glow: rgba(248, 113, 113, 0.55);
+  --tk-visor: #ffd9d9;
+}
+
+/* ============================================================
+   COMBAT EFFECTS - shots & damage numbers (framer-driven)
+   ============================================================ */
 .combat-shot {
-	background: rgba(254, 240, 138, 0.72);
-	border-radius: 9999px;
-	height: 2px;
-	margin-top: -1px;
-	opacity: 0.8;
-	position: absolute;
-	transform-origin: 0 50%;
-	width: var(--shot-distance);
-	transform: translateY(-50%) rotate(var(--shot-angle)) scaleX(0);
-	animation: combat-shot 420ms ease-out forwards;
+  position: absolute;
+  height: 4px;
+  border-radius: 9999px;
+  z-index: 40;
+  background: linear-gradient(90deg, rgba(254, 240, 138, 0.9), rgba(250, 245, 210, 0.95));
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.95), 0 0 3px rgba(255, 255, 255, 0.9);
+  transform-origin: 0% 50%;
 }
 
-@keyframes combat-impact {
-	0% { filter: brightness(1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
-	25% { filter: brightness(1.8); box-shadow: 0 0 0 8px rgba(248, 113, 113, 0.45), 0 0 22px rgba(248, 113, 113, 0.9); }
-	55% { filter: brightness(1.2); box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2), 0 4px 12px rgba(0, 0, 0, 0.35); }
-	100% { filter: brightness(1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+.combat-muzzle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  z-index: 41;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 250, 230, 0.95), rgba(250, 204, 21, 0.6) 55%, transparent 75%);
 }
 
-@keyframes combat-shot {
-	0% { opacity: 0; transform: translateY(-50%) rotate(var(--shot-angle)) scaleX(0); }
-	15% { opacity: 0.8; }
-	100% { opacity: 0.8; transform: translateY(-50%) rotate(var(--shot-angle)) scaleX(1); }
+.impact-ring {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 9999px;
+  z-index: 41;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.9), 0 0 18px rgba(248, 113, 113, 0.8);
 }
 
-@keyframes damage-popup {
-	0% { opacity: 0; transform: translate(-50%, -20%); }
-	20% { opacity: 1; }
-	100% { opacity: 0; transform: translate(-50%, -150%); }
+.damage-popup {
+  position: absolute;
+  width: 44px;
+  height: 32px;
+  margin: -16px 0 0 -22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 42;
+  font-weight: 900;
+  font-size: 1.15rem;
+  color: #fde047;
+  text-shadow: 0 1px 2px #450a0a, 0 0 12px rgba(248, 113, 113, 0.8);
 }
 
-@keyframes fade-in {
-	from { opacity: 0; transform: translateY(4px); }
-	to { opacity: 1; transform: translateY(0); }
+/* ============================================================
+   COMBAT HUD
+   ============================================================ */
+.hp-bar {
+  position: relative;
+  height: 9px;
+  border-radius: 9999px;
+  background: rgba(2, 6, 23, 0.55);
+  overflow: hidden;
 }
+
+.hp-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 9999px;
+}
+
+.hp-fill-good { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.hp-fill-mid { background: linear-gradient(90deg, #d97706, #fbbf24); }
+.hp-fill-low { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+.ap-pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.ap-pip-on {
+  background: linear-gradient(135deg, #facc15, #fde68a);
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+}
+
+.ap-pip-off {
+  background: rgba(51, 65, 85, 0.65);
+}
+/* Segmented control sliding highlight */
+.seg-highlight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 13px;
+  z-index: 1;
+}
+
+.seg-highlight-move {
+  background: linear-gradient(160deg, rgba(20, 184, 166, 0.9), rgba(13, 148, 136, 0.95));
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.45), 0 6px 16px rgba(13, 148, 136, 0.55);
+}
+
+.seg-highlight-shoot {
+  background: linear-gradient(160deg, rgba(239, 68, 68, 0.9), rgba(220, 38, 38, 0.95));
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.45), 0 6px 16px rgba(220, 38, 38, 0.55);
+}
+
+.seg-highlight-posture {
+  background: linear-gradient(160deg, rgba(250, 204, 21, 0.9), rgba(234, 179, 8, 0.95));
+  box-shadow: 0 0 0 2px rgba(253, 224, 71, 0.45), 0 6px 14px rgba(234, 179, 8, 0.5);
+}
+@import "tailwindcss";
 @import "tailwindcss";

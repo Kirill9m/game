@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Map as MapLibreMap } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+import { motion } from "framer-motion";
 import { combatApi } from "@/services/combatApi";
 import { CombatActions } from "./combat/CombatActions";
 import { CombatGrid } from "./combat/CombatGrid";
@@ -10,13 +9,11 @@ import { CombatLog } from "./combat/CombatLog";
 import { CombatModeControls } from "./combat/CombatModeControls";
 import { CombatStatus } from "./combat/CombatStatus";
 import {
-  GRID_SIZE,
   getLatestMove,
   getLatestPosture,
   getReachableCells,
   isMovementBlocked,
   postureMovement,
-  WALL_CELLS,
 } from "./combat/board";
 import {
   CombatArenaProps,
@@ -44,7 +41,6 @@ export default function CombatArena({
   const [plannedActions, setPlannedActions] = useState<PlannedAction[]>([]);
   const [isEndingTurn, setIsEndingTurn] = useState(false);
   const [isActing, setIsActing] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
   const [animationTarget, setAnimationTarget] = useState<"p1" | "p2" | null>(
     null,
   );
@@ -67,9 +63,6 @@ export default function CombatArena({
   const replayedRoundRef = useRef<string | null>(null);
   const replayTimersRef = useRef<number[]>([]);
   const previousCombatRef = useRef(initialCombat);
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const tileClickRef = useRef<(x: number, y: number) => void>(() => undefined);
 
   const isPlayer1 = playerId === combat.player1Id;
   const myX = isPlayer1 ? combat.p1X : combat.p2X;
@@ -264,214 +257,6 @@ export default function CombatArena({
     return () => window.clearInterval(interval);
   }, [combatId, onCombatUpdate]);
 
-  useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-    const gridFeatures = Array.from(
-      { length: (GRID_SIZE + 1) * 2 },
-      (_, index) => {
-        const isVertical = index < GRID_SIZE + 1;
-        const coordinate = isVertical ? index : index - GRID_SIZE - 1;
-        return {
-          type: "Feature" as const,
-          properties: {},
-          geometry: {
-            type: "LineString" as const,
-            coordinates: isVertical
-              ? [
-                  [coordinate - 0.5, 0.5],
-                  [coordinate - 0.5, -9.5],
-                ]
-              : [
-                  [-0.5, -coordinate + 0.5],
-                  [9.5, -coordinate + 0.5],
-                ],
-          },
-        };
-      },
-    );
-    const map = new MapLibreMap({
-      container: mapContainerRef.current,
-      attributionControl: {},
-      center: [4.5, -4.5],
-      zoom: 4.8,
-      minZoom: 4.2,
-      maxZoom: 6.5,
-      maxBounds: [
-        [-1, -10],
-        [10, 1],
-      ],
-      style: {
-        version: 8,
-        sources: {},
-        layers: [
-          {
-            id: "background",
-            type: "background",
-            paint: { "background-color": "#111827" },
-          },
-        ],
-      },
-    });
-    map.on("load", () => {
-      map.fitBounds(
-        [
-          [-0.5, -9.5],
-          [9.5, 0.5],
-        ],
-        { padding: 0, duration: 0 },
-      );
-      map.addSource("terrain", {
-        type: "raster",
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        attribution: "© OpenStreetMap contributors",
-      });
-      map.addLayer({
-        id: "terrain",
-        type: "raster",
-        source: "terrain",
-        paint: {
-          "raster-opacity": 0.82,
-          "raster-saturation": -0.15,
-          "raster-contrast": 0.08,
-        },
-      });
-      map.addSource("grid", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: gridFeatures },
-      });
-      map.addSource("reachable", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id: "reachable-cells",
-        type: "fill",
-        source: "reachable",
-        paint: {
-          "fill-color": mode === "shoot" ? "#ef4444" : "#14b8a6",
-          "fill-opacity": 0.28,
-        },
-      });
-      map.addSource("planned", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id: "planned-cells",
-        type: "fill",
-        source: "planned",
-        paint: { "fill-color": "#facc15", "fill-opacity": 0.5 },
-      });
-      map.addLayer({
-        id: "grid-lines",
-        type: "line",
-        source: "grid",
-        paint: {
-          "line-color": "#f8fafc",
-          "line-opacity": 0.72,
-          "line-width": 1.4,
-        },
-      });
-      setMapReady(true);
-    });
-    map.on("click", (event) => {
-      const x = Math.floor(event.lngLat.lng + 0.5);
-      const y = Math.floor(-event.lngLat.lat + 0.5);
-      if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
-        tileClickRef.current(x, y);
-    });
-    mapRef.current = map;
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      setMapReady(false);
-    };
-  }, [mode]);
-
-  useEffect(() => {
-    const source = mapRef.current?.getSource("reachable") as
-      | import("maplibre-gl").GeoJSONSource
-      | undefined;
-    if (!mapReady || !source || !isMyTurn || combat.status !== "IN_PROGRESS")
-      return;
-    const movementEnd = getLatestMove(plannedActions) ?? { x: myX, y: myY };
-    const features = [];
-    for (let x = 0; x < GRID_SIZE; x += 1)
-      for (let y = 0; y < GRID_SIZE; y += 1) {
-        const distance = Math.max(
-          Math.abs(x - movementEnd.x),
-          Math.abs(y - movementEnd.y),
-        );
-        const available =
-          mode === "move"
-            ? reachableCells.has(`${x}:${y}`)
-            : distance <= 3 && distance > 0;
-        if (
-          available &&
-          !(mode === "move"
-            ? isMovementBlocked(x, y)
-            : WALL_CELLS.has(`${x}:${y}`))
-        )
-          features.push({
-            type: "Feature" as const,
-            properties: {},
-            geometry: {
-              type: "Polygon" as const,
-              coordinates: [
-                [
-                  [x - 0.5, -y + 0.5],
-                  [x + 0.5, -y + 0.5],
-                  [x + 0.5, -y - 0.5],
-                  [x - 0.5, -y - 0.5],
-                  [x - 0.5, -y + 0.5],
-                ],
-              ],
-            },
-          });
-      }
-    source.setData({ type: "FeatureCollection", features });
-  }, [
-    combat,
-    isMyTurn,
-    mapReady,
-    mode,
-    myX,
-    myY,
-    plannedActions,
-    reachableCells,
-  ]);
-  useEffect(() => {
-    const source = mapRef.current?.getSource("planned") as
-      | import("maplibre-gl").GeoJSONSource
-      | undefined;
-    if (!mapReady || !source) return;
-    source.setData({
-      type: "FeatureCollection",
-      features: plannedActions
-        .filter(
-          (action): action is Extract<PlannedAction, { type: "MOVE" }> =>
-            action.type === "MOVE",
-        )
-        .map(({ x, y }, index) => ({
-          type: "Feature" as const,
-          properties: { step: index + 1 },
-          geometry: {
-            type: "Polygon" as const,
-            coordinates: [
-              [
-                [x - 0.5, -y + 0.5],
-                [x + 0.5, -y + 0.5],
-                [x + 0.5, -y - 0.5],
-                [x - 0.5, -y - 0.5],
-                [x - 0.5, -y + 0.5],
-              ],
-            ],
-          },
-        })),
-    });
-  }, [mapReady, plannedActions]);
-
   const handleTileClick = useCallback(
     async (targetX: number, targetY: number) => {
       if (!isMyTurn || isActing || combat.status !== "IN_PROGRESS") {
@@ -542,9 +327,6 @@ export default function CombatArena({
       reachableCells,
     ],
   );
-  useEffect(() => {
-    tileClickRef.current = (x, y) => void handleTileClick(x, y);
-  }, [handleTileClick]);
   const handleEndTurn = async () => {
     if (isEndingTurn) return;
     try {
@@ -598,7 +380,12 @@ export default function CombatArena({
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 w-full max-w-lg">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 240, damping: 22 }}
+      className="flex flex-col items-center space-y-4 w-full max-w-lg"
+    >
       <CombatStatus
         actionPoints={combat.actionPoints}
         movementRemaining={movementRemaining}
@@ -648,7 +435,6 @@ export default function CombatArena({
         replayAction={replayAction}
         animationTarget={animationTarget}
         damagePopup={damagePopup}
-        mapContainerRef={mapContainerRef}
         onTileClick={(x, y) => void handleTileClick(x, y)}
       />
       <CombatActions
@@ -664,6 +450,6 @@ export default function CombatArena({
         onCombatFinished={onCombatFinished}
       />
       <CombatLog entries={combatLog} />
-    </div>
+    </motion.div>
   );
 }
