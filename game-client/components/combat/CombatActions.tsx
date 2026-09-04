@@ -129,7 +129,7 @@ export function CombatActions({
       </motion.button>
 
       {/* Surrender */}
-      {combat.status === "IN_PROGRESS" && (
+      {combat.status === "IN_PROGRESS" && !combat.winnerId && (
         <button
           onClick={onFinishCombat}
           disabled={!isMyTurn || isActing}

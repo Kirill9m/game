@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import spring.backend.game.config.AdminProperties;
 import spring.backend.game.dto.AdminDtos;
 import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.entity.EnemyLootDrop;
 import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.ObstacleTypeEntity;
@@ -36,6 +37,7 @@ import spring.backend.game.repository.EnemyTypeRepository;
 import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.ObstacleTypeRepository;
 import spring.backend.game.repository.PlayerInventoryRepository;
+import spring.backend.game.repository.PlayerLootBagRepository;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.DialogueChoiceRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
@@ -46,6 +48,7 @@ import spring.backend.game.repository.QuestSystem.QuestRepository;
 import spring.backend.game.repository.WeaponProficiencyRepository;
 import spring.backend.game.repository.WeaponTypeRepository;
 import spring.backend.game.repository.WorldCellRepository;
+import spring.backend.game.repository.WorldLootRepository;
 
 /**
  * Admin-only service: manages players/roles, NPCs, quests (including a random
@@ -122,6 +125,8 @@ public class AdminService {
     private final ObstacleTypeRepository obstacleTypeRepository;
     private final WorldCellRepository worldCellRepository;
     private final WorldCellService worldCellService;
+    private final PlayerLootBagRepository playerLootBagRepository;
+    private final WorldLootRepository worldLootRepository;
     private final Random random = new Random();
 
     // --- ACCESS CONTROL ---
@@ -241,6 +246,10 @@ public class AdminService {
 
         // Inventory
         playerInventoryRepository.deleteAll(playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(targetPlayerId));
+
+        // Field loot bag and dropped world loot
+        playerLootBagRepository.deleteAll(playerLootBagRepository.findByPlayerIdOrderByItemNameAsc(targetPlayerId));
+        worldLootRepository.deleteByOwnerId(targetPlayerId);
 
         // Quest progress (and log entries)
         for (PlayerQuestEntity playerQuest : playerQuestRepository.findByPlayerId(targetPlayerId)) {
@@ -830,6 +839,8 @@ public class AdminService {
                 .actionPoints(clampMin1(request.actionPoints(), 3))
                 .movementRange(clampMin1(request.movementRange(), 2))
                 .build());
+        enemy.setLootDrops(toLootDrops(request.lootDrops()));
+        enemyTypeRepository.save(enemy);
         log.info("Admin created enemy type {}", enemy.getCode());
         return toEnemyTypeDto(enemy);
     }
@@ -858,6 +869,9 @@ public class AdminService {
         }
         if (request.movementRange() != null) {
             enemy.setMovementRange(clampMin1(request.movementRange(), 1));
+        }
+        if (request.lootDrops() != null) {
+            enemy.setLootDrops(toLootDrops(request.lootDrops()));
         }
         return toEnemyTypeDto(enemyTypeRepository.save(enemy));
     }
@@ -895,8 +909,22 @@ public class AdminService {
         int actionPoints = 2 + random.nextInt(2) + (tier >= 2 ? 1 : 0); // 2..5
         int movementRange = 1 + random.nextInt(3); // 1..3
 
+        // Randomised loot table: 0..2 drops of existing weapon items.
+        List<AdminDtos.EnemyLootDropDto> lootDrops = new ArrayList<>();
+        List<ItemEntity> weaponItems = itemRepository.findAll().stream()
+                .filter(item -> "WEAPON".equalsIgnoreCase(item.getType()))
+                .toList();
+        if (!weaponItems.isEmpty()) {
+            int dropCount = random.nextInt(3); // 0..2
+            for (int index = 0; index < dropCount; index++) {
+                ItemEntity weapon = weaponItems.get(random.nextInt(weaponItems.size()));
+                lootDrops.add(new AdminDtos.EnemyLootDropDto(
+                        weapon.getCode(), 40 + random.nextInt(51), 1, 1));
+            }
+        }
+
         AdminDtos.AdminEnemyTypeDto created = createEnemyType(new AdminDtos.CreateEnemyTypeRequest(
-                code, name, maxHealth, damage, attackRange, actionPoints, movementRange));
+                code, name, maxHealth, damage, attackRange, actionPoints, movementRange, lootDrops));
         log.info("Generated random enemy '{}' ({}, difficulty {})", created.name(), created.code(), tier);
         return created;
     }
@@ -960,9 +988,27 @@ public class AdminService {
     }
 
     private AdminDtos.AdminEnemyTypeDto toEnemyTypeDto(EnemyTypeEntity enemy) {
+        List<AdminDtos.EnemyLootDropDto> drops = enemy.getLootDrops().stream()
+                .map(drop -> new AdminDtos.EnemyLootDropDto(
+                        drop.itemCode(), drop.chance(), drop.minQuantity(), drop.maxQuantity()))
+                .toList();
         return new AdminDtos.AdminEnemyTypeDto(enemy.getId(), enemy.getCode(), enemy.getName(),
                 enemy.getMaxHealth(), enemy.getDamage(), enemy.getAttackRange(),
-                enemy.getActionPoints(), enemy.getMovementRange());
+                enemy.getActionPoints(), enemy.getMovementRange(), drops);
+    }
+
+    private List<EnemyLootDrop> toLootDrops(List<AdminDtos.EnemyLootDropDto> drops) {
+        if (drops == null || drops.isEmpty()) {
+            return List.of();
+        }
+        return drops.stream()
+                .filter(drop -> drop != null && drop.itemCode() != null && !drop.itemCode().isBlank())
+                .map(drop -> new EnemyLootDrop(
+                        drop.itemCode().trim().toUpperCase(Locale.ROOT),
+                        Math.max(0, Math.min(100, drop.chance() == null ? 100 : drop.chance())),
+                        Math.max(1, drop.minQuantity() == null ? 1 : drop.minQuantity()),
+                        Math.max(1, drop.maxQuantity() == null ? 1 : drop.maxQuantity())))
+                .toList();
     }
 
     private static String requireNonBlank(String value, String message) {

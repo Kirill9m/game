@@ -14,6 +14,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import spring.backend.game.dto.AdminDtos.AdminEnemyTypeDto;
+import spring.backend.game.dto.AdminDtos.EnemyLootDropDto;
 import spring.backend.game.dto.AdminDtos.AdminObstacleTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminWorldCellDto;
 import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
@@ -169,7 +170,11 @@ public class WorldCellService {
                 cell.getEnemyType().getDamage(),
                 cell.getEnemyType().getAttackRange(),
                 cell.getEnemyType().getActionPoints(),
-                cell.getEnemyType().getMovementRange());
+                cell.getEnemyType().getMovementRange(),
+                cell.getEnemyType().getLootDrops().stream()
+                        .map(drop -> new EnemyLootDropDto(drop.itemCode(), drop.chance(),
+                                drop.minQuantity(), drop.maxQuantity()))
+                        .toList());
         return new AdminWorldCellDto(cell.getId(), cell.getPositionX(), cell.getPositionY(),
                 cell.isBlocked(), cell.getRadiation(), cell.getAmbushChance(), enemy,
                 cell.getObstacleTypes().stream()

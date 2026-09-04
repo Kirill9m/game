@@ -2,6 +2,7 @@ package spring.backend.game.controller;
 
 import spring.backend.game.entity.CombatSessionEntity;
 import spring.backend.game.entity.EnemyTypeEntity;
+import spring.backend.game.dto.CombatLootPickupRequest;
 import spring.backend.game.dto.CombatPlanRequest;
 import spring.backend.game.service.CombatService;
 
@@ -66,6 +67,15 @@ public class CombatController {
             @RequestParam String playerId,
             @org.springframework.web.bind.annotation.RequestBody(required = false) CombatPlanRequest plan) {
         return ResponseEntity.ok(combatService.endTurn(combatId, playerId, plan));
+    }
+
+    @PostMapping("/{combatId}/pickup-loot")
+    public ResponseEntity<CombatSessionEntity> pickupLoot(
+            @PathVariable UUID combatId,
+            @RequestParam String playerId,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) CombatLootPickupRequest request) {
+        return ResponseEntity.ok(combatService.pickupLoot(combatId, playerId,
+                request == null ? List.of() : request.pileIndexes()));
     }
 
     @PostMapping("/{combatId}/attack")

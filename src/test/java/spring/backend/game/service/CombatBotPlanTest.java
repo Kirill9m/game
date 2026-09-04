@@ -21,7 +21,7 @@ import spring.backend.game.entity.EnemyTypeEntity;
 class CombatBotPlanTest {
 
     private final CombatService service =
-            new CombatService(null, null, null, null, null, null, null, null, null);
+            new CombatService(null, null, null, null, null, null, null, null, null, null);
 
     private String botPlan(CombatSessionEntity combat) throws Exception {
         Method method = CombatService.class.getDeclaredMethod("createBotPlan", CombatSessionEntity.class);

@@ -30,4 +30,19 @@ public class MoveResponse {
 
     /** Name of the ambushing enemy (null when no ambush). */
     private String enemyName;
+
+    /** Loot piles lying on the target cell. */
+    private List<WorldLootResponse> fieldLoot;
+
+    /** Field loot bag after the move (auto-deposited when entering the city). */
+    private List<InventoryItemResponse> lootBag;
+
+    /** True when entering the city deposited the field loot bag into the inventory. */
+    private boolean lootDeposited;
+
+    /** How many items were deposited (0 when nothing was stored). */
+    private int lootDepositedCount;
+
+    /** True when the target cell is inside the city (safe zone). */
+    private boolean inSafeZone;
 }

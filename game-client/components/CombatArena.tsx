@@ -7,6 +7,7 @@ import { CombatActions } from "./combat/CombatActions";
 import { CombatGrid } from "./combat/CombatGrid";
 import { CombatLog } from "./combat/CombatLog";
 import { CombatModeControls } from "./combat/CombatModeControls";
+import { CombatLootPicker, CombatLootPickerPile } from "./combat/CombatLootPicker";
 import { CombatStatus } from "./combat/CombatStatus";
 import {
   getAttackRangeCells,
@@ -42,6 +43,12 @@ export default function CombatArena({
   const [plannedActions, setPlannedActions] = useState<PlannedAction[]>([]);
   const [isEndingTurn, setIsEndingTurn] = useState(false);
   const [isActing, setIsActing] = useState(false);
+  // Loot picker: which piles (indexes into combat.loot) the player selected.
+  const [isLootPickerOpen, setIsLootPickerOpen] = useState(false);
+  const [selectedPileIndexes, setSelectedPileIndexes] = useState<Set<number>>(
+    new Set(),
+  );
+  const [isPickingLoot, setIsPickingLoot] = useState(false);
   const [animationTarget, setAnimationTarget] = useState<"p1" | "p2" | null>(
     null,
   );
@@ -64,6 +71,8 @@ export default function CombatArena({
   const replayedRoundRef = useRef<string | null>(null);
   const replayTimersRef = useRef<number[]>([]);
   const previousCombatRef = useRef(initialCombat);
+  // Latest combat state — used to drop stale polling responses (version guard).
+  const lastCombatRef = useRef(initialCombat);
 
   // Размер поля: mobile — вписываемся в высоту экрана (до 440px),
   // desktop — растем по ширине колонки вплоть до 760px.
@@ -124,6 +133,16 @@ export default function CombatArena({
       : 0;
   const plannedEnd = getLatestMove(plannedActions);
   const obstacles = useMemo(() => combat.obstacles ?? [], [combat.obstacles]);
+  // Piles the player is currently standing on (candidates for the Take button).
+  const lootAtMyFeet = useMemo<CombatLootPickerPile[]>(() => {
+    const piles: CombatLootPickerPile[] = [];
+    combat.loot?.forEach((pile, index) => {
+      if (pile.x === myX && pile.y === myY && pile.quantity > 0) {
+        piles.push({ lootIndex: index, pile });
+      }
+    });
+    return piles;
+  }, [combat.loot, myX, myY]);
   const reachableCells = getReachableCells(
     plannedEnd?.x ?? myX,
     plannedEnd?.y ?? myY,
@@ -150,6 +169,7 @@ export default function CombatArena({
   const canAttack =
     isMyTurn &&
     !isReplaying &&
+    enemyHealth > 0 && // a dead enemy cannot be shot anymore
     distanceToEnemy <= myAttackRange &&
     plannedActions.length < combat.actionPoints;
   // Зону обстрела показываем только когда ей можно воспользоваться.
@@ -305,9 +325,18 @@ export default function CombatArena({
     [],
   );
   useEffect(() => {
+    lastCombatRef.current = combat;
+  }, [combat]);
+
+  useEffect(() => {
     const interval = window.setInterval(async () => {
       try {
         const latestCombat = await combatApi.getCombat(combatId);
+        // Drop stale responses that arrive after a newer combat state (e.g. a
+        // pickup already removed a pile) — prevents the board from "glitching".
+        if ((latestCombat.version ?? 0) < (lastCombatRef.current.version ?? 0)) {
+          return;
+        }
         setCombat(latestCombat);
         onCombatUpdate(latestCombat);
       } catch {
@@ -327,7 +356,9 @@ export default function CombatArena({
       const targetKey = `${targetX}:${targetY}`;
 
       // Нажатие на врага = выстрел по умолчанию (режима "Shoot" больше нет).
-      if (targetX === enemyX && targetY === enemyY) {
+      // Мёртвого врага нельзя обстрелять — клик идёт как передвижение, чтобы
+      // подойти к его телу и забрать выпавший лут.
+      if (targetX === enemyX && targetY === enemyY && enemyHealth > 0) {
         if (plannedActions.length >= combat.actionPoints) {
           setError(
             `You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`,
@@ -420,6 +451,48 @@ export default function CombatArena({
       setIsEndingTurn(false);
     }
   };
+  const openLootPicker = () => {
+    setSelectedPileIndexes(
+      new Set(lootAtMyFeet.map((entry) => entry.lootIndex)),
+    );
+    setIsLootPickerOpen(true);
+  };
+
+  const toggleLootPile = (lootIndex: number) => {
+    setSelectedPileIndexes((prev) => {
+      const next = new Set(prev);
+      if (next.has(lootIndex)) next.delete(lootIndex);
+      else next.add(lootIndex);
+      return next;
+    });
+  };
+
+  const handleTakeLoot = async () => {
+    if (isPickingLoot || selectedPileIndexes.size === 0) return;
+    try {
+      setError("");
+      setIsPickingLoot(true);
+      const updated = await combatApi.pickupLoot(
+        combatId,
+        playerId,
+        [...selectedPileIndexes],
+      );
+      setCombat(updated);
+      onCombatUpdate(updated);
+      setIsLootPickerOpen(false);
+      setSelectedPileIndexes(new Set());
+      setCombatLog((prev) =>
+        ["🎒 Loot taken from the board — it went to your field bag.", ...prev].slice(
+          0,
+          20,
+        ),
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to pick up loot");
+    } finally {
+      setIsPickingLoot(false);
+    }
+  };
   const handleFinishCombat = async () => {
     if (!isMyTurn || combat.status !== "IN_PROGRESS") return;
     try {
@@ -497,6 +570,52 @@ export default function CombatArena({
           onTileClick={(x, y) => void handleTileClick(x, y)}
         />
       </div>
+      {/* Loot hint: piles lie somewhere on the board, but not under the player. */}
+      {combat.status === "IN_PROGRESS" &&
+        enemyHealth <= 0 &&
+        lootAtMyFeet.length === 0 &&
+        (combat.loot?.length ?? 0) > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full rounded-xl border border-emerald-500/50 bg-emerald-950/40 px-3 py-2 text-center text-xs text-emerald-200"
+          >
+            💰{" "}
+            <span className="font-bold">
+              {combat.loot!.length} loot pile
+              {combat.loot!.length === 1 ? "" : "s"}
+            </span>{" "}
+            on the board — walk onto a pile and press Take Loot to grab it.
+          </motion.div>
+        )}
+
+      {/* Player is standing on a pile: offer the Take button and a selection. */}
+      {combat.status === "IN_PROGRESS" && lootAtMyFeet.length > 0 && (
+        <div className="w-full flex flex-col gap-2">
+          {!isLootPickerOpen ? (
+            <motion.button
+              type="button"
+              onClick={openLootPicker}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/70 bg-emerald-900/50 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-emerald-200 shadow-[0_0_18px_rgba(52,211,153,0.4)] transition hover:bg-emerald-900 hover:text-white"
+            >
+              💰 Take Loot · {lootAtMyFeet.length} pile
+              {lootAtMyFeet.length === 1 ? "" : "s"}
+            </motion.button>
+          ) : (
+            <CombatLootPicker
+              piles={lootAtMyFeet}
+              selectedIndexes={selectedPileIndexes}
+              busy={isPickingLoot}
+              onToggle={toggleLootPile}
+              onTake={() => void handleTakeLoot()}
+              onCancel={() => setIsLootPickerOpen(false)}
+            />
+          )}
+        </div>
+      )}
       <CombatActions
         combat={combat}
         plannedActions={plannedActions}

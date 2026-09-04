@@ -14,12 +14,15 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import spring.backend.game.entity.CombatLoot;
 import spring.backend.game.entity.CombatObstacle;
 import spring.backend.game.entity.CombatSessionEntity;
+import spring.backend.game.entity.EnemyLootDrop;
 import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.PlayerEntity;
+import spring.backend.game.entity.PlayerLootBagEntity;
 import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
 import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.dto.CombatPlanRequest;
@@ -51,6 +54,7 @@ public class CombatService {
     private final WeaponProficiencyRepository weaponProficiencyRepository;
     private final WorldCellService worldCellService;
     private final WorldZoneService worldZoneService;
+    private final LootService lootService;
 
     @Transactional
     public CombatSessionEntity startCombat(String attackerId, String targetId) {
@@ -140,7 +144,12 @@ public class CombatService {
             combat.setP2Ready(true);
         }
         if (isBotCombat(combat) && playerId.equals(combat.getPlayer1Id())) {
-            combat.setP2Plan(createBotPlan(combat));
+            if (isAlive(combat, false)) {
+                combat.setP2Plan(createBotPlan(combat));
+            } else {
+                // The bot is dead — it just idles while the player collects loot.
+                combat.setP2Plan(null);
+            }
             combat.setP2Ready(true);
         }
         if (combat.isP1Ready() && combat.isP2Ready()) {
@@ -151,6 +160,9 @@ public class CombatService {
 
     private String createBotPlan(CombatSessionEntity combat) {
         EnemyTypeEntity enemy = combat.getEnemyType();
+        if (enemy == null || !isAlive(combat, false)) {
+            return "";
+        }
         List<String> plan = new ArrayList<>();
         int botX = combat.getP2X();
         int botY = combat.getP2Y();
@@ -260,6 +272,8 @@ public class CombatService {
         String winnerId = playerId.equals(combat.getPlayer1Id()) ? combat.getPlayer2Id() : combat.getPlayer1Id();
         combat.setWinnerId(winnerId);
         combat.setStatus("FINISHED");
+        // Surrender counts as a defeat: the field loot bag is dropped outside the city.
+        lootService.dropBagOutsideCity(playerId);
         return combatRepository.save(combat);
     }
 
@@ -349,7 +363,17 @@ public class CombatService {
                     throw new RuntimeException("You cannot leave the combat board");
                 }
                 validateMovementPath(combat, x - dx, y - dy, x, y, movementRange(posture));
-            } else if (!"A".equals(parts[0]) || parts.length != 3) {
+            } else if ("A".equals(parts[0])) {
+                if (parts.length != 3) {
+                    throw new RuntimeException("Invalid combat plan");
+                }
+                boolean targetDead = playerId.equals(combat.getPlayer1Id())
+                        ? combat.getP2Health() <= 0
+                        : combat.getP1Health() <= 0;
+                if (targetDead) {
+                    throw new RuntimeException("The target is already dead");
+                }
+            } else {
                 throw new RuntimeException("Invalid combat plan");
             }
         }
@@ -360,6 +384,8 @@ public class CombatService {
     }
 
     private void resolveRound(CombatSessionEntity combat) {
+        boolean p1WasAlive = combat.getP1Health() > 0;
+        boolean p2WasAlive = combat.getP2Health() > 0;
         String[] p1Actions = actions(combat.getP1Plan());
         String[] p2Actions = actions(combat.getP2Plan());
         List<String> roundActions = new ArrayList<>();
@@ -376,16 +402,217 @@ public class CombatService {
             }
         }
         combat.setLastRoundActions(roundActions.toArray(String[]::new));
-        if (combat.getP1Health() == 0 || combat.getP2Health() == 0) {
-            combat.setStatus("FINISHED");
+        // Лоут выпадает ровно один раз — в раунд, когда боец погиб. Без этой
+        // проверки каждый последующий раунд бросал дроп-таблицу заново и
+        // добавлял на доску новые кучи (бой никогда не заканчивался).
+        boolean someoneFellThisRound = (p1WasAlive && combat.getP1Health() == 0)
+                || (p2WasAlive && combat.getP2Health() == 0);
+        if (someoneFellThisRound) {
             combat.setWinnerId(combat.getP1Health() == 0 && combat.getP2Health() == 0 ? null
                     : combat.getP1Health() == 0 ? combat.getPlayer2Id() : combat.getPlayer1Id());
+            spawnDeathLoot(combat);
+        }
+        // The winner's loot stays on the board — they decide when and what to
+        // take (POST /combat/{combatId}/pickup-loot).
+        if (combat.getWinnerId() != null) {
+            boolean winnerIsAlive = combat.getWinnerId().equals(combat.getPlayer1Id())
+                    ? isAlive(combat, true)
+                    : isAlive(combat, false);
+            if (!winnerIsAlive || combat.getLoot().isEmpty()) {
+                combat.setStatus("FINISHED");
+            }
+        } else if (combat.getP1Health() == 0 && combat.getP2Health() == 0) {
+            combat.setStatus("FINISHED");
         }
         combat.setP1Plan(null);
         combat.setP2Plan(null);
         combat.setP1Ready(false);
         combat.setP2Ready(false);
         combat.setActionPoints(isBotCombat(combat) ? combat.getEnemyType().getActionPoints() : 3);
+    }
+
+    /**
+     * Spawns the loot piles the moment a fighter dies:
+     * <ul>
+     *   <li>Bot combat: the enemy's configured drop table is rolled and dropped
+     *       around the dead body (only the player can pick it up).</li>
+     *   <li>PvP: the defeated player's whole field loot bag falls onto the board
+     *       so the winner can collect it while the combat stays open.</li>
+     * </ul>
+     */
+    private void spawnDeathLoot(CombatSessionEntity combat) {
+        if (combat.getWinnerId() == null) {
+            return;
+        }
+        if (isBotCombat(combat)) {
+            if (combat.getWinnerId().equals(combat.getPlayer1Id())) {
+                spawnEnemyLoot(combat);
+            } else {
+                // The player lost — their field bag falls on the world cell.
+                lootService.dropBagOutsideCity(combat.getPlayer1Id());
+            }
+            return;
+        }
+        String loserId = combat.getWinnerId().equals(combat.getPlayer1Id())
+                ? combat.getPlayer2Id()
+                : combat.getPlayer1Id();
+        spawnBagLoot(combat, loserId);
+    }
+
+    /** Rolls the enemy's configured loot table and places the piles near its body. */
+    private void spawnEnemyLoot(CombatSessionEntity combat) {
+        EnemyTypeEntity enemy = combat.getEnemyType();
+        if (enemy == null) {
+            return;
+        }
+        List<EnemyLootDrop> drops = enemy.getLootDrops();
+        if (drops.isEmpty()) {
+            return;
+        }
+        List<CombatLoot> loot = new ArrayList<>(combat.getLoot());
+        // Первая выпавшая куча ложится на саму клетку трупа — если победитель
+        // добил врага вплотную (или в этом же раунде подошёл), он сразу стоит
+        // на луте и забирает его без лишних ходов. Остальные — вокруг.
+        boolean firstPile = true;
+        for (EnemyLootDrop drop : drops) {
+            if (drop == null || drop.itemCode() == null
+                    || ThreadLocalRandom.current().nextInt(100) >= drop.chance()) {
+                continue;
+            }
+            int min = Math.max(1, drop.minQuantity());
+            int max = Math.max(min, drop.maxQuantity());
+            int quantity = min + ThreadLocalRandom.current().nextInt(max - min + 1);
+            ItemEntity item = itemRepository.findByCodeIgnoreCase(drop.itemCode()).orElse(null);
+            if (item == null) {
+                continue;
+            }
+            int[] cell = firstPile
+                    ? new int[] { combat.getP2X(), combat.getP2Y() }
+                    : findEmptyCellNear(combat, combat.getP2X(), combat.getP2Y());
+            firstPile = false;
+            if (cell == null) {
+                break;
+            }
+            loot.add(new CombatLoot(cell[0], cell[1], item.getCode(), item.getName(), quantity));
+        }
+        combat.setLoot(loot);
+    }
+
+    /** Drops the defeated player's field loot bag onto the board near their body. */
+    private void spawnBagLoot(CombatSessionEntity combat, String loserId) {
+        List<PlayerLootBagEntity> bag = lootService.takeFieldBag(loserId);
+        if (bag.isEmpty()) {
+            return;
+        }
+        boolean loserIsPlayer1 = combat.getPlayer1Id().equals(loserId);
+        int bodyX = loserIsPlayer1 ? combat.getP1X() : combat.getP2X();
+        int bodyY = loserIsPlayer1 ? combat.getP1Y() : combat.getP2Y();
+        List<CombatLoot> loot = new ArrayList<>(combat.getLoot());
+        boolean firstPile = true;
+        for (PlayerLootBagEntity entry : bag) {
+            ItemEntity item = entry.getItem();
+            int[] cell = firstPile
+                    ? new int[] { bodyX, bodyY }
+                    : findEmptyCellNear(combat, bodyX, bodyY);
+            firstPile = false;
+            if (cell == null) {
+                break;
+            }
+            loot.add(new CombatLoot(cell[0], cell[1], item.getCode(), item.getName(), entry.getQuantity()));
+        }
+        combat.setLoot(loot);
+    }
+
+    /**
+     * Manually takes the loot piles the player selected (by their zero-based
+     * indexes inside the combat's {@code loot} array). The player must be
+     * standing on the pile's cell. Items go to the field loot bag outside the
+     * city or straight to the inventory inside the city. When the winner has
+     * collected every pile, the combat is finished.
+     */
+    @Transactional
+    public CombatSessionEntity pickupLoot(UUID combatId, String playerId, List<Integer> pileIndexes) {
+        CombatSessionEntity combat = getCombatForUpdate(combatId);
+        ensureInProgress(combat);
+        ensureParticipant(combat, playerId);
+        boolean player1 = playerId.equals(combat.getPlayer1Id());
+        if (!isAlive(combat, player1)) {
+            throw new IllegalStateException("You are down and cannot pick up loot");
+        }
+        int feetX = player1 ? combat.getP1X() : combat.getP2X();
+        int feetY = player1 ? combat.getP1Y() : combat.getP2Y();
+        List<CombatLoot> loot = new ArrayList<>(combat.getLoot());
+        Set<Integer> selected = new HashSet<>();
+        if (pileIndexes != null) {
+            for (Integer index : pileIndexes) {
+                if (index == null || index < 0 || index >= loot.size()) {
+                    throw new IllegalArgumentException("One of the loot piles is no longer here — refresh the board");
+                }
+                CombatLoot pile = loot.get(index);
+                if (pile.x() != feetX || pile.y() != feetY) {
+                    throw new IllegalStateException("You must stand on a loot pile to take it");
+                }
+                selected.add(index);
+            }
+        }
+        if (selected.isEmpty()) {
+            throw new IllegalArgumentException("Select at least one loot pile to take");
+        }
+        List<CombatLoot> remaining = new ArrayList<>(Math.max(0, loot.size() - selected.size()));
+        for (int index = 0; index < loot.size(); index++) {
+            CombatLoot pile = loot.get(index);
+            if (selected.contains(index)) {
+                lootService.addLootByCode(playerId, pile.itemCode(), pile.quantity());
+            } else {
+                remaining.add(pile);
+            }
+        }
+        combat.setLoot(remaining);
+        if (combat.getWinnerId() != null) {
+            boolean winnerIsAlive = combat.getWinnerId().equals(combat.getPlayer1Id())
+                    ? isAlive(combat, true)
+                    : isAlive(combat, false);
+            if (!winnerIsAlive || combat.getLoot().isEmpty()) {
+                combat.setStatus("FINISHED");
+            }
+        } else if (combat.getP1Health() == 0 && combat.getP2Health() == 0) {
+            combat.setStatus("FINISHED");
+        }
+        return combatRepository.save(combat);
+    }
+
+    /** Nearest free board cell around {@code (centerX, centerY)} (radius outward). */
+    private int[] findEmptyCellNear(CombatSessionEntity combat, int centerX, int centerY) {
+        Set<String> occupied = new HashSet<>();
+        occupied.add(centerX + ":" + centerY);
+        occupied.add(combat.getP1X() + ":" + combat.getP1Y());
+        occupied.add(combat.getP2X() + ":" + combat.getP2Y());
+        for (CombatObstacle obstacle : combat.getObstacles()) {
+            if (obstacle.isAlive()) {
+                occupied.add(obstacle.x() + ":" + obstacle.y());
+            }
+        }
+        for (CombatLoot pile : combat.getLoot()) {
+            occupied.add(pile.x() + ":" + pile.y());
+        }
+        for (int radius = 1; radius < BOARD_SIZE; radius++) {
+            for (int deltaX = -radius; deltaX <= radius; deltaX++) {
+                for (int deltaY = -radius; deltaY <= radius; deltaY++) {
+                    if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) != radius) {
+                        continue;
+                    }
+                    int x = centerX + deltaX;
+                    int y = centerY + deltaY;
+                    if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+                        continue;
+                    }
+                    if (!occupied.contains(x + ":" + y)) {
+                        return new int[] { x, y };
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private String[] actions(String plan) {

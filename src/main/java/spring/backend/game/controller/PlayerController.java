@@ -7,14 +7,18 @@ import spring.backend.game.dto.PlayerInfo;
 import spring.backend.game.dto.PlayerLoginRequest;
 import spring.backend.game.dto.PlayerLoginResponse;
 import spring.backend.game.dto.NpcInfoResponse;
+import spring.backend.game.dto.PickupLootResponse;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.service.AdminService;
 import spring.backend.game.service.InventoryService;
+import spring.backend.game.service.LootService;
+import spring.backend.game.service.WorldZoneService;
 import spring.backend.game.dto.InventoryItemResponse;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/players")
@@ -26,6 +30,8 @@ public class PlayerController {
     private final InventoryService inventoryService;
     private final NpcRepository npcRepository;
     private final AdminService adminService;
+    private final LootService lootService;
+    private final WorldZoneService worldZoneService;
 
     @PostMapping("/login")
     public ResponseEntity<PlayerLoginResponse> loginOrCreate(@RequestBody PlayerLoginRequest request) {
@@ -47,6 +53,7 @@ public class PlayerController {
         }
 
         inventoryService.ensureStarterItems(player.getId());
+        depositLootIfInCity(player);
 
         return ResponseEntity.ok(toPlayerResponse(player));
     }
@@ -55,7 +62,15 @@ public class PlayerController {
     public ResponseEntity<PlayerLoginResponse> getState(@PathVariable String playerId) {
         PlayerEntity player = playerRepository.findById(playerId)
                 .orElseThrow(() -> new IllegalArgumentException("Player not found"));
+        depositLootIfInCity(player);
         return ResponseEntity.ok(toPlayerResponse(player));
+    }
+
+    /** Deposits a lingering field loot bag when the player is already in the city. */
+    private void depositLootIfInCity(PlayerEntity player) {
+        if (!worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY())) {
+            lootService.depositLootBag(player.getId());
+        }
     }
 
     private PlayerLoginResponse toPlayerResponse(PlayerEntity player) {
@@ -96,6 +111,9 @@ public class PlayerController {
                 .role(player.getRole())
                 .playersOnTile(playersOnTile)
                 .npcs(npcs)
+                .lootBag(lootService.getLootBag(player.getId()))
+                .fieldLoot(lootService.getFieldLoot(player.getPositionX(), player.getPositionY()))
+                .inSafeZone(!worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY()))
                 .build();
     }
 
@@ -117,5 +135,19 @@ public class PlayerController {
             @RequestParam int gridX,
             @RequestParam int gridY) {
         return ResponseEntity.ok(inventoryService.moveItem(playerId, itemCode, gridX, gridY));
+    }
+
+    /** Items currently kept in the field loot bag (collected outside the city). */
+    @GetMapping("/{playerId}/loot-bag")
+    public ResponseEntity<List<InventoryItemResponse>> getLootBag(@PathVariable String playerId) {
+        return ResponseEntity.ok(lootService.getLootBag(playerId));
+    }
+
+    /** Picks up a loot pile lying on the player's current cell. */
+    @PostMapping("/{playerId}/loot/{lootId}/pickup")
+    public ResponseEntity<PickupLootResponse> pickupLoot(
+            @PathVariable String playerId,
+            @PathVariable UUID lootId) {
+        return ResponseEntity.ok(lootService.pickupLoot(playerId, lootId));
     }
 }

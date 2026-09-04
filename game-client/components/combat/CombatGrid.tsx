@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CombatObstacle, CombatSession } from "@/types/game";
+import { CombatLoot, CombatObstacle, CombatSession } from "@/types/game";
 import { GRID_SIZE, cellKey } from "./board";
 import { CharacterToken } from "./CharacterToken";
 import {
@@ -60,6 +60,17 @@ export function CombatGrid({
   // Клик по врагу = выстрел по умолчанию, поэтому подсвечиваем его клетку.
   const attackableCell = canAttack ? enemyCell : null;
 
+  // The player's current footprint on the board — used to highlight loot
+  // piles they are standing on (available for the Take button).
+  const myDisplay = isPlayer1 ? displayPositions.p1 : displayPositions.p2;
+  const myDisplayKey = cellKey(myDisplay.x, myDisplay.y);
+  const lootCellKeys = new Set(
+    (combat.loot ?? [])
+      .filter((pile) => pile.quantity > 0)
+      .map((pile) => cellKey(pile.x, pile.y)),
+  );
+  const lootUnderMe = lootCellKeys.has(myDisplayKey);
+
   const tokenFor = (playerKey: "p1" | "p2") => {
     const isYou =
       (playerKey === "p1" ? combat.player1Id : combat.player2Id) === playerId;
@@ -102,6 +113,9 @@ export function CombatGrid({
           const reachable = isMyTurn && reachableCells.has(key);
           const attackable = attackableCell === key;
           const planned = stepIndex >= 0;
+          const lootPile = combat.loot?.find(
+            (pile) => pile.x === x && pile.y === y && pile.quantity > 0,
+          );
           // Зона обстрела — тонкая подсветка на нейтральных клетках,
           // чтобы не перебивать более важные состояния (маршрут/атака).
           const inRange =
@@ -115,6 +129,7 @@ export function CombatGrid({
               className={`combat-cell ${(x + y) % 2 === 0 ? "combat-cell-checker" : ""} ${reachable ? "combat-cell-reachable" : ""} ${attackable ? "combat-cell-attackable" : ""} ${planned ? "combat-cell-planned" : ""} ${inRange ? "combat-cell-in-range" : ""}`}
             >
               {obstacle && <ObstacleTile obstacle={obstacle} />}
+              {lootPile && <LootTile loot={lootPile} />}
               {planned && (
                 <motion.span
                   className="move-step-chip"
@@ -132,6 +147,14 @@ export function CombatGrid({
 
       <div className="pointer-events-none absolute inset-0 z-20">
         {(["p1", "p2"] as const).map(tokenFor)}
+        {lootUnderMe && (
+          <motion.span
+            className="combat-loot-ring"
+            style={{ left: CENTER(myDisplay.x), top: CENTER(myDisplay.y) }}
+            animate={{ scale: [1, 1.35, 1], opacity: [0.85, 0.25, 0.85] }}
+            transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
+          />
+        )}
 {replayAction?.type === "ATTACK" && (
           <>
             <motion.span
@@ -229,6 +252,24 @@ function ObstacleTile({ obstacle }: { obstacle: CombatObstacle }) {
           style={{ width: `${healthPercent}%` }}
         />
       </span>
+    </motion.span>
+  );
+}
+
+/** A small loot pile rendered on a combat board cell. */
+function LootTile({ loot }: { loot: CombatLoot }) {
+  return (
+    <motion.span
+      className="absolute inset-[8%] z-10 flex flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md border border-emerald-300/70 bg-emerald-900/70 shadow-[0_0_12px_rgba(52,211,153,0.45)]"
+      initial={{ scale: 0.5, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 340, damping: 20 }}
+      aria-label={`${loot.itemName} × ${loot.quantity}`}
+      title={`${loot.itemName} × ${loot.quantity}`}
+    >
+      <span className="text-[13px] leading-none">💰</span>
+      <span className="combat-loot-label">{loot.itemName}</span>
+      <span className="combat-loot-qty">×{loot.quantity}</span>
     </motion.span>
   );
 }

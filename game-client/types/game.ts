@@ -35,6 +35,16 @@ export interface MoveResponse {
   combatStarted?: boolean;
   combatId?: string | null;
   enemyName?: string | null;
+  /** Loot piles lying on the tile the player moved to. */
+  fieldLoot?: WorldLoot[];
+  /** Field loot bag after the move (auto-deposited when entering the city). */
+  lootBag?: InventoryItem[];
+  /** True when entering the city deposited the field loot bag. */
+  lootDeposited?: boolean;
+  /** How many items were deposited into the main inventory. */
+  lootDepositedCount?: number;
+  /** True when the player is inside the city (safe zone). */
+  inSafeZone?: boolean;
 }
 
 export interface WorldCell {
@@ -114,6 +124,32 @@ export interface PlayerStateResponse {
   stamina?: number;
   playersOnTile: PlayerInfo[];
   npcs: NpcInfo[];
+  /** Items collected outside the city that are not deposited yet. */
+  lootBag?: InventoryItem[];
+  /** Loot piles lying on the player's current cell. */
+  fieldLoot?: WorldLoot[];
+  /** True when the player is inside the city (safe zone). */
+  inSafeZone?: boolean;
+}
+
+/** A loot pile lying on a world cell, dropped by a defeated player. */
+export interface WorldLoot {
+  id: string;
+  itemCode: string;
+  itemName: string;
+  quantity: number;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  positionX?: number;
+  positionY?: number;
+}
+
+/** Result of picking up a world loot pile. */
+export interface PickupLootResponse {
+  lootBag: InventoryItem[];
+  fieldLoot: WorldLoot[];
+  inventory: InventoryItem[];
+  notice?: string;
 }
 
 export interface PlayerEntity {
@@ -150,6 +186,19 @@ export interface CombatSession {
   p2EquippedItemCode?: string | null;
   /** Destructible obstacles on this combat board (re-generated every combat). */
   obstacles?: CombatObstacle[];
+  /** Loot piles lying on the board — walk onto a cell, then press Take Loot. */
+  loot?: CombatLoot[];
+  /** Optimistic-lock counter; increases on each server save (stale-poll guard). */
+  version?: number;
+}
+
+/** A loot pile lying on a combat board cell. */
+export interface CombatLoot {
+  x: number;
+  y: number;
+  itemCode: string;
+  itemName: string;
+  quantity: number;
 }
 
 export interface EnemyType {
@@ -160,6 +209,16 @@ export interface EnemyType {
   attackRange: number;
   actionPoints: number;
   movementRange: number;
+  /** Items this enemy may drop on the combat board when it dies. */
+  lootDrops?: EnemyLootDrop[];
+}
+
+/** One configured loot drop entry of an enemy type. */
+export interface EnemyLootDrop {
+  itemCode: string;
+  chance: number;
+  minQuantity: number;
+  maxQuantity: number;
 }
 
 export interface QuestLogEntry {

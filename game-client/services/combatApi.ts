@@ -64,6 +64,36 @@ export const combatApi = {
     return res.json();
   },
 
+  /**
+   * Takes the loot piles (by their indexes in the combat's loot array) the
+   * player selected while standing on them.
+   */
+  async pickupLoot(
+    combatId: string,
+    playerId: string,
+    pileIndexes: number[],
+  ): Promise<CombatSession> {
+    const res = await fetch(
+      `${API_URL}/api/v1/combat/${combatId}/pickup-loot?playerId=${encodeURIComponent(playerId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pileIndexes }),
+      },
+    );
+    if (!res.ok) {
+      let message = "Failed to pick up loot";
+      try {
+        const body = await res.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // ignore body parse errors
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
   async attack(combatId: string, playerId: string): Promise<CombatSession> {
     const res = await fetch(
       `${API_URL}/api/v1/combat/${combatId}/attack?playerId=${encodeURIComponent(playerId)}`,

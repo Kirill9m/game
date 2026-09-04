@@ -122,57 +122,59 @@ public class InventoryService {
 
     @Transactional
     public void addItem(String playerId, String itemCode) {
+        addItem(playerId, itemCode, 1);
+    }
+
+    @Transactional
+    public void addItem(String playerId, String itemCode, int quantity) {
         PlayerEntity player = playerRepository.findById(playerId)
                 .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
         ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode)
                 .orElseThrow(() -> new RuntimeException("Item not found: " + itemCode));
+        boolean added = tryAddItem(player, item, quantity);
+        if (!added) {
+            throw new IllegalStateException("Inventory is full — free some space first");
+        }
+    }
 
-        var existingItem = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
-                .filter(e -> e.getItem().getCode().equalsIgnoreCase(itemCode))
+    /**
+     * Adds {@code quantity} of the item to the main inventory when there is a
+     * free slot (existing stacks are merged first). Returns {@code false} when
+     * the inventory grid has no room and nothing happens.
+     */
+    public boolean tryAddItem(PlayerEntity player, ItemEntity item, int quantity) {
+        var existingItems = inventoryRepository.findByPlayerIdOrderByItemNameAsc(player.getId());
+        var existingItem = existingItems.stream()
+                .filter(e -> e.getItem().getCode().equalsIgnoreCase(item.getCode()))
                 .findFirst()
                 .orElse(null);
 
         if (existingItem != null) {
-            existingItem.setQuantity(existingItem.getQuantity() + 1);
+            existingItem.setQuantity(existingItem.getQuantity() + quantity);
             inventoryRepository.save(existingItem);
-            return;
+            return true;
         }
 
-        var existingItems = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId);
-        final int initialTargetX = gridXFor(itemCode);
-        final int initialTargetY = gridYFor(itemCode);
-        int targetX = initialTargetX;
-        int targetY = initialTargetY;
-
-        boolean occupied = existingItems.stream().anyMatch(other ->
-                rectanglesOverlap(initialTargetX, initialTargetY, item.getWidth(), item.getHeight(),
-                        other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
-
-        if (occupied) {
-            outer:
-            for (int y = 0; y < 10; y++) {
-                for (int x = 0; x <= 8 - item.getWidth(); x++) {
-                    final int checkX = x;
-                    final int checkY = y;
-                    boolean overlaps = existingItems.stream().anyMatch(other ->
-                            rectanglesOverlap(checkX, checkY, item.getWidth(), item.getHeight(),
-                                    other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
-                    if (!overlaps) {
-                        targetX = checkX;
-                        targetY = checkY;
-                        break outer;
-                    }
+        for (int y = 0; y < 10; y++) {
+            for (int x = 0; x <= 8 - item.getWidth(); x++) {
+                final int checkX = x;
+                final int checkY = y;
+                boolean overlaps = existingItems.stream().anyMatch(other ->
+                        rectanglesOverlap(checkX, checkY, item.getWidth(), item.getHeight(),
+                                other.getGridX(), other.getGridY(), other.getItem().getWidth(), other.getItem().getHeight()));
+                if (!overlaps) {
+                    inventoryRepository.save(PlayerInventoryEntity.builder()
+                            .player(player)
+                            .item(item)
+                            .quantity(quantity)
+                            .gridX(checkX)
+                            .gridY(checkY)
+                            .equipped(false)
+                            .build());
+                    return true;
                 }
             }
         }
-
-        inventoryRepository.save(PlayerInventoryEntity.builder()
-                .player(player)
-                .item(item)
-                .quantity(1)
-                .gridX(targetX)
-                .gridY(targetY)
-                .equipped(false)
-                .build());
+        return false;
     }
 }

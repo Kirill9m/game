@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -87,6 +88,13 @@ public class CombatSessionEntity {
     @Builder.Default
     private String status = "IN_PROGRESS";
 
+    /**
+     * Optimistic-lock counter. Hibernate bumps it on every save, so clients can
+     * drop stale polling responses that arrive after a newer combat state.
+     */
+    @Version
+    private Long version;
+
     @Builder.Default
     private String p1Posture = "STANDING";
 
@@ -137,6 +145,75 @@ public class CombatSessionEntity {
         obstacles = newObstacles == null ? new ArrayList<>() : new ArrayList<>(newObstacles);
         obstaclesData = writeObstacles(obstacles);
         obstaclesParsed = true;
+    }
+
+    @Column(name = "loot_data", length = 4000)
+    @JsonIgnore
+    private String lootData;
+
+    @Transient
+    private List<CombatLoot> loot;
+
+    @Transient
+    @JsonIgnore
+    private boolean lootParsed = false;
+
+    /**
+     * Loot piles lying on this combat board (dropped by a defeated enemy or
+     * PvP opponent). The winner collects them by walking onto the cell.
+     */
+    public List<CombatLoot> getLoot() {
+        if (!lootParsed) {
+            loot = parseCombatLoot(lootData);
+            lootParsed = true;
+        }
+        return loot == null ? List.of() : loot;
+    }
+
+    public void setLoot(List<CombatLoot> newLoot) {
+        loot = newLoot == null ? new ArrayList<>() : new ArrayList<>(newLoot);
+        lootData = writeCombatLoot(loot);
+        lootParsed = true;
+    }
+
+    /** Stored as {@code x|y|itemCode|itemName|quantity} lines (same pattern as obstacles). */
+    private static List<CombatLoot> parseCombatLoot(String data) {
+        if (data == null || data.isBlank()) {
+            return List.of();
+        }
+        List<CombatLoot> result = new ArrayList<>();
+        for (String line : data.split("\\n", -1)) {
+            String[] parts = line.split("\\|", -1);
+            if (parts.length != 5) {
+                continue;
+            }
+            try {
+                result.add(new CombatLoot(
+                        Integer.parseInt(parts[0].trim()),
+                        Integer.parseInt(parts[1].trim()),
+                        parts[2].trim(),
+                        parts[3].trim(),
+                        Integer.parseInt(parts[4].trim())));
+            } catch (NumberFormatException ignored) {
+                // Skip malformed lines instead of losing the whole board.
+            }
+        }
+        return result;
+    }
+
+    private static String writeCombatLoot(List<CombatLoot> value) {
+        StringBuilder builder = new StringBuilder();
+        for (CombatLoot pile : value) {
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append(pile.x()).append('|')
+                    .append(pile.y()).append('|')
+                    .append(pile.itemCode()).append('|')
+                    .append(pile.itemName().replace('|', '/').replace('\n', ' ')).append('|')
+                    .append(pile.quantity());
+        }
+        return builder.toString();
     }
 
     /**

@@ -13,6 +13,7 @@ import {
   PlayerStats,
   QuestProgress,
   WorldCell,
+  WorldLoot,
   WorldZone,
 } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
@@ -21,6 +22,7 @@ import WorldMap from "@/components/WorldMap";
 import CombatArena from "@/components/CombatArena";
 import { combatApi } from "@/services/combatApi";
 import InventoryPanel from "@/components/InventoryPanel";
+import LootPanel from "@/components/LootPanel";
 import NpcDialog from "@/components/NpcDialog";
 import { NpcInfo } from "@/types/npc";
 import QuestPanel from "@/components/QuestPanel";
@@ -57,11 +59,18 @@ export default function GameMapPage() {
   const [gameMaps, setGameMaps] = useState<GameMap[]>([]);
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  // Loot piles visible on the currently opened map viewport.
+  const [mapLoot, setMapLoot] = useState<WorldLoot[]>([]);
   // Инвентарь во время боя на мобильных открывается только по кнопке
   const [isMobileInventoryOpen, setIsMobileInventoryOpen] = useState(false);
   const [quests, setQuests] = useState<QuestProgress[]>([]);
   const [playerRole, setPlayerRole] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  // Loot collected outside the city (separate field bag until deposited).
+  const [lootBag, setLootBag] = useState<InventoryItem[]>([]);
+  // Loot piles lying on the player's current tile.
+  const [fieldLoot, setFieldLoot] = useState<WorldLoot[]>([]);
+  const [inSafeZone, setInSafeZone] = useState(true);
 
   const [activeTab, setActiveTab] = useState<
     "inventory" | "territory" | "quests" | "admin"
@@ -147,10 +156,13 @@ export default function GameMapPage() {
     if (!playerId) return;
     try {
       setError("");
-      const [player, playerInventory, playerQuests] = await Promise.all([
-        playerApi.loginPlayer(playerId, playerName, playerAvatar),
+      // Login first: it may deposit the field loot bag when the player spawns
+      // inside the city, so the inventory reflects the deposit afterwards.
+      const player = await playerApi.loginPlayer(playerId, playerName, playerAvatar);
+      const [playerInventory, playerQuests, playerLootBag] = await Promise.all([
         playerApi.getInventory(playerId),
         questApi.getPlayerQuests(playerId),
+        playerApi.getLootBag(playerId),
       ]);
       setPositionX(player.positionX);
       setPositionY(player.positionY);
@@ -160,6 +172,9 @@ export default function GameMapPage() {
       setNpcs(player.npcs || []);
       setPlayerRole(player.role ?? null);
       setInventory(playerInventory);
+      setLootBag(playerLootBag);
+      setFieldLoot(player.fieldLoot || []);
+      setInSafeZone(player.inSafeZone ?? false);
       setQuests(playerQuests);
       if (typeof player.gold === "number") {
         setGold(player.gold);
@@ -210,6 +225,9 @@ export default function GameMapPage() {
         setPlayersOnTile(player.playersOnTile || []);
         setNpcs(player.npcs || []);
         setPlayerRole(player.role ?? null);
+        setLootBag(player.lootBag || []);
+        setFieldLoot(player.fieldLoot || []);
+        setInSafeZone(player.inSafeZone ?? false);
         if (typeof player.gold === "number") {
           setGold(player.gold);
         }
@@ -246,6 +264,9 @@ export default function GameMapPage() {
       setNpcs(data.npcs || []);
       setCooldown(data.cooldown);
       setActiveNpc(null);
+      setFieldLoot(data.fieldLoot || []);
+      setLootBag(data.lootBag || []);
+      setInSafeZone(data.inSafeZone ?? true);
       if (typeof data.health === "number") {
         setStats((prev) => ({ ...prev, health: data.health as number }));
       }
@@ -253,6 +274,20 @@ export default function GameMapPage() {
         setNotice(
           `☢️ Radiation! You lost ${data.radiationDamage} HP (${data.health} HP left).`,
         );
+      }
+      if (data.lootDeposited) {
+        setNotice(
+          `🏙️ You entered the city — ${data.lootDepositedCount ?? 0} item${(data.lootDepositedCount ?? 0) === 1 ? "" : "s"} moved to your inventory.`,
+        );
+        playerApi
+          .getInventory(playerId)
+          .then(setInventory)
+          .catch(() => {});
+        if ((data.lootBag ?? []).length > 0) {
+          setNotice(
+            `🏙️ Inventory is full — ${(data.lootBag ?? []).reduce((sum, i) => sum + i.quantity, 0)} item(s) stayed in the field bag.`,
+          );
+        }
       }
       if (data.combatStarted && data.combatId) {
         setNotice(
@@ -263,6 +298,22 @@ export default function GameMapPage() {
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Movement failed");
+    }
+  };
+
+  /** Picks up a world loot pile on the current tile. */
+  const handlePickupLoot = async (lootId: string) => {
+    try {
+      setError("");
+      const response = await playerApi.pickupLoot(playerId, lootId);
+      setLootBag(response.lootBag);
+      setFieldLoot(response.fieldLoot);
+      setInventory(response.inventory);
+      if (response.notice) {
+        setNotice(response.notice);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to pick up loot");
     }
   };
 
@@ -284,6 +335,11 @@ export default function GameMapPage() {
       if (byItem) {
         setActiveMap(byItem);
         setIsMapOpen(true);
+        // Loot piles inside the map viewport (20x20 cells around the center).
+        void playerApi
+          .getWorldLoot(byItem.centerX, byItem.centerY, byItem.radius + 5)
+          .then(setMapLoot)
+          .catch(() => setMapLoot([]));
         return;
       }
       setNotice(`No map found for item "${itemCode}"`);
@@ -297,6 +353,10 @@ export default function GameMapPage() {
     setActiveMap(next);
     setNotice("");
     setIsMapOpen(true);
+    void playerApi
+      .getWorldLoot(next.centerX, next.centerY, next.radius + 5)
+      .then(setMapLoot)
+      .catch(() => setMapLoot([]));
   };
 
   if (status === "loading") {
@@ -429,6 +489,31 @@ export default function GameMapPage() {
                     onCombatFinished={() => {
                       setCombatSession(null);
                       setIsMobileInventoryOpen(false);
+                      // Field loot (bag drop / hunt reward) changes as a result
+                      // of the finished combat — refresh everything.
+                      void playerApi
+                        .getLootBag(playerId)
+                        .then((bag) => {
+                          setLootBag(bag);
+                          if (bag.length > 0) {
+                            setNotice(
+                              `🎁 The hunt is over — ${bag.reduce((sum, i) => sum + i.quantity, 0)} item(s) are in your field loot bag. Return to the city to deposit them.`,
+                            );
+                          }
+                          return playerApi.getPlayerState(playerId);
+                        })
+                        .then((state) => {
+                          setFieldLoot(state.fieldLoot || []);
+                          if ((state.fieldLoot ?? []).length > 0) {
+                            setNotice(
+                              "💀 You were defeated outside the city and your loot bag dropped! Pick it up before someone else does.",
+                            );
+                          }
+                          setInSafeZone(state.inSafeZone ?? false);
+                          return state;
+                        })
+                        .catch(() => {});
+                      playerApi.getInventory(playerId).then(setInventory).catch(() => {});
                     }}
                     onOpenInventory={() => setIsMobileInventoryOpen(true)}
                   />
@@ -566,6 +651,16 @@ export default function GameMapPage() {
               ) : (
                 /* ДЖОЙСТИК И КАРТА ВНЕ БОЯ */
                 <div className="h-full flex flex-col justify-between items-center">
+                  <div className="w-full">
+                    <LootPanel
+                      lootBag={lootBag}
+                      fieldLoot={fieldLoot}
+                      inSafeZone={inSafeZone}
+                      playerId={playerId}
+                      onPickup={handlePickupLoot}
+                    />
+                  </div>
+
                   <div className="w-full flex items-center justify-between border-b border-gray-800 pb-2 mb-2">
                     <span className="text-xs uppercase font-bold tracking-wider text-gray-400">
                       Navigation
@@ -665,6 +760,7 @@ export default function GameMapPage() {
                 safeZone={safeZone}
                 npcs={npcs}
                 cells={worldCells}
+                loot={mapLoot}
                 onTalk={setActiveNpc}
               />
             </div>

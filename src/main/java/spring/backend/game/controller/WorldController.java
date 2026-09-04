@@ -7,14 +7,17 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.dto.GameMapResponse;
 import spring.backend.game.dto.WorldBoundsResponse;
 import spring.backend.game.dto.WorldCellResponse;
+import spring.backend.game.dto.WorldLootResponse;
 import spring.backend.game.dto.WorldZoneResponse;
 import spring.backend.game.service.GameMapService;
+import spring.backend.game.service.LootService;
 import spring.backend.game.service.WorldCellService;
 import spring.backend.game.service.WorldConstants;
 import spring.backend.game.service.WorldZoneService;
@@ -27,6 +30,7 @@ public class WorldController {
     private final WorldZoneService worldZoneService;
     private final WorldCellService worldCellService;
     private final GameMapService gameMapService;
+    private final LootService lootService;
 
     @GetMapping("/safe-zone")
     public ResponseEntity<WorldZoneResponse> getSafeZone() {
@@ -58,5 +62,14 @@ public class WorldController {
     @GetMapping("/maps/item/{itemCode}")
     public ResponseEntity<GameMapResponse> getMapByItem(@PathVariable String itemCode) {
         return ResponseEntity.ok(gameMapService.getMapByItemCode(itemCode));
+    }
+
+    /** Loot piles inside a circular area (drawn on the world map). */
+    @GetMapping("/loot")
+    public ResponseEntity<List<WorldLootResponse>> getLootAround(
+            @RequestParam int centerX,
+            @RequestParam int centerY,
+            @RequestParam int radius) {
+        return ResponseEntity.ok(lootService.getFieldLootAround(centerX, centerY, radius));
     }
 }

@@ -14,6 +14,7 @@ import type {
   AdminQuest,
   AdminWeaponType,
   AdminWorldCell,
+  EnemyLootDropPayload,
 } from "@/types/admin";
 import type { WorldZone } from "@/types/game";
 
@@ -124,6 +125,11 @@ export default function AdminPanel({ playerId }: Props) {
   const [enemyAp, setEnemyAp] = useState(3);
   const [enemyMove, setEnemyMove] = useState(2);
   const [enemyDifficulty, setEnemyDifficulty] = useState(1);
+  // Loot drop rows for the "Create enemy" form.
+  const [enemyLootRows, setEnemyLootRows] = useState<EnemyLootDropPayload[]>([]);
+  // Inline loot-table editor for an existing enemy card.
+  const [lootEditEnemyId, setLootEditEnemyId] = useState<string | null>(null);
+  const [lootEditRows, setLootEditRows] = useState<EnemyLootDropPayload[]>([]);
 
   // --- World cell form state ---
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -524,12 +530,78 @@ export default function AdminPanel({ playerId }: Props) {
         attackRange: enemyRange,
         actionPoints: enemyAp,
         movementRange: enemyMove,
+        lootDrops: enemyLootRows.filter(
+          (row) => row.itemCode && row.chance > 0,
+        ),
       });
       setEnemyCode("");
       setEnemyName("");
+      setEnemyLootRows([]);
       await loadAll();
       setNotice("Enemy type created");
     });
+
+  const openEnemyLootEditor = (enemy: AdminEnemyType) => {
+    setLootEditEnemyId(enemy.id);
+    setLootEditRows(
+      (enemy.lootDrops ?? []).map((drop) => ({
+        itemCode: drop.itemCode,
+        chance: drop.chance,
+        minQuantity: drop.minQuantity,
+        maxQuantity: drop.maxQuantity,
+      })),
+    );
+  };
+
+  const handleSaveEnemyLoot = (enemyId: string) =>
+    run(async () => {
+      await adminApi.updateEnemyType(playerId, enemyId, {
+        lootDrops: lootEditRows.filter(
+          (row) => row.itemCode && row.chance > 0,
+        ),
+      });
+      setLootEditEnemyId(null);
+      setLootEditRows([]);
+      await loadAll();
+      setNotice("Enemy loot table saved");
+    });
+
+  const addLootRow = (
+    rows: EnemyLootDropPayload[],
+    setRows: (rows: EnemyLootDropPayload[]) => void,
+  ) => {
+    const firstItem = items.find((item) => item.type === "WEAPON");
+    setRows([
+      ...rows,
+      {
+        itemCode: firstItem?.code ?? items[0]?.code ?? "",
+        chance: 50,
+        minQuantity: 1,
+        maxQuantity: 1,
+      },
+    ]);
+  };
+
+  const updateLootRow = (
+    rows: EnemyLootDropPayload[],
+    setRows: (rows: EnemyLootDropPayload[]) => void,
+    index: number,
+    patch: Partial<EnemyLootDropPayload>,
+  ) => {
+    setRows(
+      rows.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, ...patch } : row,
+      ),
+    );
+  };
+
+  const removeLootRow = (
+    rows: EnemyLootDropPayload[],
+    setRows: (rows: EnemyLootDropPayload[]) => void,
+    index: number,
+  ) => {
+    setRows(rows.filter((_, rowIndex) => rowIndex !== index));
+  };
 
   const handleDeleteEnemy = (enemyId: string) =>
     run(async () => {
@@ -1574,6 +1646,106 @@ export default function AdminPanel({ playerId }: Props) {
                 />
               </div>
             </div>
+
+            {/* Loot drops: what this enemy drops on the combat board when it dies */}
+            <div className="mt-2 rounded-lg border border-emerald-800/60 bg-emerald-950/20 p-2">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  💰 Loot drops (on death, in combat)
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => addLootRow(enemyLootRows, setEnemyLootRows)}
+                  className="rounded-md bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50 px-2 py-0.5 text-[10px] font-bold text-emerald-100 transition"
+                >
+                  ➕ Add
+                </button>
+              </div>
+              {enemyLootRows.map((row, index) => (
+                <div
+                  key={index}
+                  className="mb-1 flex flex-wrap items-end gap-1.5 rounded-md border border-emerald-900/60 bg-black/30 p-1.5"
+                >
+                  <div className="min-w-[110px] flex-1">
+                    <label className={labelClass}>Item</label>
+                    <select
+                      className={inputClass}
+                      value={row.itemCode}
+                      onChange={(event) =>
+                        updateLootRow(enemyLootRows, setEnemyLootRows, index, {
+                          itemCode: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">— select —</option>
+                      {items.map((item) => (
+                        <option key={item.id} value={item.code}>
+                          {item.name} ({item.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="w-16">
+                    <label className={labelClass}>Chance %</label>
+                    <input
+                      type="number"
+                      className={inputClass}
+                      value={row.chance}
+                      min={0}
+                      max={100}
+                      onChange={(event) =>
+                        updateLootRow(enemyLootRows, setEnemyLootRows, index, {
+                          chance:
+                            Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="w-16">
+                    <label className={labelClass}>Min</label>
+                    <input
+                      type="number"
+                      className={inputClass}
+                      value={row.minQuantity}
+                      min={1}
+                      onChange={(event) =>
+                        updateLootRow(enemyLootRows, setEnemyLootRows, index, {
+                          minQuantity: Math.max(1, Number(event.target.value) || 1),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="w-16">
+                    <label className={labelClass}>Max</label>
+                    <input
+                      type="number"
+                      className={inputClass}
+                      value={row.maxQuantity}
+                      min={1}
+                      onChange={(event) =>
+                        updateLootRow(enemyLootRows, setEnemyLootRows, index, {
+                          maxQuantity: Math.max(1, Number(event.target.value) || 1),
+                        })
+                      }
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => removeLootRow(enemyLootRows, setEnemyLootRows, index)}
+                    className="rounded-md bg-red-950 hover:bg-red-800 border border-red-800 px-2 py-1 text-[10px] font-bold text-red-200 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {enemyLootRows.length === 0 && (
+                <span className="text-[10px] text-emerald-200/50">
+                  No drops — this enemy dies without loot.
+                </span>
+              )}
+            </div>
             <button type="button" disabled={busy} onClick={handleCreateEnemy} className={primaryBtn}>
               ➕ Create Enemy
             </button>
@@ -1587,8 +1759,9 @@ export default function AdminPanel({ playerId }: Props) {
 {enemies.map((enemy) => (
               <div
                 key={enemy.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-start justify-between gap-2"
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2"
               >
+                <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-gray-100 truncate">{enemy.name}</div>
                   <div className="text-[10px] text-gray-500 font-mono">{enemy.code}</div>
@@ -1608,16 +1781,164 @@ export default function AdminPanel({ playerId }: Props) {
                     <span className="bg-green-900/40 border border-green-800 text-green-200 px-2 py-0.5 rounded-full text-[10px]">
                       👣 {enemy.movementRange}
                     </span>
+                    </div>
+                    {(enemy.lootDrops ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {enemy.lootDrops!.map((drop, dropIndex) => (
+                          <span
+                            key={`${drop.itemCode}-${dropIndex}`}
+                            className="bg-emerald-900/40 border border-emerald-800 text-emerald-200 px-2 py-0.5 rounded-full text-[10px]"
+                          >
+                            💰 {drop.itemCode} ×{drop.maxQuantity} {drop.chance}%
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        lootEditEnemyId === enemy.id
+                          ? setLootEditEnemyId(null)
+                          : openEnemyLootEditor(enemy)
+                      }
+                      className="rounded-md bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50 border border-emerald-700 px-2 py-1 text-[10px] font-bold text-emerald-100 transition"
+                    >
+                      💰 Loot
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleDeleteEnemy(enemy.id)}
+                      className={dangerBtn}
+                    >
+                      🗑 Delete
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => handleDeleteEnemy(enemy.id)}
-                  className={dangerBtn}
-                >
-                  🗑 Delete
-                </button>
+                {lootEditEnemyId === enemy.id && (
+                  <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/20 p-2">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                        💰 Loot table
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => addLootRow(lootEditRows, setLootEditRows)}
+                        className="rounded-md bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50 px-2 py-0.5 text-[10px] font-bold text-emerald-100 transition"
+                      >
+                        ➕ Add
+                      </button>
+                    </div>
+                    {lootEditRows.map((row, index) => (
+                      <div
+                        key={index}
+                        className="mb-1 flex flex-wrap items-end gap-1.5 rounded-md border border-emerald-900/60 bg-black/30 p-1.5"
+                      >
+                        <div className="min-w-[110px] flex-1">
+                          <label className={labelClass}>Item</label>
+                          <select
+                            className={inputClass}
+                            value={row.itemCode}
+                            onChange={(event) =>
+                              updateLootRow(lootEditRows, setLootEditRows, index, {
+                                itemCode: event.target.value,
+                              })
+                            }
+                          >
+                            <option value="">— select —</option>
+                            {items.map((item) => (
+                              <option key={item.id} value={item.code}>
+                                {item.name} ({item.code})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-16">
+                          <label className={labelClass}>Chance %</label>
+                          <input
+                            type="number"
+                            className={inputClass}
+                            value={row.chance}
+                            min={0}
+                            max={100}
+                            onChange={(event) =>
+                              updateLootRow(lootEditRows, setLootEditRows, index, {
+                                chance:
+                                  Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="w-16">
+                          <label className={labelClass}>Min</label>
+                          <input
+                            type="number"
+                            className={inputClass}
+                            value={row.minQuantity}
+                            min={1}
+                            onChange={(event) =>
+                              updateLootRow(lootEditRows, setLootEditRows, index, {
+                                minQuantity: Math.max(1, Number(event.target.value) || 1),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="w-16">
+                          <label className={labelClass}>Max</label>
+                          <input
+                            type="number"
+                            className={inputClass}
+                            value={row.maxQuantity}
+                            min={1}
+                            onChange={(event) =>
+                              updateLootRow(lootEditRows, setLootEditRows, index, {
+                                maxQuantity: Math.max(1, Number(event.target.value) || 1),
+                              })
+                            }
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => removeLootRow(lootEditRows, setLootEditRows, index)}
+                          className="rounded-md bg-red-950 hover:bg-red-800 border border-red-800 px-2 py-1 text-[10px] font-bold text-red-200 transition"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {lootEditRows.length === 0 && (
+                      <span className="text-[10px] text-emerald-200/50">
+                        No drops — this enemy dies without loot.
+                      </span>
+                    )}
+                    <div className="mt-2 flex gap-1.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleSaveEnemyLoot(enemy.id)}
+                        className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1 text-[10px] font-bold text-white transition"
+                      >
+                        💾 Save
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setLootEditEnemyId(null);
+                          setLootEditRows([]);
+                        }}
+                        className="rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-700 px-3 py-1 text-[10px] font-bold text-gray-300 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {enemies.length === 0 && (

@@ -93,7 +93,16 @@ public final class AdminDtos {
             int damage,
             int attackRange,
             int actionPoints,
-            int movementRange) {
+            int movementRange,
+            List<EnemyLootDropDto> lootDrops) {
+    }
+
+    /** One configured loot drop entry of an enemy type. */
+    public record EnemyLootDropDto(
+            String itemCode,
+            Integer chance,
+            Integer minQuantity,
+            Integer maxQuantity) {
     }
 
     public record AdminWorldCellDto(
@@ -191,7 +200,8 @@ public final class AdminDtos {
             Integer damage,
             Integer attackRange,
             Integer actionPoints,
-            Integer movementRange) {
+            Integer movementRange,
+            List<EnemyLootDropDto> lootDrops) {
     }
 
     public record UpdateEnemyTypeRequest(
@@ -200,7 +210,8 @@ public final class AdminDtos {
             Integer damage,
             Integer attackRange,
             Integer actionPoints,
-            Integer movementRange) {
+            Integer movementRange,
+            List<EnemyLootDropDto> lootDrops) {
     }
 
     public record CreateObstacleTypeRequest(

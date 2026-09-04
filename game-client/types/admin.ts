@@ -126,6 +126,16 @@ export interface AdminEnemyType {
   attackRange: number;
   actionPoints: number;
   movementRange: number;
+  /** Configured loot drops (items that fall on the combat board when killed). */
+  lootDrops: EnemyLootDropPayload[];
+}
+
+/** One loot drop row configured for an enemy (item, chance %, min/max quantity). */
+export interface EnemyLootDropPayload {
+  itemCode: string;
+  chance: number;
+  minQuantity: number;
+  maxQuantity: number;
 }
 
 export interface CreateEnemyTypePayload {
@@ -136,6 +146,7 @@ export interface CreateEnemyTypePayload {
   attackRange?: number;
   actionPoints?: number;
   movementRange?: number;
+  lootDrops?: EnemyLootDropPayload[];
 }
 
 export interface UpdateEnemyTypePayload {
@@ -145,6 +156,7 @@ export interface UpdateEnemyTypePayload {
   attackRange?: number;
   actionPoints?: number;
   movementRange?: number;
+  lootDrops?: EnemyLootDropPayload[];
 }
 
 export interface UpdatePlayerPayload {

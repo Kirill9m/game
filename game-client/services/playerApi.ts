@@ -2,9 +2,11 @@ import {
   GameMap,
   InventoryItem,
   MoveResponse,
+  PickupLootResponse,
   PlayerStateResponse,
   WorldBounds,
   WorldCell,
+  WorldLoot,
   WorldZone,
 } from "@/types/game";
 
@@ -127,12 +129,56 @@ export const playerApi = {
     return response.json();
   },
 
+  /** Loot piles inside a circular area (drawn on the world map). */
+  async getWorldLoot(
+    centerX: number,
+    centerY: number,
+    radius: number,
+  ): Promise<WorldLoot[]> {
+    const response = await fetch(
+      `${API_URL}/api/v1/world/loot?centerX=${centerX}&centerY=${centerY}&radius=${radius}`,
+    );
+    if (!response.ok) throw new Error("Failed to load world loot");
+    return response.json();
+  },
+
   /** The map bound to a specific inventory item code (e.g. WORLD_MAP). */
   async getGameMapByItemCode(itemCode: string): Promise<GameMap> {
     const response = await fetch(
       `${API_URL}/api/v1/world/maps/item/${encodeURIComponent(itemCode)}`,
     );
     if (!response.ok) throw new Error(`No map found for item: ${itemCode}`);
+    return response.json();
+  },
+
+  /** Items currently kept in the field loot bag (collected outside the city). */
+  async getLootBag(playerId: string): Promise<InventoryItem[]> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/loot-bag`,
+    );
+    if (!response.ok) throw new Error("Failed to load loot bag");
+    return response.json();
+  },
+
+  /** Picks up a world loot pile lying on the player's current cell. */
+  async pickupLoot(
+    playerId: string,
+    lootId: string,
+  ): Promise<PickupLootResponse> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/loot/${encodeURIComponent(lootId)}/pickup`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      let message = "Failed to pick up loot";
+      try {
+        const body = await response.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // ignore body parse errors
+      }
+      throw new Error(message);
+    }
     return response.json();
   },
 };

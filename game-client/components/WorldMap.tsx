@@ -1,4 +1,4 @@
-import { GameMap, WorldCell, WorldZone } from "@/types/game";
+import { GameMap, WorldCell, WorldLoot, WorldZone } from "@/types/game";
 import { NpcInfo } from "@/types/npc";
 
 interface WorldMapProps {
@@ -11,6 +11,8 @@ interface WorldMapProps {
   npcs: NpcInfo[];
   /** Admin-configured per-cell dangers (blocked / radiation / ambush). */
   cells?: WorldCell[];
+  /** Loot piles on cells (dropped bags are shown as a treasure marker). */
+  loot?: WorldLoot[];
   onTalk: (npc: NpcInfo) => void;
 }
 
@@ -24,6 +26,7 @@ export default function WorldMap({
   safeZone,
   npcs,
   cells,
+  loot,
   onTalk,
 }: WorldMapProps) {
   const isInsideSafe = (x: number, y: number) => {
@@ -47,6 +50,19 @@ export default function WorldMap({
   const cellSettings = new Map(
     (cells ?? []).map((cell) => [`${cell.positionX}:${cell.positionY}`, cell]),
   );
+
+  const lootAt = new Map<string, { count: number; names: string }>();
+  for (const pile of loot ?? []) {
+    if (pile.positionX === undefined || pile.positionY === undefined) continue;
+    const key = `${pile.positionX}:${pile.positionY}`;
+    const current = lootAt.get(key);
+    lootAt.set(key, {
+      count: (current?.count ?? 0) + 1,
+      names: current
+        ? `${current.names}, ${pile.itemName} ×${pile.quantity}`
+        : `${pile.itemName} ×${pile.quantity}`,
+    });
+  }
 
   return (
     <section className="space-y-3 rounded-lg border border-red-500/60 bg-red-950/60 p-3">
@@ -88,6 +104,7 @@ export default function WorldMap({
                 (npc) => npc.positionX === x && npc.positionY === y,
               );
               const settings = cellSettings.get(`${x}:${y}`);
+              const lootInfo = lootAt.get(`${x}:${y}`);
 
               let bg = safe
                 ? "bg-blue-500/55"
@@ -127,6 +144,14 @@ export default function WorldMap({
                         {icon}
                       </span>
                     </div>
+                  )}
+                  {lootInfo && (
+                    <span
+                      className="absolute left-0.5 top-0.5 z-10 text-sm leading-none"
+                      title={`Loot here: ${lootInfo.names}`}
+                    >
+                      💰
+                    </span>
                   )}
                   {npcsAtPosition.map((npc) => (
                     <button

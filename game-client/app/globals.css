@@ -274,6 +274,41 @@
   transition: width 0.35s ease;
 }
 
+/* ============================================================
+   COMBAT LOOT (dropped piles collected by walking onto the cell)
+   ============================================================ */
+.combat-loot-label {
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: rgba(209, 250, 229, 0.95);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.65);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.combat-loot-qty {
+  font-size: 8px;
+  font-weight: 900;
+  color: #a7f3d0;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+}
+
+/* Pulsing ring around a loot pile the player is standing on (Take Loot). */
+.combat-loot-ring {
+  position: absolute;
+  width: 16%;
+  height: 16%;
+  margin-left: -8%;
+  margin-top: -8%;
+  border-radius: 9999px;
+  border: 3px solid rgba(52, 211, 153, 0.9);
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.7), inset 0 0 12px rgba(52, 211, 153, 0.4);
+  pointer-events: none;
+}
+
 .combat-obstacle-barrel {
   background:
     radial-gradient(circle at 32% 24%, rgba(255, 230, 230, 0.45), transparent 18%),
