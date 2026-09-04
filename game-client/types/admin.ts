@@ -53,6 +53,7 @@ export interface AdminItem {
   height: number;
   defense: number;
   equipmentSlot: string | null;
+  heal: number;
 }
 
 export interface CreateNpcPayload {
@@ -89,6 +90,7 @@ export interface CreateItemPayload {
   height: number;
   defense?: number;
   equipmentSlot?: string | null;
+  heal?: number;
 }
 
 /** A configurable weapon type; proficiency in it raises combat accuracy. */

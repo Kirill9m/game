@@ -104,6 +104,28 @@ export const playerApi = {
     return response.json();
   },
 
+  /** Uses a health-restoring consumable outside of combat. */
+  async useItem(
+    playerId: string,
+    itemCode: string,
+  ): Promise<{ health: number; healed: number; inventory: InventoryItem[] }> {
+    const response = await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/inventory/${encodeURIComponent(itemCode)}/use`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      let message = "Failed to use item";
+      try {
+        const body = await response.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // ignore body parse errors
+      }
+      throw new Error(message);
+    }
+    return response.json();
+  },
+
   async getSafeZone(): Promise<WorldZone> {
     const response = await fetch(`${API_URL}/api/v1/world/safe-zone`);
     if (!response.ok) throw new Error("Failed to load safe zone");

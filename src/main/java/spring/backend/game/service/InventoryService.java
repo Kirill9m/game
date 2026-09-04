@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.dto.InventoryItemResponse;
+import spring.backend.game.dto.UseItemResponse;
 import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.PlayerInventoryEntity;
@@ -17,8 +18,10 @@ import spring.backend.game.repository.PlayerRepository;
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
-    // На старте инвентарь пустой, предметы выдаются в награду за квесты (например, за квест знакомства)
-    private static final List<String> STARTER_ITEMS = List.of();
+    // На старте инвентарь пустой, предметы выдаются в награду за квесты (например, за квест знакомства).
+    // Расходники для восстановления здоровья выдаются сразу, чтобы механика была доступна с первых минут.
+    private static final List<String> STARTER_ITEMS = List.of("MEDKIT", "BANDAGE");
+    private static final int MAX_PLAYER_HEALTH = 100;
 
     private final ItemRepository itemRepository;
     private final PlayerInventoryRepository inventoryRepository;
@@ -28,6 +31,9 @@ public class InventoryService {
     public void ensureStarterItems(String playerId) {
         PlayerEntity player = playerRepository.findById(playerId)
                 .orElseThrow(() -> new RuntimeException("Player not found"));
+        if (player.isStarterItemsGranted()) {
+            return;
+        }
         for (String itemCode : STARTER_ITEMS) {
             if (inventoryRepository.existsByPlayerIdAndItemCodeIgnoreCase(playerId, itemCode)) {
                 continue;
@@ -43,6 +49,8 @@ public class InventoryService {
                     .equipped(false)
                     .build());
         }
+        player.setStarterItemsGranted(true);
+        playerRepository.save(player);
     }
 
     @Transactional
@@ -64,6 +72,7 @@ public class InventoryService {
                         .equipped(entry.isEquipped())
                         .defense(entry.getItem().getDefense())
                         .equipmentSlot(entry.getItem().getEquipmentSlot())
+                        .heal(entry.getItem().getHeal())
                         .build())
                 .toList();
     }
@@ -137,7 +146,11 @@ public class InventoryService {
         }
 
     private int gridXFor(String itemCode) {
-        return "PISTOL".equalsIgnoreCase(itemCode) ? 2 : "WORLD_MAP".equalsIgnoreCase(itemCode) ? 5 : 0;
+        if ("PISTOL".equalsIgnoreCase(itemCode)) return 2;
+        if ("WORLD_MAP".equalsIgnoreCase(itemCode)) return 5;
+        if ("MEDKIT".equalsIgnoreCase(itemCode)) return 6;
+        if ("BANDAGE".equalsIgnoreCase(itemCode)) return 7;
+        return 0;
     }
 
     private int gridYFor(String itemCode) {
@@ -200,5 +213,49 @@ public class InventoryService {
             }
         }
         return false;
+    }
+
+    /**
+     * Uses a consumable item outside of combat: restores the player's health by
+     * the item's {@code heal} amount (capped at max health) and consumes one
+     * unit of the item. Returns the new health, the amount healed and the
+     * updated inventory.
+     */
+    @Transactional
+    public UseItemResponse useItem(String playerId, String itemCode) {
+        PlayerEntity player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+        PlayerInventoryEntity entry = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(e -> e.getItem().getCode().equalsIgnoreCase(itemCode))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+        ItemEntity item = entry.getItem();
+        if (!"CONSUMABLE".equalsIgnoreCase(item.getType())) {
+            throw new IllegalArgumentException("This item cannot restore health");
+        }
+        int healAmount = item.getHeal();
+        if (healAmount <= 0) {
+            throw new IllegalArgumentException("This item has no healing effect");
+        }
+        int before = player.getHealth();
+        if (before >= MAX_PLAYER_HEALTH) {
+            throw new IllegalArgumentException("You are already at full health");
+        }
+        int newHealth = Math.min(MAX_PLAYER_HEALTH, before + healAmount);
+        int healed = newHealth - before;
+        player.setHealth(newHealth);
+        playerRepository.save(player);
+
+        if (entry.getQuantity() <= 1) {
+            inventoryRepository.delete(entry);
+        } else {
+            entry.setQuantity(entry.getQuantity() - 1);
+            inventoryRepository.save(entry);
+        }
+        return UseItemResponse.builder()
+                .health(newHealth)
+                .healed(healed)
+                .inventory(getInventory(playerId))
+                .build();
     }
 }

@@ -150,9 +150,21 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS starter_items_granted BOOLEAN NOT NULL DEFAULT FALSE");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.starter_items_granted): {}", e.getMessage());
+        }
+
+        try {
             jdbcTemplate.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS weapon_type_code VARCHAR(50)");
         } catch (Exception e) {
             log.warn("Database schema update info (items.weapon_type_code): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS heal INTEGER NOT NULL DEFAULT 0");
+        } catch (Exception e) {
+            log.warn("Database schema update info (items.heal): {}", e.getMessage());
         }
 
         try {
@@ -308,6 +320,28 @@ public class DataInitializer implements CommandLineRunner {
                 saveArmorIfMissing("LEATHER_VEST", "Leather Vest", "BODY", 4);
                 saveArmorIfMissing("LEATHER_LEGS", "Leather Leggings", "LEGS", 3);
                 saveArmorIfMissing("LEATHER_BOOTS", "Leather Boots", "FEET", 1);
+                // Health-restoring consumables (usable in and out of combat).
+                saveConsumableIfMissing("MEDKIT", "Medkit", 50);
+                saveConsumableIfMissing("BANDAGE", "Bandage", 15);
+        }
+
+        private void saveConsumableIfMissing(String code, String name, int heal) {
+                if (itemRepository.findByCodeIgnoreCase(code).isPresent()) {
+                        return;
+                }
+                itemRepository.save(ItemEntity.builder()
+                                .code(code)
+                                .name(name)
+                                .type("CONSUMABLE")
+                                .weaponTypeCode(null)
+                                .damage(0)
+                                .attackRange(0)
+                                .width(1)
+                                .height(1)
+                                .defense(0)
+                                .equipmentSlot(null)
+                                .heal(heal)
+                                .build());
         }
 
         private void saveArmorIfMissing(String code, String name, String slot, int defense) {

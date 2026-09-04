@@ -16,6 +16,7 @@ import spring.backend.game.service.InventoryService;
 import spring.backend.game.service.LootService;
 import spring.backend.game.service.WorldZoneService;
 import spring.backend.game.dto.InventoryItemResponse;
+import spring.backend.game.dto.UseItemResponse;
 
 import java.util.List;
 import java.util.UUID;
@@ -134,6 +135,13 @@ public class PlayerController {
             @RequestParam int gridX,
             @RequestParam int gridY) {
         return ResponseEntity.ok(inventoryService.moveItem(playerId, itemCode, gridX, gridY));
+    }
+
+    /** Uses a health-restoring consumable outside of combat. */
+    @PostMapping("/{playerId}/inventory/{itemCode}/use")
+    public ResponseEntity<UseItemResponse> useItem(
+            @PathVariable String playerId, @PathVariable String itemCode) {
+        return ResponseEntity.ok(inventoryService.useItem(playerId, itemCode));
     }
 
     /** Items currently kept in the field loot bag (collected outside the city). */

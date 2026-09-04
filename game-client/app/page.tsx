@@ -318,6 +318,25 @@ export default function GameMapPage() {
     }
   };
 
+  /** Uses a health-restoring consumable outside of combat. */
+  const handleUseItem = async (itemCode: string) => {
+    try {
+      setError("");
+      const response = await playerApi.useItem(playerId, itemCode);
+      setInventory(response.inventory);
+      if (typeof response.health === "number") {
+        setStats((prev) => ({ ...prev, health: response.health }));
+      }
+      setNotice(
+        response.healed > 0
+          ? `❤️ Restored ${response.healed} HP (${response.health} HP now).`
+          : "❤️ You are already at full health.",
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to use item");
+    }
+  };
+
   /** Maps the player can actually open (item present in the inventory). */
   const ownedMaps = gameMaps.filter((gm) =>
     inventory.some((item) => item.code === gm.itemCode),
@@ -522,6 +541,9 @@ export default function GameMapPage() {
                       playerApi.getInventory(playerId).then(setInventory).catch(() => {});
                     }}
                     onOpenInventory={() => setIsMobileInventoryOpen(true)}
+                    onInventoryChanged={() =>
+                      playerApi.getInventory(playerId).then(setInventory).catch(() => {})
+                    }
                   />
                 </div>
               ) : (
@@ -588,6 +610,7 @@ export default function GameMapPage() {
                           playerId={playerId}
                           onItemsChange={setInventory}
                           onOpenMap={openMap}
+                          onUseItem={handleUseItem}
                         />
                       </div>
                     )}

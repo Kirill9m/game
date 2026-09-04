@@ -62,6 +62,7 @@ public class LootService {
                         .equipped(false)
                         .defense(entry.getItem().getDefense())
                         .equipmentSlot(entry.getItem().getEquipmentSlot())
+                        .heal(entry.getItem().getHeal())
                         .build())
                 .toList();
     }

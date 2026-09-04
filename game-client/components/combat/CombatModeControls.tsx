@@ -14,6 +14,7 @@ interface CombatModeControlsProps {
   inventory: InventoryItem[];
   equippedItemCode: string;
   onEquip: (itemCode: string) => void;
+  onUse: (itemCode: string) => void;
 }
 
 const POSTURES: { value: Posture; short: string; title: string }[] = [
@@ -32,11 +33,16 @@ export function CombatModeControls({
   inventory,
   equippedItemCode,
   onEquip,
+  onUse,
 }: CombatModeControlsProps) {
   const locked = !isMyTurn || isReplaying || plannedActions.length >= actionPoints;
   const postureIndex = POSTURES.findIndex((p) => p.value === plannedPosture);
   // Only weapons can be switched mid-combat; armor is equipped in the inventory.
   const weapons = inventory.filter((item) => item.type === "WEAPON");
+  // Consumables that restore health (usable in combat, one action point each).
+  const consumables = inventory.filter(
+    (item) => item.type === "CONSUMABLE" && (item.heal ?? 0) > 0,
+  );
 
   return (
     <motion.div
@@ -112,6 +118,34 @@ export function CombatModeControls({
           </div>
         )}
       </div>
+
+      {/* Consumables: use one to heal, costs one action point each */}
+      {consumables.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            Heal (1 AP each)
+          </p>
+          <div className="flex w-full gap-1.5 overflow-x-auto pb-0.5">
+            {consumables.map((item, index) => (
+              <motion.button
+                key={item.code}
+                type="button"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.06 + index * 0.05 }}
+                disabled={locked}
+                onClick={() => onUse(item.code)}
+                className="relative shrink-0 w-36 rounded-lg border p-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-green-500/50 bg-green-900/30 text-green-100 hover:border-green-400 hover:bg-green-900/50"
+              >
+                <span className="block text-xs font-bold leading-tight">{item.name}</span>
+                <span className="block text-[10px] opacity-75">
+                  ❤️ +{item.heal} · x{item.quantity}
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -8,6 +8,8 @@ interface InventoryPanelProps {
   onItemsChange: (items: InventoryItem[]) => void;
   /** Called when a map/utility item is opened, with the item's code. */
   onOpenMap?: (itemCode?: string) => void;
+  /** Called when a health-restoring consumable is used (outside of combat). */
+  onUseItem?: (itemCode: string) => void;
 }
 
 const COLUMNS = 8;
@@ -18,6 +20,7 @@ export default function InventoryPanel({
   playerId,
   onItemsChange,
   onOpenMap,
+  onUseItem,
 }: InventoryPanelProps) {
   const [selectedItemCode, setSelectedItemCode] = useState<string | null>(null);
   const [touchDraggingCode, setTouchDraggingCode] = useState<string | null>(
@@ -205,7 +208,13 @@ export default function InventoryPanel({
                   </span>
                 )}
 
-                {(item.type === "WEAPON" || item.type === "ARMOR" || item.type === "UTILITY") && (
+                {item.type === "CONSUMABLE" && typeof item.heal === "number" && item.heal > 0 && (
+                  <span className="text-[10px] text-green-200/90 pointer-events-none">
+                    ❤️ +{item.heal}
+                  </span>
+                )}
+
+                {(item.type === "WEAPON" || item.type === "ARMOR" || item.type === "UTILITY" || item.type === "CONSUMABLE") && (
                   <div className="flex gap-1 z-20">
                     {(item.type === "WEAPON" || item.type === "ARMOR") && (
                       <button
@@ -229,6 +238,18 @@ export default function InventoryPanel({
                         className="rounded bg-blue-950/80 hover:bg-blue-900 px-1.5 py-0.5 text-[10px] text-white"
                       >
                         Open
+                      </button>
+                    )}
+                    {item.type === "CONSUMABLE" && onUseItem && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUseItem(item.code);
+                        }}
+                        className="rounded bg-green-900/80 hover:bg-green-800 px-1.5 py-0.5 text-[10px] text-white"
+                      >
+                        Use
                       </button>
                     )}
                   </div>

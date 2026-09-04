@@ -6,7 +6,8 @@ export type PlannedAction =
   | { type: "MOVE"; x: number; y: number }
   | { type: "ATTACK"; x: number; y: number }
   | { type: "POSTURE"; posture: Posture }
-  | { type: "EQUIP"; itemCode: string };
+  | { type: "EQUIP"; itemCode: string }
+  | { type: "USE"; itemCode: string };
 
 export type ShotAnimation = {
   id: string;
@@ -36,4 +37,6 @@ export interface CombatArenaProps {
   onCombatFinished: () => void;
   /** Показать инвентарь (мобильный bottom-sheet). */
   onOpenInventory?: () => void;
+  /** Called after a combat round resolves (inventory may have changed: used consumables). */
+  onInventoryChanged?: () => void;
 }

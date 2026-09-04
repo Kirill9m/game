@@ -22,6 +22,7 @@ import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.PlayerEntity;
+import spring.backend.game.entity.PlayerInventoryEntity;
 import spring.backend.game.entity.PlayerLootBagEntity;
 import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
 import spring.backend.game.entity.WeaponTypeEntity;
@@ -40,6 +41,7 @@ public class CombatService {
     private static final int BOARD_SIZE = 10;
     private static final int MAX_SHOT_DISTANCE = 3;
     private static final int SHOT_DAMAGE = 25;
+    private static final int MAX_HEALTH = 100;
     private static final String DEFAULT_ENEMY_CODE = "WOLF";
     private static final String STANDING = "STANDING";
     private static final String CROUCHING = "CROUCHING";
@@ -334,6 +336,9 @@ public class CombatService {
             if ("EQUIP".equalsIgnoreCase(action.type())) {
                 return "E:" + requiredText(action.itemCode(), "itemCode");
             }
+            if ("USE".equalsIgnoreCase(action.type())) {
+                return "U:" + requiredText(action.itemCode(), "itemCode");
+            }
             throw new RuntimeException("Unknown combat action: " + action.type());
         }).reduce((left, right) -> left + ";" + right).orElse("");
     }
@@ -359,6 +364,13 @@ public class CombatService {
         String[] actions = plan == null || plan.isBlank() ? new String[0] : plan.split(";");
         if (actions.length > combat.getActionPoints()) {
             throw new RuntimeException("A plan cannot use more than " + combat.getActionPoints() + " action points");
+        }
+        Map<String, Integer> useCounts = new HashMap<>();
+        for (String action : actions) {
+            String[] p = action.split(":");
+            if ("U".equals(p[0]) && p.length == 2) {
+                useCounts.merge(p[1].toUpperCase(), 1, Integer::sum);
+            }
         }
         for (String action : actions) {
             String[] parts = action.split(":");
@@ -395,6 +407,19 @@ public class CombatService {
                         : combat.getP1Health() <= 0;
                 if (targetDead) {
                     throw new RuntimeException("The target is already dead");
+                }
+            } else if ("U".equals(parts[0])) {
+                if (parts.length != 2) {
+                    throw new RuntimeException("Invalid combat plan");
+                }
+                String itemCode = parts[1].toUpperCase();
+                ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode).orElse(null);
+                if (item == null || !"CONSUMABLE".equalsIgnoreCase(item.getType()) || item.getHeal() <= 0) {
+                    throw new RuntimeException("This item cannot be used in combat");
+                }
+                int plannedUses = useCounts.getOrDefault(itemCode, 0);
+                if (inventoryQuantity(playerId, itemCode) < plannedUses) {
+                    throw new RuntimeException("You do not have enough " + itemCode);
                 }
             } else {
                 throw new RuntimeException("Invalid combat plan");
@@ -694,6 +719,9 @@ public class CombatService {
             else combat.setP2EquippedItemCode(itemCode);
             return 0;
         }
+        if (action.startsWith("U:")) {
+            return applyHeal(combat, player1, action.substring(2).toUpperCase());
+        }
         if (action.startsWith("M:")) {
             applyMovement(combat, player1, action);
             return 0;
@@ -921,6 +949,53 @@ public class CombatService {
 
     private boolean player1HasItem(String playerId, String itemCode) {
         return playerInventoryRepository.existsByPlayerIdAndItemCodeIgnoreCase(playerId, itemCode);
+    }
+
+    /** Total quantity of the given item code the player holds (across stacks). */
+    private int inventoryQuantity(String playerId, String itemCode) {
+        return playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(entry -> entry.getItem().getCode().equalsIgnoreCase(itemCode))
+                .mapToInt(PlayerInventoryEntity::getQuantity)
+                .sum();
+    }
+
+    /** Consumes one unit of the item; returns {@code false} when there is nothing to consume. */
+    private boolean consumeCombatItem(String playerId, String itemCode) {
+        var entry = playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(e -> e.getItem().getCode().equalsIgnoreCase(itemCode))
+                .findFirst()
+                .orElse(null);
+        if (entry == null) return false;
+        if (entry.getQuantity() <= 1) {
+            playerInventoryRepository.delete(entry);
+        } else {
+            entry.setQuantity(entry.getQuantity() - 1);
+            playerInventoryRepository.save(entry);
+        }
+        return true;
+    }
+
+    /** Applies a consumable heal to the acting combatant and returns the health actually restored. */
+    private int applyHeal(CombatSessionEntity combat, boolean player1, String itemCode) {
+        ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode).orElse(null);
+        if (item == null || !"CONSUMABLE".equalsIgnoreCase(item.getType()) || item.getHeal() <= 0) {
+            return 0;
+        }
+        int current = player1 ? combat.getP1Health() : combat.getP2Health();
+        int healed = Math.min(item.getHeal(), MAX_HEALTH - current);
+        if (healed <= 0) {
+            return 0; // already at full health — do not consume the item
+        }
+        String playerId = player1 ? combat.getPlayer1Id() : combat.getPlayer2Id();
+        if (playerId == null || playerId.startsWith("bot_") || !consumeCombatItem(playerId, itemCode)) {
+            return 0;
+        }
+        if (player1) {
+            combat.setP1Health(current + healed);
+        } else {
+            combat.setP2Health(current + healed);
+        }
+        return healed;
     }
 
     /** The item code of the weapon currently equipped by the player, or PISTOL if none. */

@@ -69,6 +69,11 @@ public class PlayerEntity {
     @Builder.Default
     private String role = ROLE_PLAYER;
 
+    /** Marks that the one-time starter items were already granted to this player. */
+    @Column(name = "starter_items_granted", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean starterItemsGranted = false;
+
     public static final String ROLE_PLAYER = "PLAYER";
     public static final String ROLE_ADMIN = "ADMIN";
 

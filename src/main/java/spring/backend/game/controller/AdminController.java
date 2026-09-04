@@ -275,10 +275,11 @@ public class AdminController {
                 request.width() == null ? 1 : request.width(),
                 request.height() == null ? 1 : request.height(),
                 request.defense() == null ? 0 : request.defense(),
-                request.equipmentSlot()));
+                request.equipmentSlot(),
+                request.heal() == null ? 0 : request.heal()));
     }
 
-    /** Random item generator: random type (WEAPON/ARMOR/UTILITY), name and stats. */
+    /** Random item generator: random type (WEAPON/ARMOR/CONSUMABLE/UTILITY), name and stats. */
     @PostMapping("/items/generate")
     public ResponseEntity<AdminItemDto> generateItem(@RequestParam String playerId) {
         adminService.requireAdmin(playerId);

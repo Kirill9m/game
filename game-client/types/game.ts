@@ -23,6 +23,8 @@ export interface InventoryItem {
   defense?: number;
   /** Armor slot: HELMET / BODY / LEGS / FEET. */
   equipmentSlot?: string | null;
+  /** How much health this consumable restores when used (0 for non-consumables). */
+  heal?: number;
 }
 
 export interface MoveResponse {

@@ -20,4 +20,6 @@ public class InventoryItemResponse {
     private boolean equipped;
     private int defense;
     private String equipmentSlot;
+    /** How much health this consumable restores when used (0 for non-consumables). */
+    private int heal;
 }

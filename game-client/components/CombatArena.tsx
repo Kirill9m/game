@@ -36,6 +36,7 @@ export default function CombatArena({
   onCombatUpdate,
   onCombatFinished,
   onOpenInventory,
+  onInventoryChanged,
 }: CombatArenaProps) {
   const [combat, setCombat] = useState(initialCombat);
   const [error, setError] = useState("");
@@ -73,6 +74,8 @@ export default function CombatArena({
   const previousCombatRef = useRef(initialCombat);
   // Latest combat state — used to drop stale polling responses (version guard).
   const lastCombatRef = useRef(initialCombat);
+  // Tracks the last resolved round so inventory refreshes exactly once per round.
+  const inventoryRoundRef = useRef<string | null>(null);
 
   // Размер поля: mobile — вписываемся в высоту экрана (до 440px),
   // desktop — растем по ширине колонки вплоть до 760px.
@@ -263,6 +266,15 @@ export default function CombatArena({
                   });
                 }, 420),
               );
+          } else if (type === "U") {
+            const heal = Number(second || 0);
+            if (heal > 0) {
+              setDisplayHealth((health) => ({
+                ...health,
+                [actorKey]: Math.min(100, health[actorKey] + heal),
+              }));
+              setAnimationTarget(actorKey);
+            }
           }
         }, index * 700);
         replayTimersRef.current.push(timer);
@@ -354,6 +366,19 @@ export default function CombatArena({
     return () => window.clearInterval(interval);
   }, [combatId, onCombatUpdate]);
 
+  // Refresh the inventory once whenever a combat round resolves (used consumables
+  // are consumed server-side, so the item count must be re-fetched).
+  useEffect(() => {
+    const roundActions = combat.lastRoundActions;
+    const roundKey = roundActions?.length
+      ? `${combat.version}:${roundActions.join("|")}`
+      : null;
+    if (roundKey && roundKey !== inventoryRoundRef.current) {
+      inventoryRoundRef.current = roundKey;
+      onInventoryChanged?.();
+    }
+  }, [combat, onInventoryChanged]);
+
   const handleTileClick = useCallback(
     (targetX: number, targetY: number) => {
       if (!isMyTurn || isActing || combat.status !== "IN_PROGRESS") {
@@ -434,6 +459,8 @@ export default function CombatArena({
           result.push({ type: "POSTURE", posture: action.posture });
         else if (action.type === "EQUIP")
           result.push({ type: "EQUIP", itemCode: action.itemCode });
+        else if (action.type === "USE")
+          result.push({ type: "USE", itemCode: action.itemCode });
         else if (action.type === "MOVE") {
           result.push({
             type: "MOVE",
@@ -555,6 +582,9 @@ export default function CombatArena({
         equippedItemCode={plannedEquipment}
         onEquip={(itemCode) =>
           setPlannedActions((actions) => [...actions, { type: "EQUIP", itemCode }])
+        }
+        onUse={(itemCode) =>
+          setPlannedActions((actions) => [...actions, { type: "USE", itemCode }])
         }
       />
       <div

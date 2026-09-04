@@ -59,4 +59,9 @@ public class ItemEntity {
     /** Armor slot (HELMET, BODY, LEGS, FEET); {@code null} for weapons and utility items. */
     @Column(name = "equipment_slot", length = 20)
     private String equipmentSlot;
+
+    /** How much health this consumable restores when used (0 for non-consumables). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    @Builder.Default
+    private int heal = 0;
 }

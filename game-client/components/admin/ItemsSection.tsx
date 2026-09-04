@@ -18,6 +18,7 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
   const [wCode, setWCode] = useState("");
   const [defense, setDefense] = useState(2);
   const [slot, setSlot] = useState("HELMET");
+  const [heal, setHeal] = useState(30);
 
   const act = async (fn: () => Promise<void>, msg?: string) => {
     try { await fn(); if (msg) setNotice(msg); await onRefresh(); }
@@ -36,7 +37,7 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
           <div><label className={labelClass}>Name</label><input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Iron Sword" /></div>
           <div><label className={labelClass}>Type</label>
             <select className={inputClass} value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="WEAPON">WEAPON</option><option value="ARMOR">ARMOR</option><option value="UTILITY">UTILITY</option>
+              <option value="WEAPON">WEAPON</option><option value="ARMOR">ARMOR</option><option value="UTILITY">UTILITY</option><option value="CONSUMABLE">CONSUMABLE</option>
             </select></div>
           <div><label className={labelClass}>Weapon Type Code</label><input className={inputClass} value={wCode} onChange={(e) => setWCode(e.target.value.toUpperCase())} placeholder="SWORD" /></div>
           <div><label className={labelClass}>Damage</label><input type="number" min={0} className={inputClass} value={damage} onChange={(e) => setDamage(Number(e.target.value) || 0)} /></div>
@@ -52,10 +53,13 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
                 </select></div>
             </>
           )}
+          {type === "CONSUMABLE" && (
+            <div><label className={labelClass}>Heal amount (HP restored)</label><input type="number" min={1} className={inputClass} value={heal} onChange={(e) => setHeal(Number(e.target.value) || 1)} /></div>
+          )}
         </div>
         <button type="button" disabled={busy} onClick={() => act(async () => {
           if (!code.trim() || !name.trim()) throw new Error("Code and name required");
-          await adminApi.createItem(playerId, { code: code.trim(), name: name.trim(), type, weaponTypeCode: wCode || null, damage, attackRange: range, width, height, defense: type === "ARMOR" ? defense : 0, equipmentSlot: type === "ARMOR" ? slot : null });
+          await adminApi.createItem(playerId, { code: code.trim(), name: name.trim(), type, weaponTypeCode: wCode || null, damage, attackRange: range, width, height, defense: type === "ARMOR" ? defense : 0, equipmentSlot: type === "ARMOR" ? slot : null, heal: type === "CONSUMABLE" ? heal : 0 });
           setCode(""); setName(""); setNotice("Item created");
         }, "")} className={primaryBtn}>➕ Create Item</button>
       </div>
@@ -72,6 +76,7 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
                 <span className="bg-blue-900/40 border border-blue-800 text-blue-200 px-1.5 py-0.5 rounded text-[9px]">📏 {it.attackRange}</span>
                 {it.weaponTypeCode && <span className="bg-green-900/40 border border-green-800 text-green-200 px-1.5 py-0.5 rounded text-[9px]">{it.weaponTypeCode}</span>}
                 {it.type === "ARMOR" && <span className="bg-purple-900/40 border border-purple-800 text-purple-200 px-1.5 py-0.5 rounded text-[9px]">🛡 {it.defense}</span>}
+                {it.type === "CONSUMABLE" && <span className="bg-green-900/40 border border-green-800 text-green-200 px-1.5 py-0.5 rounded text-[9px]">❤️ +{it.heal}</span>}
                 {it.equipmentSlot && <span className="bg-cyan-900/40 border border-cyan-800 text-cyan-200 px-1.5 py-0.5 rounded text-[9px]">{it.equipmentSlot}</span>}
               </div>
             </div>
