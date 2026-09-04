@@ -26,7 +26,7 @@ import LootPanel from "@/components/LootPanel";
 import NpcDialog from "@/components/NpcDialog";
 import { NpcInfo } from "@/types/npc";
 import QuestPanel from "@/components/QuestPanel";
-import AdminPanel from "@/components/AdminPanel";
+import AdminPanel from "@/components/admin/AdminPanel";
 import { questApi } from "@/services/questApi";
 
 export default function GameMapPage() {
