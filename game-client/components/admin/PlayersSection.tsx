@@ -1,15 +1,18 @@
 "use client";
 import { useState } from "react";
 import { adminApi } from "@/services/adminApi";
-import type { AdminPlayer } from "@/types/admin";
+import type { AdminItem, AdminPlayer } from "@/types/admin";
 import type { SectionProps } from "./types";
 import { inputClass, labelClass, primaryBtn, dangerBtn } from "./ui";
 
-interface Props extends SectionProps { players: AdminPlayer[]; weaponTypes: { id: string; code: string; name: string }[]; }
+interface Props extends SectionProps { players: AdminPlayer[]; items: AdminItem[]; weaponTypes: { id: string; code: string; name: string }[]; }
 
-export default function PlayersSection({ playerId, busy, setError, setNotice, onRefresh, players }: Props) {
+export default function PlayersSection({ playerId, busy, setError, setNotice, onRefresh, players, items }: Props) {
   const [editId, setEditId] = useState("");
   const [d, setD] = useState<Record<string, string>>({});
+  const [giveId, setGiveId] = useState("");
+  const [giveItemCode, setGiveItemCode] = useState("");
+  const [giveQty, setGiveQty] = useState(1);
 
   const act = async (fn: () => Promise<void>, msg?: string) => {
     try { await fn(); if (msg) setNotice(msg); await onRefresh(); }
@@ -22,8 +25,8 @@ export default function PlayersSection({ playerId, busy, setError, setNotice, on
 
   return (<div className="flex flex-col gap-2">
     <span className="text-xs font-bold uppercase tracking-wider text-gray-400">🛡️ Players ({players.length})</span>
-    {players.map((p) => (<div key={p.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-start justify-between gap-2">
-      {editId === p.id ? (<div className="flex flex-col gap-2 flex-1">
+    {players.map((p) => (<div key={p.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+      {editId === p.id ? (<div className="flex flex-col gap-2">
         <div className="grid grid-cols-3 gap-2">
           <div><label className={labelClass}>Username</label><input className={inputClass} value={d.username ?? ""} onChange={(e) => setD((v) => ({ ...v, username: e.target.value }))} /></div>
           <div><label className={labelClass}>Level</label><input type="number" className={inputClass} value={d.level ?? ""} onChange={(e) => setD((v) => ({ ...v, level: e.target.value }))} /></div>
@@ -33,7 +36,7 @@ export default function PlayersSection({ playerId, busy, setError, setNotice, on
           <button type="button" disabled={busy} onClick={() => act(async () => { await adminApi.updatePlayer(playerId, editId, { username: d.username || undefined, level: d.level ? Number(d.level) : undefined, gold: d.gold ? Number(d.gold) : undefined }); setEditId(""); }, "Updated")} className={primaryBtn}>💾 Save</button>
           <button type="button" onClick={() => setEditId("")} className={dangerBtn}>✕</button>
         </div>
-      </div>) : (<>
+      </div>) : (<div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-gray-100">{p.username ?? "—"}</div>
           <div className="text-[10px] text-gray-500 font-mono">{p.id}</div>
@@ -47,8 +50,25 @@ export default function PlayersSection({ playerId, busy, setError, setNotice, on
         <div className="flex gap-1 shrink-0 flex-wrap justify-end">
           <RoleBtn p={p} />
           <button type="button" disabled={busy} onClick={() => { setEditId(p.id); setD({ username: p.username ?? "", level: String(p.level), gold: String(p.gold) }); }} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[10px] font-bold px-2 py-1 rounded-lg transition">✏️</button>
+          <button type="button" disabled={busy} onClick={() => { setGiveId(p.id); setGiveItemCode(""); setGiveQty(1); }} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[10px] font-bold px-2 py-1 rounded-lg transition" title="Give item">🎁</button>
           <button type="button" disabled={busy} onClick={() => act(async () => { if (!window.confirm("Delete?")) return; await adminApi.deletePlayer(playerId, p.id); }, "Deleted")} className={dangerBtn}>🗑</button>
         </div>
-      </>)}</div>))}
+      </div>)}
+      {giveId === p.id && (<div className="flex gap-2 items-end flex-wrap border-t border-gray-800 pt-2">
+        <div className="flex-1 min-w-[160px]">
+          <label className={labelClass}>Item</label>
+          <select className={inputClass} value={giveItemCode} onChange={(e) => setGiveItemCode(e.target.value)}>
+            <option value="">— Select item —</option>
+            {items.map((it) => <option key={it.id} value={it.code}>{it.name} ({it.code})</option>)}
+          </select>
+        </div>
+        <div className="w-20">
+          <label className={labelClass}>Qty</label>
+          <input type="number" min={1} className={inputClass} value={giveQty} onChange={(e) => setGiveQty(Math.max(1, Number(e.target.value) || 1))} />
+        </div>
+        <button type="button" disabled={busy || !giveItemCode} onClick={() => act(async () => { await adminApi.giveItem(playerId, p.id, { itemCode: giveItemCode, quantity: giveQty }); setGiveId(""); }, `Gave ${giveQty}x ${giveItemCode} to ${p.username ?? p.id}`)} className={primaryBtn}>🎁 Give</button>
+        <button type="button" onClick={() => setGiveId("")} className={dangerBtn}>✕</button>
+      </div>)}
+    </div>))}
   </div>);
 }

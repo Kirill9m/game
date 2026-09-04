@@ -132,6 +132,7 @@ public class AdminService {
     private final WorldCellService worldCellService;
     private final PlayerLootBagRepository playerLootBagRepository;
     private final WorldLootRepository worldLootRepository;
+    private final InventoryService inventoryService;
     private final Random random = new Random();
 
     // --- ACCESS CONTROL ---
@@ -269,6 +270,23 @@ public class AdminService {
 
         playerRepository.delete(player);
         log.info("Admin deleted player {}", targetPlayerId);
+    }
+
+    /**
+     * Gives an item directly to a player's inventory. Stacks with an existing
+     * copy of the item or places it in the first free grid slot; throws when the
+     * inventory has no room.
+     */
+    @Transactional
+    public AdminDtos.AdminItemDto giveItemToPlayer(String targetPlayerId, String itemCode, Integer quantity) {
+        String normalizedCode = requireNonBlank(itemCode, "Item code is required")
+                .trim().toUpperCase(Locale.ROOT);
+        ItemEntity item = itemRepository.findByCodeIgnoreCase(normalizedCode)
+                .orElseThrow(() -> new IllegalArgumentException("Item not found: " + normalizedCode));
+        int qty = Math.max(1, quantity == null ? 1 : quantity);
+        inventoryService.addItem(targetPlayerId, item.getCode(), qty);
+        log.info("Admin gave {}x '{}' to player {}", qty, item.getCode(), targetPlayerId);
+        return toItemDto(item);
     }
 
     // --- NPC MANAGEMENT ---

@@ -178,6 +178,12 @@ export interface UpdatePlayerPayload {
   positionY?: number;
 }
 
+/** Give an item directly to a player's inventory (admin shortcut). */
+export interface GiveItemPayload {
+  itemCode: string;
+  quantity?: number;
+}
+
 export interface AdminWorldCell {
   id: string;
   positionX: number;

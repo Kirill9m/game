@@ -60,7 +60,7 @@ export default function AdminPanel({ playerId }: Props) {
       {section === "items" && <ItemsSection {...sectionProps} items={data.items} />}
       {section === "weapons" && <WeaponsSection {...sectionProps} weaponTypes={data.weaponTypes} />}
       {section === "enemies" && <EnemiesSection {...sectionProps} enemies={data.enemies} items={data.items} />}
-      {section === "players" && <PlayersSection {...sectionProps} players={data.players} weaponTypes={data.weaponTypes} />}
+      {section === "players" && <PlayersSection {...sectionProps} players={data.players} items={data.items} weaponTypes={data.weaponTypes} />}
       {section === "maps" && <MapsSection {...sectionProps} maps={data.maps} items={data.items} />}
       {section === "obstacles" && <ObstaclesSection {...sectionProps} obstacleTypes={data.obstacleTypes} />}
       {(section === "world" || section === "zone") && (

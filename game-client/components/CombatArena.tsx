@@ -136,11 +136,12 @@ export default function CombatArena({
       : 0;
   const plannedEnd = getLatestMove(plannedActions);
   const obstacles = useMemo(() => combat.obstacles ?? [], [combat.obstacles]);
-  // Piles the player is currently standing on (candidates for the Take button).
+  // Piles on or next to the player's cell (candidates for the Take button).
   const lootAtMyFeet = useMemo<CombatLootPickerPile[]>(() => {
     const piles: CombatLootPickerPile[] = [];
     combat.loot?.forEach((pile, index) => {
-      if (pile.x === myX && pile.y === myY && pile.quantity > 0) {
+      const distance = Math.max(Math.abs(pile.x - myX), Math.abs(pile.y - myY));
+      if (distance <= 1 && pile.quantity > 0) {
         piles.push({ lootIndex: index, pile });
       }
     });
@@ -241,7 +242,9 @@ export default function CombatArena({
             setAnimationTarget(actorKey);
           } else if (type === "A") {
             const targetKey = actorKey === "p1" ? "p2" : "p1";
-            const damage = Number(encodedAction.split(":")[4] || 0);
+            const parts = encodedAction.split(":");
+            const damage = Number(parts[4] || 0);
+            const range = parts.length > 5 ? Number(parts[5]) : undefined;
             setReplayAction({
               id: `${encodedAction}-${index}`,
               type: "ATTACK",
@@ -250,6 +253,7 @@ export default function CombatArena({
               fromY: current.y,
               toX: Number(first),
               toY: Number(second),
+              range: Number.isFinite(range) ? range : undefined,
             });
             setAnimationTarget(targetKey);
             if (damage > 0)
@@ -623,11 +627,11 @@ export default function CombatArena({
               {combat.loot!.length} loot pile
               {combat.loot!.length === 1 ? "" : "s"}
             </span>{" "}
-            on the board — walk onto a pile and press Take Loot to grab it.
+            on the board — stand next to a pile and press Take Loot to grab it.
           </motion.div>
         )}
 
-      {/* Player is standing on a pile: offer the Take button and a selection. */}
+      {/* Player is on or next to a pile: offer the Take button and a selection. */}
       {combat.status === "IN_PROGRESS" && lootAtMyFeet.length > 0 && (
         <div className="w-full flex flex-col gap-2">
           {!isLootPickerOpen ? (

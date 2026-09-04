@@ -10,7 +10,7 @@ export interface CombatLootPickerPile {
 }
 
 interface CombatLootPickerProps {
-  /** Piles lying on the player's current cell. */
+  /** Piles lying on or next to the player's current cell. */
   piles: CombatLootPickerPile[];
   /** Indexes (into the combat's loot array) the player has selected. */
   selectedIndexes: Set<number>;
@@ -42,7 +42,7 @@ export function CombatLootPicker({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-          🎒 Loot on your cell — choose what to take
+          🎒 Loot nearby — choose what to take
         </span>
         <button
           type="button"

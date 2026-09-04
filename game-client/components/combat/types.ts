@@ -15,6 +15,8 @@ export type ShotAnimation = {
   fromY: number;
   toX: number;
   toY: number;
+  /** Weapon range (in cells) used to scale the shot tracer length. */
+  range?: number;
 };
 
 export type ReplayAction = ShotAnimation & {

@@ -18,6 +18,7 @@ import type {
   CreateObstacleTypePayload,
   CreateQuestPayload,
   CreateWeaponTypePayload,
+  GiveItemPayload,
   SetProficiencyPayload,
   UpdateEnemyTypePayload,
   UpdateGameMapPayload,
@@ -106,6 +107,17 @@ export const adminApi = {
     await request<void>(
       `${API_URL}/api/admin/players/${encodeURIComponent(targetPlayerId)}?${withPlayerId(playerId)}`,
       { method: "DELETE" },
+    );
+  },
+
+  async giveItem(
+    playerId: string,
+    targetPlayerId: string,
+    payload: GiveItemPayload,
+  ): Promise<AdminItem> {
+    return request<AdminItem>(
+      `${API_URL}/api/admin/players/${encodeURIComponent(targetPlayerId)}/items?${withPlayerId(playerId)}`,
+      jsonBody(payload),
     );
   },
 

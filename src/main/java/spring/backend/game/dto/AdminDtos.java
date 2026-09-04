@@ -244,6 +244,12 @@ public final class AdminDtos {
             Integer positionY) {
     }
 
+    /** Give an item directly to a player's inventory (admin shortcut). */
+    public record GiveItemRequest(
+            String itemCode,
+            Integer quantity) {
+    }
+
     public record UpsertWorldCellRequest(
             Integer positionX,
             Integer positionY,

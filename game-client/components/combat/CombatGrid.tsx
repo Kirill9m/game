@@ -60,16 +60,15 @@ export function CombatGrid({
   // Клик по врагу = выстрел по умолчанию, поэтому подсвечиваем его клетку.
   const attackableCell = canAttack ? enemyCell : null;
 
-  // The player's current footprint on the board — used to highlight loot
-  // piles they are standing on (available for the Take button).
+  // The player's current footprint on the board — used to highlight when loot
+  // piles are on or next to the player (available for the Take button).
   const myDisplay = isPlayer1 ? displayPositions.p1 : displayPositions.p2;
-  const myDisplayKey = cellKey(myDisplay.x, myDisplay.y);
-  const lootCellKeys = new Set(
-    (combat.loot ?? [])
-      .filter((pile) => pile.quantity > 0)
-      .map((pile) => cellKey(pile.x, pile.y)),
+  const lootNearMe = (combat.loot ?? []).some(
+    (pile) =>
+      pile.quantity > 0 &&
+      Math.max(Math.abs(pile.x - myDisplay.x), Math.abs(pile.y - myDisplay.y)) <=
+        1,
   );
-  const lootUnderMe = lootCellKeys.has(myDisplayKey);
 
   const tokenFor = (playerKey: "p1" | "p2") => {
     const isYou =
@@ -147,7 +146,7 @@ export function CombatGrid({
 
       <div className="pointer-events-none absolute inset-0 z-20">
         {(["p1", "p2"] as const).map(tokenFor)}
-        {lootUnderMe && (
+        {lootNearMe && (
           <motion.span
             className="combat-loot-ring"
             style={{ left: CENTER(myDisplay.x), top: CENTER(myDisplay.y) }}
@@ -174,7 +173,7 @@ export function CombatGrid({
               style={{
                 left: CENTER(replayAction.fromX),
                 top: CENTER(replayAction.fromY),
-                width: `${Math.min(Math.hypot(replayAction.toX - replayAction.fromX, replayAction.toY - replayAction.fromY), 3) * 10}%`,
+                width: `${(replayAction.range ?? 3) * 10}%`,
               }}
               initial={{ scaleX: 0, opacity: 0, rotate: 0 }}
               animate={{

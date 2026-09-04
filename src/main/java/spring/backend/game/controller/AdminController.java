@@ -34,6 +34,7 @@ import spring.backend.game.dto.AdminDtos.CreateNpcRequest;
 import spring.backend.game.dto.AdminDtos.CreateObstacleTypeRequest;
 import spring.backend.game.dto.AdminDtos.CreateQuestRequest;
 import spring.backend.game.dto.AdminDtos.CreateWeaponTypeRequest;
+import spring.backend.game.dto.AdminDtos.GiveItemRequest;
 import spring.backend.game.dto.AdminDtos.SetProficiencyRequest;
 import spring.backend.game.dto.AdminDtos.SetRoleRequest;
 import spring.backend.game.dto.AdminDtos.UpdateEnemyTypeRequest;
@@ -110,6 +111,22 @@ public class AdminController {
         adminService.requireAdmin(playerId);
         adminService.deletePlayer(targetPlayerId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Give an item directly to a player's inventory. */
+    @PostMapping("/players/{targetPlayerId}/items")
+    public ResponseEntity<AdminItemDto> giveItem(
+            @PathVariable String targetPlayerId,
+            @RequestParam String playerId,
+            @RequestBody GiveItemRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(adminService.giveItemToPlayer(
+                targetPlayerId,
+                request.itemCode(),
+                request.quantity()));
     }
 
     // --- NPCS ---

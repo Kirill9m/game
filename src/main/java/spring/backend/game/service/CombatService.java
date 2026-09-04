@@ -394,7 +394,12 @@ public class CombatService {
                 }
                 int opponentX = playerId.equals(combat.getPlayer1Id()) ? combat.getP2X() : combat.getP1X();
                 int opponentY = playerId.equals(combat.getPlayer1Id()) ? combat.getP2Y() : combat.getP1Y();
-                if (x == opponentX && y == opponentY) {
+                boolean opponentAlive = playerId.equals(combat.getPlayer1Id())
+                        ? combat.getP2Health() > 0
+                        : combat.getP1Health() > 0;
+                // A dead opponent no longer blocks the cell: their body (and the
+                // loot that dropped on it) can be walked onto to collect it.
+                if (opponentAlive && x == opponentX && y == opponentY) {
                     throw new RuntimeException("You cannot move to the opponent's cell");
                 }
                 validateMovementPath(combat, x - dx, y - dy, x, y, movementRange(posture));
@@ -576,9 +581,9 @@ public class CombatService {
     /**
      * Manually takes the loot piles the player selected (by their zero-based
      * indexes inside the combat's {@code loot} array). The player must be
-     * standing on the pile's cell. Items go to the field loot bag outside the
-     * city or straight to the inventory inside the city. When the winner has
-     * collected every pile, the combat is finished.
+     * standing on the pile's cell or an adjacent cell. Items go to the field
+     * loot bag outside the city or straight to the inventory inside the city.
+     * When the winner has collected every pile, the combat is finished.
      */
     @Transactional
     public CombatSessionEntity pickupLoot(UUID combatId, String playerId, List<Integer> pileIndexes) {
@@ -599,8 +604,9 @@ public class CombatService {
                     throw new IllegalArgumentException("One of the loot piles is no longer here — refresh the board");
                 }
                 CombatLoot pile = loot.get(index);
-                if (pile.x() != feetX || pile.y() != feetY) {
-                    throw new IllegalStateException("You must stand on a loot pile to take it");
+                int pileDistance = Math.max(Math.abs(pile.x() - feetX), Math.abs(pile.y() - feetY));
+                if (pileDistance > 1) {
+                    throw new IllegalStateException("You must stand next to a loot pile to take it");
                 }
                 selected.add(index);
             }
@@ -679,7 +685,16 @@ public class CombatService {
         if (!action.startsWith("A:")) return (player1 ? "P1:" : "P2:") + action + ":" + damage;
         int targetX = player1 ? combat.getP2X() : combat.getP1X();
         int targetY = player1 ? combat.getP2Y() : combat.getP1Y();
-        return (player1 ? "P1:A:" : "P2:A:") + targetX + ":" + targetY + ":" + damage;
+        // The attacker's weapon range rides along so the client can scale the shot
+        // tracer to exactly as many cells as the weapon's range.
+        return (player1 ? "P1:A:" : "P2:A:") + targetX + ":" + targetY + ":" + damage + ":" + shotRange(combat, player1);
+    }
+
+    /** Range (in cells) of the attacker's weapon — mirrors the logic in {@link #applyAttack}. */
+    private int shotRange(CombatSessionEntity combat, boolean player1) {
+        EnemyTypeEntity enemy = !player1 ? combat.getEnemyType() : null;
+        if (enemy != null) return enemy.getAttackRange();
+        return getWeapon(combat, player1).getAttackRange();
     }
 
     private void addReplayActions(List<String> replay, CombatSessionEntity combat, boolean player1, String action, int damage) {
