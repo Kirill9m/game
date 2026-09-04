@@ -236,3 +236,11 @@ export interface UpdateObstacleTypePayload {
   name?: string;
   maxHealth?: number;
 }
+
+/** Update payload for the single world safe zone (village circle). */
+export interface UpdateWorldZonePayload {
+  name: string;
+  centerX: number;
+  centerY: number;
+  radius: number;
+}

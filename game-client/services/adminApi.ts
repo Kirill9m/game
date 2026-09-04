@@ -24,8 +24,10 @@ import type {
   UpdateObstacleTypePayload,
   UpdatePlayerPayload,
   UpdateWeaponTypePayload,
+  UpdateWorldZonePayload,
   UpsertWorldCellPayload,
 } from "@/types/admin";
+import type { WorldZone } from "@/types/game";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -350,6 +352,27 @@ export const adminApi = {
     return request<AdminEnemyType>(
       `${API_URL}/api/admin/enemies/generate?${withPlayerId(playerId)}&difficulty=${difficulty}`,
       { method: "POST" },
+    );
+  },
+
+  // --- World zone (single safe zone / village circle) ---
+  async getSafeZone(playerId: string): Promise<WorldZone> {
+    return request<WorldZone>(
+      `${API_URL}/api/admin/world-zones?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async updateSafeZone(
+    playerId: string,
+    payload: UpdateWorldZonePayload,
+  ): Promise<WorldZone> {
+    return request<WorldZone>(
+      `${API_URL}/api/admin/world-zones?${withPlayerId(playerId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
     );
   },
 

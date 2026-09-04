@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { adminApi } from "@/services/adminApi";
-import { playerApi } from "@/services/playerApi";
 import type {
   AdminDialogueNode,
   AdminEnemyType,
@@ -30,6 +29,7 @@ type Section =
   | "enemies"
   | "players"
   | "world"
+  | "zone"
   | "maps"
   | "obstacles";
 
@@ -155,6 +155,12 @@ export default function AdminPanel({ playerId }: Props) {
   const [obstacleHealth, setObstacleHealth] = useState(30);
   const [editingObstacleId, setEditingObstacleId] = useState<string>("");
 
+  // --- Safe zone (village circle) form state ---
+  const [zoneName, setZoneName] = useState("Village");
+  const [zoneCenterX, setZoneCenterX] = useState(0);
+  const [zoneCenterY, setZoneCenterY] = useState(0);
+  const [zoneRadius, setZoneRadius] = useState(4);
+
   // --- World map navigation state ---
   const [viewOrigin, setViewOrigin] = useState({ x: 0, y: 0 });
   const [jumpX, setJumpX] = useState(0);
@@ -228,7 +234,7 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getWorldCells(playerId),
       adminApi.getMaps(playerId),
       adminApi.getObstacleTypes(playerId),
-      playerApi.getSafeZone().catch(() => null),
+      adminApi.getSafeZone(playerId).catch(() => null),
     ])
       .then(([p, n, q, i, wt, e, w, m, ot, zone]) => {
         if (cancelled) return;
@@ -242,6 +248,12 @@ export default function AdminPanel({ playerId }: Props) {
         setMaps(m);
         setObstacleTypes(ot);
         setSafeZone(zone);
+        if (zone) {
+          setZoneName(zone.name);
+          setZoneCenterX(zone.centerX);
+          setZoneCenterY(zone.centerY);
+          setZoneRadius(zone.radius);
+        }
         setSelectedNpcId((current) => current || n[0]?.id || "");
       })
       .catch((err: unknown) => {
@@ -795,6 +807,24 @@ export default function AdminPanel({ playerId }: Props) {
       setNotice("Obstacle type deleted");
     });
 
+  // --- Safe zone (village) handlers ---
+
+  const handleSaveSafeZone = () =>
+    run(async () => {
+      if (!zoneName.trim()) throw new Error("Safe zone name is required");
+      if (zoneRadius <= 0) throw new Error("Safe zone radius must be positive");
+      const updated = await adminApi.updateSafeZone(playerId, {
+        name: zoneName.trim(),
+        centerX: zoneCenterX,
+        centerY: zoneCenterY,
+        radius: zoneRadius,
+      });
+      setSafeZone(updated);
+      setNotice(
+        `Safe zone updated (center ${updated.centerX}:${updated.centerY}, radius ${updated.radius})`,
+      );
+    });
+
   const handleStartEditPlayer = (player: AdminPlayer) => {
     setEditingPlayerId(player.id);
     setPlayerDraft({
@@ -844,6 +874,7 @@ export default function AdminPanel({ playerId }: Props) {
                 { id: "weapons", icon: "🔫", label: "Weapon Types" },
                 { id: "enemies", icon: "👹", label: "Enemies" },
                 { id: "world", icon: "🗺️", label: "World Cells" },
+                { id: "zone", icon: "🏘️", label: "Safe Zone" },
                 { id: "maps", icon: "🧭", label: "Maps" },
                 { id: "obstacles", icon: "🧱", label: "Obstacles" },
                 { id: "players", icon: "🛡️", label: "Players" },
@@ -2189,6 +2220,18 @@ export default function AdminPanel({ playerId }: Props) {
                       height: `${(VIEW_SIZE / WORLD_SIZE) * 100}%`,
                     }}
                   />
+                  {/* Safe zone circle overlay (whole world overview) */}
+                  {safeZone && (
+                    <div
+                      className="pointer-events-none absolute z-[6] rounded-full border border-blue-300/70 bg-blue-400/10"
+                      style={{
+                        left: `${((safeZone.centerX - WORLD_MIN - safeZone.radius) / WORLD_SIZE) * 100}%`,
+                        bottom: `${((safeZone.centerY - WORLD_MIN - safeZone.radius) / WORLD_SIZE) * 100}%`,
+                        width: `${((safeZone.radius * 2 + 1) / WORLD_SIZE) * 100}%`,
+                        aspectRatio: "1",
+                      }}
+                    />
+                  )}
                   {selectedCell.x >= WORLD_MIN &&
                     selectedCell.x <= WORLD_MAX &&
                     selectedCell.y >= WORLD_MIN &&
@@ -2396,6 +2439,146 @@ export default function AdminPanel({ playerId }: Props) {
                 No cells configured yet — click a cell on the grid above.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= SAFE ZONE (village circle) ================= */}
+      {section === "zone" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              🏘️ Safe Zone (village)
+            </span>
+            <p className="text-[11px] text-gray-500">
+              Cells inside the circle around the center are safe: PvP is disabled, ambushes
+              never trigger, and field loot is auto-deposited when a player re-enters.
+              Everything outside is dangerous. The zone is drawn blue in the World Cells
+              editor and on the player&apos;s map.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <label className={labelClass}>Name</label>
+                <input
+                  className={inputClass}
+                  value={zoneName}
+                  onChange={(e) => setZoneName(e.target.value)}
+                  placeholder="Village"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Center X</label>
+                <input
+                  type="number"
+                  min={WORLD_MIN}
+                  max={WORLD_MAX}
+                  className={inputClass}
+                  value={zoneCenterX}
+                  onChange={(e) =>
+                    setZoneCenterX(
+                      Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(e.target.value) || 0)),
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Center Y</label>
+                <input
+                  type="number"
+                  min={WORLD_MIN}
+                  max={WORLD_MAX}
+                  className={inputClass}
+                  value={zoneCenterY}
+                  onChange={(e) =>
+                    setZoneCenterY(
+                      Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(e.target.value) || 0)),
+                    )
+                  }
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Radius (cells)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={WORLD_SIZE}
+                  className={inputClass}
+                  value={zoneRadius}
+                  onChange={(e) => setZoneRadius(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={busy} onClick={handleSaveSafeZone} className={primaryBtn}>
+                💾 Save Safe Zone
+              </button>
+              <button
+                type="button"
+                disabled={busy || !safeZone}
+                onClick={() => {
+                  if (safeZone) {
+                    setZoneName(safeZone.name);
+                    setZoneCenterX(safeZone.centerX);
+                    setZoneCenterY(safeZone.centerY);
+                    setZoneRadius(safeZone.radius);
+                  }
+                }}
+                className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-bold px-3 py-1.5 rounded-lg transition"
+              >
+                ↩️ Reset
+              </button>
+              {safeZone && (
+                <span className="font-mono text-[10px] text-gray-500 text-right ml-auto">
+                  saved: {safeZone.name} · [{safeZone.centerX}:{safeZone.centerY}] · r=
+                  {safeZone.radius}
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Live preview of the circle on the whole world grid */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                👁️ World preview
+              </span>
+              <span className="font-mono text-[10px] text-gray-500">
+                center [{zoneCenterX}:{zoneCenterY}] · radius {zoneRadius} · {WORLD_SIZE}×
+                {WORLD_SIZE} cells ({WORLD_MIN}…{WORLD_MAX})
+              </span>
+            </div>
+            <div className="relative aspect-square w-full max-w-[420px] mx-auto overflow-hidden rounded-xl border border-gray-700 bg-gray-950">
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(to right, rgba(148,163,184,0.2) 1px, transparent 1px), linear-gradient(to top, rgba(148,163,184,0.2) 1px, transparent 1px)",
+                  backgroundSize: "10% 10%",
+                }}
+              />
+              <div className="pointer-events-none absolute left-1/2 top-0 h-full w-px bg-blue-400/30" />
+              <div className="pointer-events-none absolute top-1/2 left-0 w-full h-px bg-blue-400/30" />
+              <div
+                className="pointer-events-none absolute z-[5] rounded-full border-2 border-blue-300/80 bg-blue-400/20 shadow-[0_0_30px_rgba(96,165,250,0.55)]"
+                style={{
+                  left: `${((zoneCenterX - WORLD_MIN - zoneRadius) / WORLD_SIZE) * 100}%`,
+                  bottom: `${((zoneCenterY - WORLD_MIN - zoneRadius) / WORLD_SIZE) * 100}%`,
+                  width: `${((zoneRadius * 2 + 1) / WORLD_SIZE) * 100}%`,
+                  aspectRatio: "1",
+                }}
+              />
+              <span
+                className="pointer-events-none absolute z-10 h-[7px] w-[7px] rounded-full border border-white bg-white"
+                style={{
+                  left: `${((zoneCenterX - WORLD_MIN + 0.5) / WORLD_SIZE) * 100}%`,
+                  bottom: `${((zoneCenterY - WORLD_MIN + 0.5) / WORLD_SIZE) * 100}%`,
+                  transform: "translate(-50%, 50%)",
+                }}
+              />
+            </div>
+            <span className="text-[10px] text-gray-500">
+              Blue circle = safe zone (changes live with the form, saved only after pressing
+              “Save Safe Zone”). The axes cross at cell (0,0) — the default village.
+            </span>
           </div>
         </div>
       )}

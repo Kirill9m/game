@@ -45,10 +45,13 @@ import spring.backend.game.dto.AdminDtos.UpdatePlayerRequest;
 import spring.backend.game.dto.AdminDtos.UpdateQuestRequest;
 import spring.backend.game.dto.AdminDtos.UpdateWeaponTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
+import spring.backend.game.dto.AdminDtos.UpdateWorldZoneRequest;
 import spring.backend.game.dto.GameMapResponse;
+import spring.backend.game.dto.WorldZoneResponse;
 import spring.backend.game.service.AdminService;
 import spring.backend.game.service.GameMapService;
 import spring.backend.game.service.WorldCellService;
+import spring.backend.game.service.WorldZoneService;
 
 /**
  * Admin panel API. Every endpoint (except the code-protected bootstrap)
@@ -64,6 +67,7 @@ public class AdminController {
     private final AdminService adminService;
     private final WorldCellService worldCellService;
     private final GameMapService gameMapService;
+    private final WorldZoneService worldZoneService;
 
     // --- BOOTSTRAP (first admin) ---
 
@@ -377,6 +381,30 @@ public class AdminController {
         adminService.requireAdmin(playerId);
         adminService.deleteEnemyType(enemyId);
         return ResponseEntity.noContent().build();
+    }
+
+    // --- WORLD ZONE (single safe zone / village circle) ---
+
+    @GetMapping("/world-zones")
+    public ResponseEntity<WorldZoneResponse> getWorldZone(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(worldZoneService.getSafeZone());
+    }
+
+    /** Create or update the safe zone (name, center, radius). */
+    @PutMapping("/world-zones")
+    public ResponseEntity<WorldZoneResponse> updateWorldZone(
+            @RequestParam String playerId,
+            @RequestBody UpdateWorldZoneRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(worldZoneService.updateSafeZone(
+                request.name(),
+                request.centerX() == null ? 0 : request.centerX(),
+                request.centerY() == null ? 0 : request.centerY(),
+                request.radius() == null ? 1 : request.radius()));
     }
 
     // --- WORLD CELLS (per-cell settings: blocked / radiation / ambush) ---

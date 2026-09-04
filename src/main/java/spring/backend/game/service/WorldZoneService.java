@@ -1,6 +1,7 @@
 package spring.backend.game.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.dto.WorldZoneResponse;
@@ -24,6 +25,27 @@ public class WorldZoneService {
         long distanceX = (long) x - zone.getCenterX();
         long distanceY = (long) y - zone.getCenterY();
         return distanceX * distanceX + distanceY * distanceY <= (long) zone.getRadius() * zone.getRadius();
+    }
+
+    /**
+     * Create or update the single safe zone (there is only one zone, used as the
+     * village). When no zone is configured yet, a new one is created.
+     */
+    @Transactional
+    public WorldZoneResponse updateSafeZone(String name, int centerX, int centerY, int radius) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Safe zone name is required");
+        }
+        if (radius <= 0) {
+            throw new IllegalArgumentException("Safe zone radius must be positive");
+        }
+        WorldZoneEntity zone = worldZoneRepository.findFirstByOrderByIdAsc().orElseGet(() ->
+                WorldZoneEntity.builder().build());
+        zone.setName(name.trim());
+        zone.setCenterX(centerX);
+        zone.setCenterY(centerY);
+        zone.setRadius(radius);
+        return toResponse(worldZoneRepository.save(zone));
     }
 
     /**

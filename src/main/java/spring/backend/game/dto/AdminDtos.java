@@ -273,4 +273,12 @@ public final class AdminDtos {
 
     public record SetRoleRequest(String role) {
     }
+
+    /** Update payload for the world safe zone (village circle). */
+    public record UpdateWorldZoneRequest(
+            String name,
+            Integer centerX,
+            Integer centerY,
+            Integer radius) {
+    }
 }
