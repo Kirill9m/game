@@ -68,7 +68,9 @@ public final class AdminDtos {
             int damage,
             int attackRange,
             int width,
-            int height) {
+            int height,
+            int defense,
+            String equipmentSlot) {
     }
 
     public record AdminWeaponTypeDto(
@@ -174,7 +176,9 @@ public final class AdminDtos {
             Integer damage,
             Integer attackRange,
             Integer width,
-            Integer height) {
+            Integer height,
+            Integer defense,
+            String equipmentSlot) {
     }
 
     public record CreateWeaponTypeRequest(

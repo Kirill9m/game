@@ -35,6 +35,8 @@ export function CombatModeControls({
 }: CombatModeControlsProps) {
   const locked = !isMyTurn || isReplaying || plannedActions.length >= actionPoints;
   const postureIndex = POSTURES.findIndex((p) => p.value === plannedPosture);
+  // Only weapons can be switched mid-combat; armor is equipped in the inventory.
+  const weapons = inventory.filter((item) => item.type === "WEAPON");
 
   return (
     <motion.div
@@ -73,13 +75,13 @@ export function CombatModeControls({
         </div>
 
         {/* Equipment */}
-        {inventory.length > 0 && (
+        {weapons.length > 0 && (
           <div className="min-h-0 lg:flex-1 lg:min-w-0 lg:flex lg:items-center lg:gap-2">
             <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 lg:mb-0 lg:shrink-0">
               Active weapon
             </p>
             <div className="flex w-full gap-1.5 overflow-x-auto pb-0.5 lg:pb-0">
-              {inventory.map((item, index) => {
+              {weapons.map((item, index) => {
                 const selected = item.code === equippedItemCode;
                 return (
                   <motion.button

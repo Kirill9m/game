@@ -22,6 +22,7 @@ import WorldMap from "@/components/WorldMap";
 import CombatArena from "@/components/CombatArena";
 import { combatApi } from "@/services/combatApi";
 import InventoryPanel from "@/components/InventoryPanel";
+import EquipmentPanel from "@/components/EquipmentPanel";
 import LootPanel from "@/components/LootPanel";
 import NpcDialog from "@/components/NpcDialog";
 import { NpcInfo } from "@/types/npc";
@@ -510,6 +511,11 @@ export default function GameMapPage() {
                             );
                           }
                           setInSafeZone(state.inSafeZone ?? false);
+                          // Persist post-combat health into the HUD immediately.
+                          const newHealth = state.health;
+                          if (typeof newHealth === "number") {
+                            setStats((prev) => ({ ...prev, health: newHealth }));
+                          }
                           return state;
                         })
                         .catch(() => {});
@@ -571,12 +577,19 @@ export default function GameMapPage() {
                   {/* Контент активного окна */}
                   <div className="flex-1 min-h-0 overflow-y-auto pr-1">
                     {activeTab === "inventory" && (
-                      <InventoryPanel
-                        items={inventory}
-                        playerId={playerId}
-                        onItemsChange={setInventory}
-                        onOpenMap={openMap}
-                      />
+                      <div className="flex flex-col gap-3">
+                        <EquipmentPanel
+                          items={inventory}
+                          playerId={playerId}
+                          onItemsChange={setInventory}
+                        />
+                        <InventoryPanel
+                          items={inventory}
+                          playerId={playerId}
+                          onItemsChange={setInventory}
+                          onOpenMap={openMap}
+                        />
+                      </div>
                     )}
 
                     {activeTab === "territory" && (

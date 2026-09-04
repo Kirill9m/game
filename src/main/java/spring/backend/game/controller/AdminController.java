@@ -273,7 +273,9 @@ public class AdminController {
                 request.damage() == null ? 0 : request.damage(),
                 request.attackRange() == null ? 0 : request.attackRange(),
                 request.width() == null ? 1 : request.width(),
-                request.height() == null ? 1 : request.height()));
+                request.height() == null ? 1 : request.height(),
+                request.defense() == null ? 0 : request.defense(),
+                request.equipmentSlot()));
     }
 
     /** Random item generator: random type (WEAPON/ARMOR/UTILITY), name and stats. */

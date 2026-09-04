@@ -100,6 +100,9 @@ public class AdminService {
     private static final List<String> ITEM_PREFIXES = List.of(
             "Simple", "Fine", "Rare", "Ancient", "Traveler's", "Hunter's", "Wanderer's", "Mystic");
 
+    /** Valid armor equipment slots, in the order used by the random generator. */
+    private static final List<String> ARMOR_SLOTS = List.of("HELMET", "BODY", "LEGS", "FEET");
+
     /** Name pools for the random enemy generator. */
     private static final List<String> ENEMY_NAMES = List.of(
             "Goblin", "Wolf", "Bandit", "Skeleton", "Orc Brute", "Swamp Slime",
@@ -575,27 +578,42 @@ public class AdminService {
     @Transactional
     public AdminDtos.AdminItemDto createItem(String code, String name, String type, String weaponTypeCode,
                                              int damage, int attackRange,
-                                             int width, int height) {
+                                             int width, int height, int defense, String equipmentSlot) {
         String normalizedCode = requireNonBlank(code, "Item code is required").trim().toUpperCase(Locale.ROOT);
         if (itemRepository.findByCodeIgnoreCase(normalizedCode).isPresent()) {
             throw new IllegalArgumentException("Item code already exists: " + normalizedCode);
         }
+        String normalizedType = type == null || type.isBlank() ? "UTILITY" : type.trim().toUpperCase(Locale.ROOT);
+        String normalizedSlot = equipmentSlot == null || equipmentSlot.isBlank()
+                ? null
+                : equipmentSlot.trim().toUpperCase(Locale.ROOT);
+        if ("ARMOR".equals(normalizedType)) {
+            if (normalizedSlot == null || !ARMOR_SLOTS.contains(normalizedSlot)) {
+                throw new IllegalArgumentException(
+                        "ARMOR items require an equipmentSlot of " + String.join(", ", ARMOR_SLOTS));
+            }
+        } else {
+            normalizedSlot = null;
+        }
         ItemEntity item = itemRepository.save(ItemEntity.builder()
                 .code(normalizedCode)
                 .name(requireNonBlank(name, "Item name is required").trim())
-                .type(type == null || type.isBlank() ? "UTILITY" : type.trim().toUpperCase(Locale.ROOT))
+                .type(normalizedType)
                 .weaponTypeCode(normalizeWeaponTypeCode(weaponTypeCode))
                 .damage(Math.max(0, damage))
                 .attackRange(Math.max(0, attackRange))
                 .width(Math.max(1, width))
                 .height(Math.max(1, height))
+                .defense("ARMOR".equals(normalizedType) ? Math.max(0, defense) : 0)
+                .equipmentSlot(normalizedSlot)
                 .build());
         return toItemDto(item);
     }
 
     /**
      * Item generator: creates an item with a random name, type and stats.
-     * Types: WEAPON (damage + short range), ARMOR (no damage, 1x1), UTILITY.
+     * Types: WEAPON (damage + short range), ARMOR (defense + equipment slot),
+     * UTILITY.
      */
     @Transactional
     public AdminDtos.AdminItemDto generateRandomItem() {
@@ -609,6 +627,8 @@ public class AdminService {
         int attackRange = 0;
         int width = 1;
         int height = 1;
+        int defense = 0;
+        String equipmentSlot = null;
         switch (type) {
             case "WEAPON" -> {
                 name = WEAPON_PREFIXES.get(random.nextInt(WEAPON_PREFIXES.size())) + " "
@@ -619,6 +639,8 @@ public class AdminService {
             case "ARMOR" -> {
                 name = ITEM_PREFIXES.get(random.nextInt(ITEM_PREFIXES.size())) + " "
                         + ARMOR_NAMES.get(random.nextInt(ARMOR_NAMES.size()));
+                equipmentSlot = ARMOR_SLOTS.get(random.nextInt(ARMOR_SLOTS.size()));
+                defense = 1 + random.nextInt(5); // 1..5 damage reduction
             }
             default -> {
                 name = ITEM_PREFIXES.get(random.nextInt(ITEM_PREFIXES.size())) + " "
@@ -631,7 +653,7 @@ public class AdminService {
         }
         String code = "ITEM_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
         String weaponTypeCode = "WEAPON".equals(type) ? randomWeaponTypeCode() : null;
-        AdminDtos.AdminItemDto created = createItem(code, name, type, weaponTypeCode, damage, attackRange, width, height);
+        AdminDtos.AdminItemDto created = createItem(code, name, type, weaponTypeCode, damage, attackRange, width, height, defense, equipmentSlot);
         log.info("Generated random item '{}' ({}, {})", created.name(), created.code(), type);
         return created;
     }
@@ -972,7 +994,8 @@ public class AdminService {
 
     private AdminDtos.AdminItemDto toItemDto(ItemEntity item) {
         return new AdminDtos.AdminItemDto(item.getId(), item.getCode(), item.getName(), item.getType(),
-                item.getWeaponTypeCode(), item.getDamage(), item.getAttackRange(), item.getWidth(), item.getHeight());
+                item.getWeaponTypeCode(), item.getDamage(), item.getAttackRange(), item.getWidth(), item.getHeight(),
+                item.getDefense(), item.getEquipmentSlot());
     }
 
     private AdminDtos.AdminWeaponTypeDto toWeaponTypeDto(WeaponTypeEntity weaponType) {

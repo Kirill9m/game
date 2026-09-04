@@ -60,6 +60,8 @@ public class LootService {
                         .gridX(0)
                         .gridY(0)
                         .equipped(false)
+                        .defense(entry.getItem().getDefense())
+                        .equipmentSlot(entry.getItem().getEquipmentSlot())
                         .build())
                 .toList();
     }

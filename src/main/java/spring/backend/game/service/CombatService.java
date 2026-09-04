@@ -70,14 +70,16 @@ public class CombatService {
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(attackerId)
                 .player2Id(targetId)
-                .p1EquippedItemCode("PISTOL")
-                .p2EquippedItemCode("PISTOL")
+                .p1EquippedItemCode(equippedWeaponCode(attackerId))
+                .p2EquippedItemCode(equippedWeaponCode(targetId))
                 .currentTurnPlayerId("")
                 .actionPoints(3)
                 .p1X(1)
                 .p1Y(5)
                 .p2X(8)
                 .p2Y(5)
+                .p1Health(attacker.getHealth())
+                .p2Health(target.getHealth())
                 .build();
         combat.setObstacles(generateObstacles(attacker.getPositionX(), attacker.getPositionY()));
         return combatRepository.save(combat);
@@ -97,7 +99,7 @@ public class CombatService {
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(playerId)
                 .player2Id("bot_" + enemy.getCode().toLowerCase())
-                .p1EquippedItemCode("PISTOL")
+                .p1EquippedItemCode(equippedWeaponCode(playerId))
                 .enemyType(enemy)
                 .currentTurnPlayerId(playerId)
                 .actionPoints(enemy.getActionPoints())
@@ -105,6 +107,7 @@ public class CombatService {
                 .p1Y(5)
                 .p2X(8)
                 .p2Y(5)
+                .p1Health(player.getHealth())
                 .p2Health(enemy.getMaxHealth())
                 .build();
         combat.setObstacles(generateObstacles(player.getPositionX(), player.getPositionY()));
@@ -286,6 +289,7 @@ public class CombatService {
         String winnerId = playerId.equals(combat.getPlayer1Id()) ? combat.getPlayer2Id() : combat.getPlayer1Id();
         combat.setWinnerId(winnerId);
         combat.setStatus("FINISHED");
+        persistCombatHealth(combat);
         // Surrender counts as a defeat: the field loot bag is dropped outside the city.
         lootService.dropBagOutsideCity(playerId);
         return combatRepository.save(combat);
@@ -439,9 +443,11 @@ public class CombatService {
                     : isAlive(combat, false);
             if (!winnerIsAlive || combat.getLoot().isEmpty()) {
                 combat.setStatus("FINISHED");
+                persistCombatHealth(combat);
             }
         } else if (combat.getP1Health() == 0 && combat.getP2Health() == 0) {
             combat.setStatus("FINISHED");
+            persistCombatHealth(combat);
         }
         combat.setP1Plan(null);
         combat.setP2Plan(null);
@@ -593,9 +599,11 @@ public class CombatService {
                     : isAlive(combat, false);
             if (!winnerIsAlive || combat.getLoot().isEmpty()) {
                 combat.setStatus("FINISHED");
+                persistCombatHealth(combat);
             }
         } else if (combat.getP1Health() == 0 && combat.getP2Health() == 0) {
             combat.setStatus("FINISHED");
+            persistCombatHealth(combat);
         }
         return combatRepository.save(combat);
     }
@@ -729,9 +737,27 @@ public class CombatService {
         // Пуля не блокируется препятствиями — она проходит насквозь, но каждое
         // препятствие на линии огня получает урон и может разрушиться.
         damageObstaclesAlongLine(combat, attackerX, attackerY, actualTargetX, actualTargetY, shotDamage);
-        if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - shotDamage));
-        else combat.setP1Health(Math.max(0, combat.getP1Health() - shotDamage));
-        return shotDamage;
+        // Экипированная броня защитника снижает входящий урон.
+        String defenderId = player1 ? combat.getPlayer2Id() : combat.getPlayer1Id();
+        int actualDamage = Math.max(0, shotDamage - armorDefense(defenderId));
+        if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - actualDamage));
+        else combat.setP1Health(Math.max(0, combat.getP1Health() - actualDamage));
+        return actualDamage;
+    }
+
+    /**
+     * Sums the defense of every equipped armor piece of the given player.
+     * Bots (whose ids start with {@code bot_}) have no inventory and always
+     * return {@code 0}.
+     */
+    private int armorDefense(String playerId) {
+        if (playerId == null || playerId.startsWith("bot_")) {
+            return 0;
+        }
+        return playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(entry -> entry.isEquipped() && "ARMOR".equalsIgnoreCase(entry.getItem().getType()))
+                .mapToInt(entry -> entry.getItem().getDefense())
+                .sum();
     }
 
     private int movementRange(String posture) {
@@ -895,6 +921,27 @@ public class CombatService {
 
     private boolean player1HasItem(String playerId, String itemCode) {
         return playerInventoryRepository.existsByPlayerIdAndItemCodeIgnoreCase(playerId, itemCode);
+    }
+
+    /** The item code of the weapon currently equipped by the player, or PISTOL if none. */
+    private String equippedWeaponCode(String playerId) {
+        return playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
+                .filter(entry -> entry.isEquipped() && "WEAPON".equalsIgnoreCase(entry.getItem().getType()))
+                .map(entry -> entry.getItem().getCode())
+                .findFirst()
+                .orElse("PISTOL");
+    }
+
+    /**
+     * Writes the combat health back to the participating players so damage is not
+     * "healed" after the battle ends. Bot ids ({@code bot_*}) resolve to no player
+     * and are skipped automatically.
+     */
+    private void persistCombatHealth(CombatSessionEntity combat) {
+        playerRepository.findById(combat.getPlayer1Id())
+                .ifPresent(player -> player.setHealth(Math.max(0, combat.getP1Health())));
+        playerRepository.findById(combat.getPlayer2Id())
+                .ifPresent(player -> player.setHealth(Math.max(0, combat.getP2Health())));
     }
 
     private ItemEntity getWeapon(CombatSessionEntity combat, boolean player1) {

@@ -19,6 +19,10 @@ export interface InventoryItem {
   gridX: number;
   gridY: number;
   equipped: boolean;
+  /** Flat damage reduction while equipped (armor). */
+  defense?: number;
+  /** Armor slot: HELMET / BODY / LEGS / FEET. */
+  equipmentSlot?: string | null;
 }
 
 export interface MoveResponse {

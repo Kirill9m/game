@@ -62,20 +62,44 @@ public class InventoryService {
                         .gridX(entry.getGridX())
                         .gridY(entry.getGridY())
                         .equipped(entry.isEquipped())
+                        .defense(entry.getItem().getDefense())
+                        .equipmentSlot(entry.getItem().getEquipmentSlot())
                         .build())
                 .toList();
     }
 
+    /**
+     * Toggles the equipped state of an item. Only one item can be equipped per
+     * equipment group: a single weapon, or a single armor piece per slot
+     * (HELMET, BODY, LEGS, FEET). Equipping a new item automatically unequips
+     * any other item from the same group.
+     */
     @Transactional
     public List<InventoryItemResponse> equipItem(String playerId, String itemCode) {
-        PlayerInventoryEntity selected = inventoryRepository
-                .findByPlayerIdOrderByItemNameAsc(playerId).stream()
+        List<PlayerInventoryEntity> inventory = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId);
+        PlayerInventoryEntity selected = inventory.stream()
                 .filter(entry -> entry.getItem().getCode().equalsIgnoreCase(itemCode))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
-        inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId)
-                .forEach(entry -> entry.setEquipped(entry == selected));
+        String group = equipmentGroup(selected.getItem());
+        boolean newEquipped = !selected.isEquipped();
+        for (PlayerInventoryEntity entry : inventory) {
+            if (entry.getItem().getCode().equalsIgnoreCase(itemCode)) {
+                entry.setEquipped(newEquipped);
+            } else if (equipmentGroup(entry.getItem()).equals(group)) {
+                entry.setEquipped(false);
+            }
+        }
         return getInventory(playerId);
+    }
+
+    private String equipmentGroup(ItemEntity item) {
+        String type = item.getType() == null ? "" : item.getType().toUpperCase();
+        if ("WEAPON".equals(type)) {
+            return "WEAPON";
+        }
+        String slot = item.getEquipmentSlot() == null ? "" : item.getEquipmentSlot().toUpperCase();
+        return type + ":" + slot;
     }
 
     @Transactional

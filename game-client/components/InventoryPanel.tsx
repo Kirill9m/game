@@ -199,9 +199,15 @@ export default function InventoryPanel({
                   {item.width}x{item.height}
                 </span>
 
-                {(item.type === "WEAPON" || item.type === "UTILITY") && (
+                {item.type === "ARMOR" && typeof item.defense === "number" && (
+                  <span className="text-[10px] text-emerald-200/90 pointer-events-none">
+                    🛡 {item.defense}
+                  </span>
+                )}
+
+                {(item.type === "WEAPON" || item.type === "ARMOR" || item.type === "UTILITY") && (
                   <div className="flex gap-1 z-20">
-                    {item.type === "WEAPON" && (
+                    {(item.type === "WEAPON" || item.type === "ARMOR") && (
                       <button
                         type="button"
                         onClick={(e) => {

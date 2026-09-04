@@ -16,6 +16,8 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
   const [width, setWidth] = useState(1);
   const [height, setHeight] = useState(1);
   const [wCode, setWCode] = useState("");
+  const [defense, setDefense] = useState(2);
+  const [slot, setSlot] = useState("HELMET");
 
   const act = async (fn: () => Promise<void>, msg?: string) => {
     try { await fn(); if (msg) setNotice(msg); await onRefresh(); }
@@ -41,10 +43,19 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
           <div><label className={labelClass}>Attack Range</label><input type="number" min={0} className={inputClass} value={range} onChange={(e) => setRange(Number(e.target.value) || 0)} /></div>
           <div><label className={labelClass}>Width</label><input type="number" min={1} className={inputClass} value={width} onChange={(e) => setWidth(Number(e.target.value) || 1)} /></div>
           <div><label className={labelClass}>Height</label><input type="number" min={1} className={inputClass} value={height} onChange={(e) => setHeight(Number(e.target.value) || 1)} /></div>
+          {type === "ARMOR" && (
+            <>
+              <div><label className={labelClass}>Defense (damage reduction)</label><input type="number" min={0} className={inputClass} value={defense} onChange={(e) => setDefense(Number(e.target.value) || 0)} /></div>
+              <div><label className={labelClass}>Equipment Slot</label>
+                <select className={inputClass} value={slot} onChange={(e) => setSlot(e.target.value)}>
+                  <option value="HELMET">HELMET</option><option value="BODY">BODY</option><option value="LEGS">LEGS</option><option value="FEET">FEET</option>
+                </select></div>
+            </>
+          )}
         </div>
         <button type="button" disabled={busy} onClick={() => act(async () => {
           if (!code.trim() || !name.trim()) throw new Error("Code and name required");
-          await adminApi.createItem(playerId, { code: code.trim(), name: name.trim(), type, weaponTypeCode: wCode || null, damage, attackRange: range, width, height });
+          await adminApi.createItem(playerId, { code: code.trim(), name: name.trim(), type, weaponTypeCode: wCode || null, damage, attackRange: range, width, height, defense: type === "ARMOR" ? defense : 0, equipmentSlot: type === "ARMOR" ? slot : null });
           setCode(""); setName(""); setNotice("Item created");
         }, "")} className={primaryBtn}>➕ Create Item</button>
       </div>
@@ -60,6 +71,8 @@ export default function ItemsSection({ playerId, busy, setError, setNotice, onRe
                 <span className="bg-red-900/40 border border-red-800 text-red-200 px-1.5 py-0.5 rounded text-[9px]">⚔️ {it.damage}</span>
                 <span className="bg-blue-900/40 border border-blue-800 text-blue-200 px-1.5 py-0.5 rounded text-[9px]">📏 {it.attackRange}</span>
                 {it.weaponTypeCode && <span className="bg-green-900/40 border border-green-800 text-green-200 px-1.5 py-0.5 rounded text-[9px]">{it.weaponTypeCode}</span>}
+                {it.type === "ARMOR" && <span className="bg-purple-900/40 border border-purple-800 text-purple-200 px-1.5 py-0.5 rounded text-[9px]">🛡 {it.defense}</span>}
+                {it.equipmentSlot && <span className="bg-cyan-900/40 border border-cyan-800 text-cyan-200 px-1.5 py-0.5 rounded text-[9px]">{it.equipmentSlot}</span>}
               </div>
             </div>
             <button type="button" disabled={busy} onClick={() => act(async () => { await adminApi.deleteItem(playerId, it.id); }, "Deleted")} className={dangerBtn}>🗑</button>

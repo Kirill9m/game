@@ -303,6 +303,29 @@ public class DataInitializer implements CommandLineRunner {
                 // Backfill weapon types on pre-existing seeded weapons.
                 backfillWeaponType("KNIFE", "KNIFE");
                 backfillWeaponType("PISTOL", "PISTOL");
+                // Starter armor set (one piece per equipment slot).
+                saveArmorIfMissing("LEATHER_HELMET", "Leather Helmet", "HELMET", 2);
+                saveArmorIfMissing("LEATHER_VEST", "Leather Vest", "BODY", 4);
+                saveArmorIfMissing("LEATHER_LEGS", "Leather Leggings", "LEGS", 3);
+                saveArmorIfMissing("LEATHER_BOOTS", "Leather Boots", "FEET", 1);
+        }
+
+        private void saveArmorIfMissing(String code, String name, String slot, int defense) {
+                if (itemRepository.findByCodeIgnoreCase(code).isPresent()) {
+                        return;
+                }
+                itemRepository.save(ItemEntity.builder()
+                                .code(code)
+                                .name(name)
+                                .type("ARMOR")
+                                .weaponTypeCode(null)
+                                .damage(0)
+                                .attackRange(0)
+                                .width(1)
+                                .height(1)
+                                .defense(defense)
+                                .equipmentSlot(slot)
+                                .build());
         }
 
         private void backfillWeaponType(String itemCode, String weaponTypeCode) {

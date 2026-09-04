@@ -51,6 +51,8 @@ export interface AdminItem {
   attackRange: number;
   width: number;
   height: number;
+  defense: number;
+  equipmentSlot: string | null;
 }
 
 export interface CreateNpcPayload {
@@ -85,6 +87,8 @@ export interface CreateItemPayload {
   attackRange: number;
   width: number;
   height: number;
+  defense?: number;
+  equipmentSlot?: string | null;
 }
 
 /** A configurable weapon type; proficiency in it raises combat accuracy. */

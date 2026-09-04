@@ -18,4 +18,6 @@ public class InventoryItemResponse {
     private int gridX;
     private int gridY;
     private boolean equipped;
+    private int defense;
+    private String equipmentSlot;
 }

@@ -50,4 +50,13 @@ public class ItemEntity {
 
     @Column(nullable = false)
     private int height;
+
+    /** Flat damage reduction provided while this armor piece is equipped (0 for weapons/utility). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    @Builder.Default
+    private int defense = 0;
+
+    /** Armor slot (HELMET, BODY, LEGS, FEET); {@code null} for weapons and utility items. */
+    @Column(name = "equipment_slot", length = 20)
+    private String equipmentSlot;
 }
