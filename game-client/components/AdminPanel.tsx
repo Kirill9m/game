@@ -11,6 +11,7 @@ import type {
   AdminNpc,
   AdminPlayer,
   AdminQuest,
+  AdminWeaponType,
   AdminWorldCell,
 } from "@/types/admin";
 import type { WorldZone } from "@/types/game";
@@ -19,7 +20,15 @@ interface Props {
   playerId: string;
 }
 
-type Section = "quests" | "dialogues" | "items" | "enemies" | "players" | "world" | "maps";
+type Section =
+  | "quests"
+  | "dialogues"
+  | "items"
+  | "weapons"
+  | "enemies"
+  | "players"
+  | "world"
+  | "maps";
 
 // --- World map (admin cell editor): big map, movable viewport ---
 // Matches the game world (WorldConstants): 1000×1000 cells, negative allowed.
@@ -52,6 +61,7 @@ export default function AdminPanel({ playerId }: Props) {
   const [npcs, setNpcs] = useState<AdminNpc[]>([]);
   const [quests, setQuests] = useState<AdminQuest[]>([]);
   const [items, setItems] = useState<AdminItem[]>([]);
+  const [weaponTypes, setWeaponTypes] = useState<AdminWeaponType[]>([]);
   const [enemies, setEnemies] = useState<AdminEnemyType[]>([]);
   const [worldCells, setWorldCells] = useState<AdminWorldCell[]>([]);
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
@@ -89,6 +99,18 @@ export default function AdminPanel({ playerId }: Props) {
   const [itemRange, setItemRange] = useState(1);
   const [itemWidth, setItemWidth] = useState(1);
   const [itemHeight, setItemHeight] = useState(1);
+  const [itemWeaponType, setItemWeaponType] = useState("");
+
+  // --- Weapon type form state ---
+  const [wtCode, setWtCode] = useState("");
+  const [wtName, setWtName] = useState("");
+  const [wtAccPerLevel, setWtAccPerLevel] = useState(5);
+  const [wtMaxAcc, setWtMaxAcc] = useState(25);
+  const [editingWtId, setEditingWtId] = useState<string>("");
+
+  // --- Player weapon proficiency state ---
+  const [proficiencyTargetId, setProficiencyTargetId] = useState<string>("");
+  const [profDrafts, setProfDrafts] = useState<Record<string, number>>({});
 
   // --- Enemy form state ---
   const [enemyCode, setEnemyCode] = useState("");
@@ -154,11 +176,12 @@ export default function AdminPanel({ playerId }: Props) {
   );
 
   const loadAll = useCallback(async () => {
-    const [p, n, q, i, e, w, m] = await Promise.all([
+    const [p, n, q, i, wt, e, w, m] = await Promise.all([
       adminApi.getPlayers(playerId),
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
+      adminApi.getWeaponTypes(playerId),
       adminApi.getEnemyTypes(playerId),
       adminApi.getWorldCells(playerId),
       adminApi.getMaps(playerId),
@@ -167,6 +190,7 @@ export default function AdminPanel({ playerId }: Props) {
     setNpcs(n);
     setQuests(q);
     setItems(i);
+    setWeaponTypes(wt);
     setEnemies(e);
     setWorldCells(w);
     setMaps(m);
@@ -181,17 +205,19 @@ export default function AdminPanel({ playerId }: Props) {
       adminApi.getNpcs(playerId),
       adminApi.getQuests(playerId),
       adminApi.getItems(playerId),
+      adminApi.getWeaponTypes(playerId),
       adminApi.getEnemyTypes(playerId),
       adminApi.getWorldCells(playerId),
       adminApi.getMaps(playerId),
       playerApi.getSafeZone().catch(() => null),
     ])
-      .then(([p, n, q, i, e, w, m, zone]) => {
+      .then(([p, n, q, i, wt, e, w, m, zone]) => {
         if (cancelled) return;
         setPlayers(p);
         setNpcs(n);
         setQuests(q);
         setItems(i);
+        setWeaponTypes(wt);
         setEnemies(e);
         setWorldCells(w);
         setMaps(m);
@@ -365,6 +391,7 @@ export default function AdminPanel({ playerId }: Props) {
         code: itemCode.trim(),
         name: itemName.trim(),
         type: itemType,
+        weaponTypeCode: itemType === "WEAPON" && itemWeaponType ? itemWeaponType : null,
         damage: itemDamage,
         attackRange: itemRange,
         width: itemWidth,
@@ -382,6 +409,86 @@ export default function AdminPanel({ playerId }: Props) {
       await loadAll();
       setNotice("Item deleted");
     });
+
+  // --- Weapon type handlers ---
+
+  const resetWeaponTypeForm = () => {
+    setWtCode("");
+    setWtName("");
+    setWtAccPerLevel(5);
+    setWtMaxAcc(25);
+    setEditingWtId("");
+  };
+
+  const handleStartEditWeaponType = (weaponType: AdminWeaponType) => {
+    setEditingWtId(weaponType.id);
+    setWtCode(weaponType.code);
+    setWtName(weaponType.name);
+    setWtAccPerLevel(weaponType.accuracyPerLevel);
+    setWtMaxAcc(weaponType.maxAccuracy);
+  };
+
+  const handleSaveWeaponType = () =>
+    run(async () => {
+      if (!wtCode.trim() || !wtName.trim()) {
+        throw new Error("Weapon type code and name are required");
+      }
+      if (editingWtId) {
+        await adminApi.updateWeaponType(playerId, editingWtId, {
+          name: wtName.trim(),
+          accuracyPerLevel: wtAccPerLevel,
+          maxAccuracy: wtMaxAcc,
+        });
+        setNotice("Weapon type updated");
+      } else {
+        await adminApi.createWeaponType(playerId, {
+          code: wtCode.trim(),
+          name: wtName.trim(),
+          accuracyPerLevel: wtAccPerLevel,
+          maxAccuracy: wtMaxAcc,
+        });
+        setNotice("Weapon type created");
+      }
+      resetWeaponTypeForm();
+      await loadAll();
+    });
+
+  const handleDeleteWeaponType = (weaponTypeId: string) =>
+    run(async () => {
+      await adminApi.deleteWeaponType(playerId, weaponTypeId);
+      await loadAll();
+      setNotice("Weapon type deleted");
+    });
+
+  // --- Player weapon proficiency handlers ---
+
+  const openProficiencyEditor = (player: AdminPlayer) => {
+    setProficiencyTargetId(player.id);
+    const drafts: Record<string, number> = {};
+    weaponTypes.forEach((weaponType) => {
+      const existing = (player.proficiencies ?? []).find(
+        (p) => p.weaponTypeCode === weaponType.code,
+      );
+      drafts[weaponType.code] = existing?.level ?? 0;
+    });
+    setProfDrafts(drafts);
+  };
+
+  const handleSaveProficiency = (weaponTypeCode: string) =>
+    run(async () => {
+      if (!proficiencyTargetId) return;
+      await adminApi.setPlayerProficiency(playerId, proficiencyTargetId, {
+        weaponTypeCode,
+        level: Math.max(0, profDrafts[weaponTypeCode] ?? 0),
+      });
+      setNotice("Proficiency saved");
+      await loadAll();
+    });
+
+  const handleCloseProficiency = () => {
+    setProficiencyTargetId("");
+    setProfDrafts({});
+  };
 
   const handleGenerateEnemy = () =>
     run(async () => {
@@ -591,6 +698,7 @@ export default function AdminPanel({ playerId }: Props) {
                 { id: "quests", icon: "🎲", label: "Quest Generator" },
                 { id: "dialogues", icon: "💬", label: "Dialogues" },
                 { id: "items", icon: "⚔️", label: "Items" },
+                { id: "weapons", icon: "🔫", label: "Weapon Types" },
                 { id: "enemies", icon: "👹", label: "Enemies" },
                 { id: "world", icon: "🗺️", label: "World Cells" },
                 { id: "maps", icon: "🧭", label: "Maps" },
@@ -1072,6 +1180,23 @@ export default function AdminPanel({ playerId }: Props) {
                   <option value="UTILITY">UTILITY</option>
                 </select>
               </div>
+              {itemType === "WEAPON" && (
+                <div>
+                  <label className={labelClass}>Weapon type</label>
+                  <select
+                    className={inputClass}
+                    value={itemWeaponType}
+                    onChange={(e) => setItemWeaponType(e.target.value)}
+                  >
+                    <option value="">— none —</option>
+                    {weaponTypes.map((weaponType) => (
+                      <option key={weaponType.code} value={weaponType.code}>
+                        {weaponType.code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className={labelClass}>Damage</label>
                 <input
@@ -1133,6 +1258,11 @@ export default function AdminPanel({ playerId }: Props) {
                     <span className="bg-purple-900/40 border border-purple-800 text-purple-200 px-2 py-0.5 rounded-full text-[10px]">
                       {item.type}
                     </span>
+                    {item.weaponTypeCode && (
+                      <span className="bg-cyan-900/40 border border-cyan-800 text-cyan-200 px-2 py-0.5 rounded-full text-[10px]">
+                        🔫 {item.weaponTypeCode}
+                      </span>
+                    )}
                     <span className="bg-red-900/40 border border-red-800 text-red-200 px-2 py-0.5 rounded-full text-[10px]">
                       ⚔️ {item.damage}
                     </span>
@@ -1156,6 +1286,123 @@ export default function AdminPanel({ playerId }: Props) {
             ))}
             {items.length === 0 && (
               <div className="text-center text-gray-600 text-xs py-4">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+{/* ================= WEAPON TYPES ================= */}
+      {section === "weapons" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-cyan-900/50 rounded-xl p-3 flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+              🔫 Weapon Types — {weaponTypes.length} defined
+            </span>
+            <p className="text-[11px] text-gray-500">
+              Each weapon type has an accuracy bonus per proficiency level and a maximum
+              accuracy bonus. A character's proficiency in a type raises their hit chance
+              in combat (set it in the Players tab).
+            </p>
+            {editingWtId && (
+              <span className="text-[10px] text-cyan-200 font-mono">
+                Editing: {wtCode}
+              </span>
+            )}
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Code</label>
+                <input
+                  className={inputClass}
+                  value={wtCode}
+                  onChange={(e) => setWtCode(e.target.value.toUpperCase())}
+                  placeholder="PISTOL"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Name</label>
+                <input
+                  className={inputClass}
+                  value={wtName}
+                  onChange={(e) => setWtName(e.target.value)}
+                  placeholder="Pistol"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Accuracy per level</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={wtAccPerLevel}
+                  onChange={(e) => setWtAccPerLevel(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Max accuracy bonus</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={wtMaxAcc}
+                  onChange={(e) => setWtMaxAcc(Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" disabled={busy} onClick={handleSaveWeaponType} className={primaryBtn}>
+                {editingWtId ? "💾 Save Weapon Type" : "➕ Create Weapon Type"}
+              </button>
+              {editingWtId && (
+                <button type="button" disabled={busy} onClick={resetWeaponTypeForm} className={dangerBtn}>
+                  ✖ Cancel
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              🔫 All Weapon Types ({weaponTypes.length})
+            </span>
+            {weaponTypes.map((weaponType) => (
+              <div
+                key={weaponType.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">{weaponType.name}</div>
+                  <div className="text-[10px] text-gray-500 font-mono">{weaponType.code}</div>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    <span className="bg-cyan-900/40 border border-cyan-800 text-cyan-200 px-2 py-0.5 rounded-full text-[10px]">
+                      🎯 +{weaponType.accuracyPerLevel}/level
+                    </span>
+                    <span className="bg-blue-900/40 border border-blue-800 text-blue-200 px-2 py-0.5 rounded-full text-[10px]">
+                      cap {weaponType.maxAccuracy}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleStartEditWeaponType(weaponType)}
+                    className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleDeleteWeaponType(weaponType.id)}
+                    className={dangerBtn}
+                  >
+                    🗑 Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            {weaponTypes.length === 0 && (
+              <div className="text-center text-gray-600 text-xs py-4">No weapon types yet.</div>
             )}
           </div>
         </div>
@@ -1886,47 +2133,118 @@ export default function AdminPanel({ playerId }: Props) {
           {players.map((player) => (
             <div
               key={player.id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-2"
+              className="bg-gray-900 border border-gray-800 rounded-xl p-3"
             >
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-100 truncate">
-                  {player.username ?? "Unnamed"}{" "}
-                  <span className="text-[10px] text-gray-500 font-mono">#{player.id.slice(0, 12)}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">
+                    {player.username ?? "Unnamed"}{" "}
+                    <span className="text-[10px] text-gray-500 font-mono">#{player.id.slice(0, 12)}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    Lv {player.level} · 💰 {player.gold} · ⭐ {player.questPoints}
+                  </div>
+                  {(player.proficiencies ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(player.proficiencies ?? []).map((prof) => (
+                        <span
+                          key={prof.weaponTypeCode}
+                          className="bg-cyan-900/40 border border-cyan-800 text-cyan-200 px-2 py-0.5 rounded-full text-[10px]"
+                        >
+                          {prof.weaponTypeCode} Lv{prof.level}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="text-[10px] text-gray-500">
-                  Lv {player.level} · 💰 {player.gold} · ⭐ {player.questPoints}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    player.role === "ADMIN"
-                      ? "bg-purple-900/50 border-purple-700 text-purple-200"
-                      : "bg-gray-800 border-gray-700 text-gray-400"
-                  }`}
-                >
-                  {player.role}
-                </span>
-                {player.role === "ADMIN" ? (
-                  <button
-                    type="button"
-                    disabled={busy || player.id === playerId}
-                    onClick={() => handleSetRole(player.id, "PLAYER")}
-                    className={dangerBtn}
-                  >
-                    Demote
-                  </button>
-                ) : (
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => handleSetRole(player.id, "ADMIN")}
-                    className="bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition"
+                    onClick={() => openProficiencyEditor(player)}
+                    className="bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition"
                   >
-                    Make Admin
+                    🎯 Weapons
                   </button>
-                )}
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      player.role === "ADMIN"
+                        ? "bg-purple-900/50 border-purple-700 text-purple-200"
+                        : "bg-gray-800 border-gray-700 text-gray-400"
+                    }`}
+                  >
+                    {player.role}
+                  </span>
+                  {player.role === "ADMIN" ? (
+                    <button
+                      type="button"
+                      disabled={busy || player.id === playerId}
+                      onClick={() => handleSetRole(player.id, "PLAYER")}
+                      className={dangerBtn}
+                    >
+                      Demote
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleSetRole(player.id, "ADMIN")}
+                      className="bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition"
+                    >
+                      Make Admin
+                    </button>
+                  )}
+                </div>
               </div>
+              {proficiencyTargetId === player.id && (
+                <div className="mt-2 border border-cyan-800 bg-cyan-950/20 rounded-xl p-2 flex flex-col gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                    🎯 Weapon proficiency — {player.username ?? "Unnamed"}
+                  </span>
+                  {weaponTypes.length === 0 ? (
+                    <span className="text-[10px] text-gray-500">
+                      No weapon types yet. Create them in the "Weapon Types" tab first.
+                    </span>
+                  ) : (
+                    weaponTypes.map((weaponType) => (
+                      <div key={weaponType.code} className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-gray-200 min-w-24 truncate">
+                          {weaponType.code}
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-100"
+                          value={profDrafts[weaponType.code] ?? 0}
+                          onChange={(e) =>
+                            setProfDrafts((drafts) => ({
+                              ...drafts,
+                              [weaponType.code]: Number(e.target.value) || 0,
+                            }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleSaveProficiency(weaponType.code)}
+                          className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-[10px] font-bold px-3 py-1 rounded-lg transition"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ))
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={handleCloseProficiency}
+                    className={dangerBtn}
+                  >
+                    ✖ Close
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           {players.length === 0 && (

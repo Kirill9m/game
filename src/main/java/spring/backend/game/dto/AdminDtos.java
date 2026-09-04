@@ -23,7 +23,8 @@ public final class AdminDtos {
             String role,
             int level,
             int gold,
-            int questPoints) {
+            int questPoints,
+            List<AdminProficiencyDto> proficiencies) {
     }
 
     public record AdminNpcDto(
@@ -63,10 +64,25 @@ public final class AdminDtos {
             String code,
             String name,
             String type,
+            String weaponTypeCode,
             int damage,
             int attackRange,
             int width,
             int height) {
+    }
+
+    public record AdminWeaponTypeDto(
+            UUID id,
+            String code,
+            String name,
+            int accuracyPerLevel,
+            int maxAccuracy) {
+    }
+
+    public record AdminProficiencyDto(
+            String weaponTypeCode,
+            String weaponTypeName,
+            int level) {
     }
 
     public record AdminEnemyTypeDto(
@@ -137,10 +153,27 @@ public final class AdminDtos {
             String code,
             String name,
             String type,
+            String weaponTypeCode,
             Integer damage,
             Integer attackRange,
             Integer width,
             Integer height) {
+    }
+
+    public record CreateWeaponTypeRequest(
+            String code,
+            String name,
+            Integer accuracyPerLevel,
+            Integer maxAccuracy) {
+    }
+
+    public record UpdateWeaponTypeRequest(
+            String name,
+            Integer accuracyPerLevel,
+            Integer maxAccuracy) {
+    }
+
+    public record SetProficiencyRequest(String weaponTypeCode, Integer level) {
     }
 
     public record CreateEnemyTypeRequest(

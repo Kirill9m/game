@@ -14,14 +14,21 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * A configurable weapon type (e.g. KNIFE, PISTOL, RIFLE, SHOTGUN).
+ * Each weapon type defines how much accuracy a character gains per level of
+ * weapon proficiency ({@code accuracyPerLevel}) and the maximum accuracy bonus
+ * that proficiency can provide ({@code maxAccuracy}). Managed from the admin
+ * panel.
+ */
 @Entity
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "items")
-public class ItemEntity {
+@Table(name = "weapon_types")
+public class WeaponTypeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -32,22 +39,11 @@ public class ItemEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = 30)
-    private String type;
+    @Column(name = "accuracy_per_level", nullable = false)
+    @Builder.Default
+    private int accuracyPerLevel = 5;
 
-    /** Optional weapon type (e.g. "PISTOL", "KNIFE", "RIFLE") used for proficiency-based accuracy. */
-    @Column(name = "weapon_type_code", length = 50)
-    private String weaponTypeCode;
-
-    @Column(nullable = false)
-    private int damage;
-
-    @Column(name = "attack_range", nullable = false)
-    private int attackRange;
-
-    @Column(nullable = false)
-    private int width;
-
-    @Column(nullable = false)
-    private int height;
+    @Column(name = "max_accuracy", nullable = false)
+    @Builder.Default
+    private int maxAccuracy = 25;
 }

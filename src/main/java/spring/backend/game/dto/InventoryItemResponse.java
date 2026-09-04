@@ -9,6 +9,7 @@ public class InventoryItemResponse {
     private String code;
     private String name;
     private String type;
+    private String weaponTypeCode;
     private int damage;
     private int attackRange;
     private int quantity;

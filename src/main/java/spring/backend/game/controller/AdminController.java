@@ -21,7 +21,9 @@ import spring.backend.game.dto.AdminDtos.AdminEnemyTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminItemDto;
 import spring.backend.game.dto.AdminDtos.AdminNpcDto;
 import spring.backend.game.dto.AdminDtos.AdminPlayerDto;
+import spring.backend.game.dto.AdminDtos.AdminProficiencyDto;
 import spring.backend.game.dto.AdminDtos.AdminQuestDto;
+import spring.backend.game.dto.AdminDtos.AdminWeaponTypeDto;
 import spring.backend.game.dto.AdminDtos.AdminWorldCellDto;
 import spring.backend.game.dto.AdminDtos.BootstrapAdminRequest;
 import spring.backend.game.dto.AdminDtos.CreateDialogueNodeRequest;
@@ -30,12 +32,15 @@ import spring.backend.game.dto.AdminDtos.CreateGameMapRequest;
 import spring.backend.game.dto.AdminDtos.CreateItemRequest;
 import spring.backend.game.dto.AdminDtos.CreateNpcRequest;
 import spring.backend.game.dto.AdminDtos.CreateQuestRequest;
+import spring.backend.game.dto.AdminDtos.CreateWeaponTypeRequest;
+import spring.backend.game.dto.AdminDtos.SetProficiencyRequest;
 import spring.backend.game.dto.AdminDtos.SetRoleRequest;
 import spring.backend.game.dto.AdminDtos.UpdateEnemyTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpdateGameMapRequest;
 import spring.backend.game.dto.AdminDtos.UpdateNpcRequest;
 import spring.backend.game.dto.AdminDtos.UpdatePlayerRequest;
 import spring.backend.game.dto.AdminDtos.UpdateQuestRequest;
+import spring.backend.game.dto.AdminDtos.UpdateWeaponTypeRequest;
 import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
 import spring.backend.game.dto.GameMapResponse;
 import spring.backend.game.service.AdminService;
@@ -259,6 +264,7 @@ public class AdminController {
                 request.code(),
                 request.name(),
                 request.type(),
+                request.weaponTypeCode(),
                 request.damage() == null ? 0 : request.damage(),
                 request.attackRange() == null ? 0 : request.attackRange(),
                 request.width() == null ? 1 : request.width(),
@@ -277,6 +283,65 @@ public class AdminController {
         adminService.requireAdmin(playerId);
         adminService.deleteItem(itemId);
         return ResponseEntity.noContent().build();
+    }
+
+    // --- WEAPON TYPES (configurable accuracy / proficiency system) ---
+
+    @GetMapping("/weapon-types")
+    public ResponseEntity<List<AdminWeaponTypeDto>> getWeaponTypes(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.getAllWeaponTypes());
+    }
+
+    @PostMapping("/weapon-types")
+    public ResponseEntity<AdminWeaponTypeDto> createWeaponType(
+            @RequestParam String playerId,
+            @RequestBody CreateWeaponTypeRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.createWeaponType(
+                request.code(),
+                request.name(),
+                request.accuracyPerLevel(),
+                request.maxAccuracy()));
+    }
+
+    @PatchMapping("/weapon-types/{weaponTypeId}")
+    public ResponseEntity<AdminWeaponTypeDto> updateWeaponType(
+            @PathVariable UUID weaponTypeId,
+            @RequestParam String playerId,
+            @RequestBody UpdateWeaponTypeRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.updateWeaponType(
+                weaponTypeId,
+                request.name(),
+                request.accuracyPerLevel(),
+                request.maxAccuracy()));
+    }
+
+    @DeleteMapping("/weapon-types/{weaponTypeId}")
+    public ResponseEntity<Void> deleteWeaponType(@PathVariable UUID weaponTypeId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        adminService.deleteWeaponType(weaponTypeId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // --- PLAYER WEAPON PROFICIENCY (affects combat accuracy) ---
+
+    @GetMapping("/players/{targetPlayerId}/proficiencies")
+    public ResponseEntity<List<AdminProficiencyDto>> getPlayerProficiencies(
+            @PathVariable String targetPlayerId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.getPlayerProficiencies(targetPlayerId));
+    }
+
+    @PutMapping("/players/{targetPlayerId}/proficiencies")
+    public ResponseEntity<List<AdminProficiencyDto>> setPlayerProficiency(
+            @PathVariable String targetPlayerId,
+            @RequestParam String playerId,
+            @RequestBody SetProficiencyRequest request) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(adminService.setPlayerProficiency(
+                targetPlayerId, request.weaponTypeCode(), request.level()));
     }
 
     // --- ENEMY TYPES ---

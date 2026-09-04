@@ -17,12 +17,16 @@ import lombok.RequiredArgsConstructor;
 import spring.backend.game.entity.CombatSessionEntity;
 import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
+import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.dto.CombatPlanRequest;
 import spring.backend.game.repository.CombatRepository;
 import spring.backend.game.repository.EnemyTypeRepository;
 import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.PlayerInventoryRepository;
 import spring.backend.game.repository.PlayerRepository;
+import spring.backend.game.repository.WeaponProficiencyRepository;
+import spring.backend.game.repository.WeaponTypeRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +46,8 @@ public class CombatService {
     private final ItemRepository itemRepository;
     private final PlayerInventoryRepository playerInventoryRepository;
     private final PlayerRepository playerRepository;
+    private final WeaponTypeRepository weaponTypeRepository;
+    private final WeaponProficiencyRepository weaponProficiencyRepository;
     private final WorldZoneService worldZoneService;
 
     @Transactional
@@ -395,7 +401,7 @@ public class CombatService {
         if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > maxShotDistance
             || isShotBlocked(attackerX, attackerY, actualTargetX, actualTargetY)) return 0;
         String targetPosture = player1 ? combat.getP2Posture() : combat.getP1Posture();
-        if (ThreadLocalRandom.current().nextInt(100) >= hitChance(targetPosture)) return 0;
+        if (ThreadLocalRandom.current().nextInt(100) >= hitChance(combat, player1, weapon, targetPosture)) return 0;
         if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - shotDamage));
         else combat.setP1Health(Math.max(0, combat.getP1Health() - shotDamage));
         return shotDamage;
@@ -449,8 +455,27 @@ public class CombatService {
         return null;
     }
 
-    private int hitChance(String posture) {
-        return STANDING.equals(posture) ? 100 : CROUCHING.equals(posture) ? 75 : 50;
+    private int hitChance(CombatSessionEntity combat, boolean attackerIsPlayer1, ItemEntity weapon, String targetPosture) {
+        int base = STANDING.equals(targetPosture) ? 100 : CROUCHING.equals(targetPosture) ? 75 : 50;
+        // No weapon (e.g. an enemy's claw attack) → accuracy depends only on the target's posture.
+        if (weapon == null) {
+            return base;
+        }
+        String weaponTypeCode = weapon.getWeaponTypeCode();
+        if (weaponTypeCode == null || weaponTypeCode.isBlank()) {
+            return base;
+        }
+        String playerId = attackerIsPlayer1 ? combat.getPlayer1Id() : combat.getPlayer2Id();
+        int level = weaponProficiencyRepository
+                .findByPlayerIdAndWeaponTypeCodeIgnoreCase(playerId, weaponTypeCode)
+                .map(PlayerWeaponProficiencyEntity::getLevel)
+                .orElse(0);
+        WeaponTypeEntity weaponType = weaponTypeRepository.findByCodeIgnoreCase(weaponTypeCode).orElse(null);
+        if (weaponType == null) {
+            return base;
+        }
+        int bonus = Math.min(weaponType.getMaxAccuracy(), level * weaponType.getAccuracyPerLevel());
+        return Math.max(5, Math.min(100, base + bonus));
     }
 
     private String normalizePosture(String posture) {

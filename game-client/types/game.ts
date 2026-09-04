@@ -10,6 +10,7 @@ export interface InventoryItem {
   code: string;
   name: string;
   type: string;
+  weaponTypeCode?: string | null;
   damage: number;
   attackRange: number;
   quantity: number;

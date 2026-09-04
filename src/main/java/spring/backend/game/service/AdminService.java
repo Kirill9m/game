@@ -22,6 +22,8 @@ import spring.backend.game.entity.EnemyTypeEntity;
 import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.PlayerInventoryEntity;
+import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
+import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.entity.QuestSystem.DialogueChoiceEntity;
 import spring.backend.game.entity.QuestSystem.DialogueNodeEntity;
 import spring.backend.game.entity.QuestSystem.NpcEntity;
@@ -39,6 +41,8 @@ import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.repository.QuestSystem.PlayerQuestRepository;
 import spring.backend.game.repository.QuestSystem.QuestLogEntryRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
+import spring.backend.game.repository.WeaponProficiencyRepository;
+import spring.backend.game.repository.WeaponTypeRepository;
 
 /**
  * Admin-only service: manages players/roles, NPCs, quests (including a random
@@ -110,6 +114,8 @@ public class AdminService {
     private final EnemyTypeRepository enemyTypeRepository;
     private final PlayerInventoryRepository playerInventoryRepository;
     private final CombatRepository combatRepository;
+    private final WeaponTypeRepository weaponTypeRepository;
+    private final WeaponProficiencyRepository weaponProficiencyRepository;
     private final WorldCellService worldCellService;
     private final Random random = new Random();
 
@@ -553,7 +559,8 @@ public class AdminService {
     }
 
     @Transactional
-    public AdminDtos.AdminItemDto createItem(String code, String name, String type, int damage, int attackRange,
+    public AdminDtos.AdminItemDto createItem(String code, String name, String type, String weaponTypeCode,
+                                             int damage, int attackRange,
                                              int width, int height) {
         String normalizedCode = requireNonBlank(code, "Item code is required").trim().toUpperCase(Locale.ROOT);
         if (itemRepository.findByCodeIgnoreCase(normalizedCode).isPresent()) {
@@ -563,6 +570,7 @@ public class AdminService {
                 .code(normalizedCode)
                 .name(requireNonBlank(name, "Item name is required").trim())
                 .type(type == null || type.isBlank() ? "UTILITY" : type.trim().toUpperCase(Locale.ROOT))
+                .weaponTypeCode(normalizeWeaponTypeCode(weaponTypeCode))
                 .damage(Math.max(0, damage))
                 .attackRange(Math.max(0, attackRange))
                 .width(Math.max(1, width))
@@ -608,9 +616,116 @@ public class AdminService {
             }
         }
         String code = "ITEM_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
-        AdminDtos.AdminItemDto created = createItem(code, name, type, damage, attackRange, width, height);
+        String weaponTypeCode = "WEAPON".equals(type) ? randomWeaponTypeCode() : null;
+        AdminDtos.AdminItemDto created = createItem(code, name, type, weaponTypeCode, damage, attackRange, width, height);
         log.info("Generated random item '{}' ({}, {})", created.name(), created.code(), type);
         return created;
+    }
+
+    private String randomWeaponTypeCode() {
+        List<WeaponTypeEntity> weaponTypes = weaponTypeRepository.findAll();
+        return weaponTypes.isEmpty() ? null : weaponTypes.get(random.nextInt(weaponTypes.size())).getCode();
+    }
+
+    // --- WEAPON TYPE MANAGEMENT ---
+
+    @Transactional(readOnly = true)
+    public List<AdminDtos.AdminWeaponTypeDto> getAllWeaponTypes() {
+        return weaponTypeRepository.findAllByOrderByNameAsc().stream()
+                .map(this::toWeaponTypeDto)
+                .toList();
+    }
+
+    @Transactional
+    public AdminDtos.AdminWeaponTypeDto createWeaponType(String code, String name, Integer accuracyPerLevel, Integer maxAccuracy) {
+        String normalizedCode = requireNonBlank(code, "Weapon type code is required").trim().toUpperCase(Locale.ROOT);
+        if (weaponTypeRepository.existsByCodeIgnoreCase(normalizedCode)) {
+            throw new IllegalArgumentException("Weapon type code already exists: " + normalizedCode);
+        }
+        WeaponTypeEntity weaponType = weaponTypeRepository.save(WeaponTypeEntity.builder()
+                .code(normalizedCode)
+                .name(requireNonBlank(name, "Weapon type name is required").trim())
+                .accuracyPerLevel(Math.max(0, accuracyPerLevel == null ? 5 : accuracyPerLevel))
+                .maxAccuracy(Math.max(0, maxAccuracy == null ? 25 : maxAccuracy))
+                .build());
+        log.info("Admin created weapon type '{}' ({})", weaponType.getName(), weaponType.getCode());
+        return toWeaponTypeDto(weaponType);
+    }
+
+    @Transactional
+    public AdminDtos.AdminWeaponTypeDto updateWeaponType(UUID weaponTypeId, String name, Integer accuracyPerLevel, Integer maxAccuracy) {
+        WeaponTypeEntity weaponType = weaponTypeRepository.findById(weaponTypeId)
+                .orElseThrow(() -> new EntityNotFoundException("Weapon type not found: " + weaponTypeId));
+        if (name != null && !name.isBlank()) {
+            weaponType.setName(name.trim());
+        }
+        if (accuracyPerLevel != null) {
+            weaponType.setAccuracyPerLevel(Math.max(0, accuracyPerLevel));
+        }
+        if (maxAccuracy != null) {
+            weaponType.setMaxAccuracy(Math.max(0, maxAccuracy));
+        }
+        weaponTypeRepository.save(weaponType);
+        log.info("Admin updated weapon type '{}' ({})", weaponType.getName(), weaponType.getCode());
+        return toWeaponTypeDto(weaponType);
+    }
+
+    @Transactional
+    public void deleteWeaponType(UUID weaponTypeId) {
+        WeaponTypeEntity weaponType = weaponTypeRepository.findById(weaponTypeId)
+                .orElseThrow(() -> new EntityNotFoundException("Weapon type not found: " + weaponTypeId));
+        // Remove related proficiencies and clear the reference on items
+        weaponProficiencyRepository.deleteAll(weaponProficiencyRepository.findByWeaponTypeCodeIgnoreCase(weaponType.getCode()));
+        itemRepository.findAll().forEach(item -> {
+            if (weaponType.getCode().equalsIgnoreCase(item.getWeaponTypeCode())) {
+                item.setWeaponTypeCode(null);
+            }
+        });
+        weaponTypeRepository.delete(weaponType);
+        log.info("Admin deleted weapon type '{}'", weaponType.getCode());
+    }
+
+    // --- PLAYER WEAPON PROFICIENCY ---
+
+    @Transactional(readOnly = true)
+    public List<AdminDtos.AdminProficiencyDto> getPlayerProficiencies(String playerId) {
+        playerRepository.findById(playerId)
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
+        return weaponProficiencyRepository.findByPlayerIdOrderByWeaponTypeCodeAsc(playerId).stream()
+                .map(this::toProficiencyDto)
+                .toList();
+    }
+
+    @Transactional
+    public List<AdminDtos.AdminProficiencyDto> setPlayerProficiency(String playerId, String weaponTypeCode, Integer level) {
+        playerRepository.findById(playerId)
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
+        String normalizedCode = normalizeWeaponTypeCode(weaponTypeCode);
+        if (normalizedCode == null) {
+            throw new IllegalArgumentException("Unknown weapon type: " + weaponTypeCode);
+        }
+        int clampedLevel = Math.max(0, level == null ? 0 : level);
+        weaponProficiencyRepository.findByPlayerIdAndWeaponTypeCodeIgnoreCase(playerId, normalizedCode)
+                .ifPresentOrElse(
+                        existing -> {
+                            existing.setLevel(clampedLevel);
+                            weaponProficiencyRepository.save(existing);
+                        },
+                        () -> weaponProficiencyRepository.save(PlayerWeaponProficiencyEntity.builder()
+                                .playerId(playerId)
+                                .weaponTypeCode(normalizedCode)
+                                .level(clampedLevel)
+                                .build()));
+        return getPlayerProficiencies(playerId);
+    }
+
+    private String normalizeWeaponTypeCode(String weaponTypeCode) {
+        if (weaponTypeCode == null || weaponTypeCode.isBlank()) {
+            return null;
+        }
+        WeaponTypeEntity weaponType = weaponTypeRepository.findByCodeIgnoreCase(weaponTypeCode.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Unknown weapon type: " + weaponTypeCode));
+        return weaponType.getCode();
     }
 
     @Transactional
@@ -735,8 +850,12 @@ public class AdminService {
     // --- DTO MAPPERS ---
 
     private AdminDtos.AdminPlayerDto toPlayerDto(PlayerEntity player) {
+        List<AdminDtos.AdminProficiencyDto> proficiencies = weaponProficiencyRepository
+                .findByPlayerIdOrderByWeaponTypeCodeAsc(player.getId()).stream()
+                .map(this::toProficiencyDto)
+                .toList();
         return new AdminDtos.AdminPlayerDto(player.getId(), player.getUsername(), player.getAvatarUrl(),
-                player.getRole(), player.getLevel(), player.getGold(), player.getQuestPoints());
+                player.getRole(), player.getLevel(), player.getGold(), player.getQuestPoints(), proficiencies);
     }
 
     private AdminDtos.AdminNpcDto toNpcDto(NpcEntity npc) {
@@ -763,7 +882,19 @@ public class AdminService {
 
     private AdminDtos.AdminItemDto toItemDto(ItemEntity item) {
         return new AdminDtos.AdminItemDto(item.getId(), item.getCode(), item.getName(), item.getType(),
-                item.getDamage(), item.getAttackRange(), item.getWidth(), item.getHeight());
+                item.getWeaponTypeCode(), item.getDamage(), item.getAttackRange(), item.getWidth(), item.getHeight());
+    }
+
+    private AdminDtos.AdminWeaponTypeDto toWeaponTypeDto(WeaponTypeEntity weaponType) {
+        return new AdminDtos.AdminWeaponTypeDto(weaponType.getId(), weaponType.getCode(), weaponType.getName(),
+                weaponType.getAccuracyPerLevel(), weaponType.getMaxAccuracy());
+    }
+
+    private AdminDtos.AdminProficiencyDto toProficiencyDto(PlayerWeaponProficiencyEntity proficiency) {
+        String weaponTypeName = weaponTypeRepository.findByCodeIgnoreCase(proficiency.getWeaponTypeCode())
+                .map(WeaponTypeEntity::getName)
+                .orElse(proficiency.getWeaponTypeCode());
+        return new AdminDtos.AdminProficiencyDto(proficiency.getWeaponTypeCode(), weaponTypeName, proficiency.getLevel());
     }
 
     private AdminDtos.AdminEnemyTypeDto toEnemyTypeDto(EnemyTypeEntity enemy) {

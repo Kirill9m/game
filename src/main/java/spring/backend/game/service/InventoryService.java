@@ -53,6 +53,7 @@ public class InventoryService {
                         .code(entry.getItem().getCode())
                         .name(entry.getItem().getName())
                         .type(entry.getItem().getType())
+                        .weaponTypeCode(entry.getItem().getWeaponTypeCode())
                         .damage(entry.getItem().getDamage())
                         .attackRange(entry.getItem().getAttackRange())
                         .quantity(entry.getQuantity())

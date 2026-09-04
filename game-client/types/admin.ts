@@ -6,6 +6,7 @@ export interface AdminPlayer {
   level: number;
   gold: number;
   questPoints: number;
+  proficiencies: AdminProficiency[];
 }
 
 export interface AdminNpc {
@@ -45,6 +46,7 @@ export interface AdminItem {
   code: string;
   name: string;
   type: string;
+  weaponTypeCode: string | null;
   damage: number;
   attackRange: number;
   width: number;
@@ -78,10 +80,41 @@ export interface CreateItemPayload {
   code: string;
   name: string;
   type: string;
+  weaponTypeCode?: string | null;
   damage: number;
   attackRange: number;
   width: number;
   height: number;
+}
+
+/** A configurable weapon type; proficiency in it raises combat accuracy. */
+export interface AdminWeaponType {
+  id: string;
+  code: string;
+  name: string;
+  accuracyPerLevel: number;
+  maxAccuracy: number;
+}
+
+export interface CreateWeaponTypePayload {
+  code: string;
+  name: string;
+  accuracyPerLevel?: number;
+  maxAccuracy?: number;
+}
+
+export type UpdateWeaponTypePayload = Partial<CreateWeaponTypePayload>;
+
+/** A character's proficiency level in one weapon type. */
+export interface AdminProficiency {
+  weaponTypeCode: string;
+  weaponTypeName: string;
+  level: number;
+}
+
+export interface SetProficiencyPayload {
+  weaponTypeCode: string;
+  level: number;
 }
 
 export interface AdminEnemyType {

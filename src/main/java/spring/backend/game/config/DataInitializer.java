@@ -17,11 +17,13 @@ import spring.backend.game.entity.QuestSystem.NpcEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
 import spring.backend.game.entity.GameMapEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.repository.GameMapRepository;
 import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
+import spring.backend.game.repository.WeaponTypeRepository;
 import spring.backend.game.service.AdminService;
 
 @Slf4j
@@ -34,6 +36,7 @@ public class DataInitializer implements CommandLineRunner {
     private final DialogueNodeRepository dialogueNodeRepository;
     private final ItemRepository itemRepository;
     private final GameMapRepository mapRepository;
+    private final WeaponTypeRepository weaponTypeRepository;
     private final JdbcTemplate jdbcTemplate;
     @Lazy
     private final AdminService adminService;
@@ -47,6 +50,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Transactional
     public void seedData() {
+        seedWeaponTypes();
         seedItems();
         seedMaps();
 
@@ -139,6 +143,12 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'PLAYER'");
         } catch (Exception e) {
             log.warn("Database schema update info (players.role): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS weapon_type_code VARCHAR(50)");
+        } catch (Exception e) {
+            log.warn("Database schema update info (items.weapon_type_code): {}", e.getMessage());
         }
 
         try {
@@ -261,11 +271,43 @@ public class DataInitializer implements CommandLineRunner {
 		dialogueNodeRepository.save(merchantStart);
 	}
 
+        private void seedWeaponTypes() {
+                saveWeaponTypeIfMissing("KNIFE", "Knife", 10, 50);
+                saveWeaponTypeIfMissing("PISTOL", "Pistol", 5, 25);
+                saveWeaponTypeIfMissing("SMG", "Submachine Gun", 4, 20);
+                saveWeaponTypeIfMissing("RIFLE", "Rifle", 3, 15);
+                saveWeaponTypeIfMissing("SHOTGUN", "Shotgun", 5, 20);
+        }
+
+        private void saveWeaponTypeIfMissing(String code, String name, int accuracyPerLevel, int maxAccuracy) {
+                if (weaponTypeRepository.existsByCodeIgnoreCase(code)) {
+                        return;
+                }
+                weaponTypeRepository.save(WeaponTypeEntity.builder()
+                                .code(code)
+                                .name(name)
+                                .accuracyPerLevel(accuracyPerLevel)
+                                .maxAccuracy(maxAccuracy)
+                                .build());
+        }
+
         private void seedItems() {
-                saveItemIfMissing("KNIFE", "Knife", "WEAPON", 15, 1, 1, 2);
-                saveItemIfMissing("PISTOL", "Pistol", "WEAPON", 25, 3, 1, 2);
-                saveItemIfMissing("WORLD_MAP", "World Map", "UTILITY", 0, 0, 2, 2);
-                saveItemIfMissing("DESERT_MAP", "Desert Map", "UTILITY", 0, 0, 2, 2);
+                saveItemIfMissing("KNIFE", "Knife", "WEAPON", "KNIFE", 15, 1, 1, 2);
+                saveItemIfMissing("PISTOL", "Pistol", "WEAPON", "PISTOL", 25, 3, 1, 2);
+                saveItemIfMissing("WORLD_MAP", "World Map", "UTILITY", null, 0, 0, 2, 2);
+                saveItemIfMissing("DESERT_MAP", "Desert Map", "UTILITY", null, 0, 0, 2, 2);
+                // Backfill weapon types on pre-existing seeded weapons.
+                backfillWeaponType("KNIFE", "KNIFE");
+                backfillWeaponType("PISTOL", "PISTOL");
+        }
+
+        private void backfillWeaponType(String itemCode, String weaponTypeCode) {
+                itemRepository.findByCodeIgnoreCase(itemCode).ifPresent(item -> {
+                        if (item.getWeaponTypeCode() == null || item.getWeaponTypeCode().isBlank()) {
+                                item.setWeaponTypeCode(weaponTypeCode);
+                                itemRepository.save(item);
+                        }
+                });
         }
 
         /**
@@ -298,7 +340,7 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         private void saveItemIfMissing(
-                        String code, String name, String type, int damage, int attackRange, int width, int height) {
+                        String code, String name, String type, String weaponTypeCode, int damage, int attackRange, int width, int height) {
                 if (itemRepository.findByCodeIgnoreCase(code).isPresent()) {
                         return;
                 }
@@ -306,6 +348,7 @@ public class DataInitializer implements CommandLineRunner {
                                 .code(code)
                                 .name(name)
                                 .type(type)
+                                .weaponTypeCode(weaponTypeCode)
                                 .damage(damage)
                                 .attackRange(attackRange)
                                 .width(width)

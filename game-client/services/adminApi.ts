@@ -5,7 +5,9 @@ import type {
   AdminItem,
   AdminNpc,
   AdminPlayer,
+  AdminProficiency,
   AdminQuest,
+  AdminWeaponType,
   AdminWorldCell,
   CreateDialogueNodePayload,
   CreateEnemyTypePayload,
@@ -13,9 +15,12 @@ import type {
   CreateItemPayload,
   CreateNpcPayload,
   CreateQuestPayload,
+  CreateWeaponTypePayload,
+  SetProficiencyPayload,
   UpdateEnemyTypePayload,
   UpdateGameMapPayload,
   UpdatePlayerPayload,
+  UpdateWeaponTypePayload,
   UpsertWorldCellPayload,
 } from "@/types/admin";
 
@@ -234,6 +239,67 @@ export const adminApi = {
     await request<void>(
       `${API_URL}/api/admin/items/${encodeURIComponent(itemId)}?${withPlayerId(playerId)}`,
       { method: "DELETE" },
+    );
+  },
+
+  // --- Weapon types (configurable accuracy / proficiency system) ---
+  async getWeaponTypes(playerId: string): Promise<AdminWeaponType[]> {
+    return request<AdminWeaponType[]>(
+      `${API_URL}/api/admin/weapon-types?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async createWeaponType(playerId: string, payload: CreateWeaponTypePayload): Promise<AdminWeaponType> {
+    return request<AdminWeaponType>(
+      `${API_URL}/api/admin/weapon-types?${withPlayerId(playerId)}`,
+      jsonBody(payload),
+    );
+  },
+
+  async updateWeaponType(
+    playerId: string,
+    weaponTypeId: string,
+    payload: UpdateWeaponTypePayload,
+  ): Promise<AdminWeaponType> {
+    return request<AdminWeaponType>(
+      `${API_URL}/api/admin/weapon-types/${encodeURIComponent(weaponTypeId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteWeaponType(playerId: string, weaponTypeId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/weapon-types/${encodeURIComponent(weaponTypeId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  // --- Player weapon proficiency (affects combat accuracy) ---
+  async getPlayerProficiencies(
+    playerId: string,
+    targetPlayerId: string,
+  ): Promise<AdminProficiency[]> {
+    return request<AdminProficiency[]>(
+      `${API_URL}/api/admin/players/${encodeURIComponent(targetPlayerId)}/proficiencies?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async setPlayerProficiency(
+    playerId: string,
+    targetPlayerId: string,
+    payload: SetProficiencyPayload,
+  ): Promise<AdminProficiency[]> {
+    return request<AdminProficiency[]>(
+      `${API_URL}/api/admin/players/${encodeURIComponent(targetPlayerId)}/proficiencies?${withPlayerId(playerId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
     );
   },
 
