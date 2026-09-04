@@ -64,3 +64,68 @@ export const getReachableCells = (
   }
   return reachable;
 };
+
+/**
+ * Все клетки в квадрате дальности (Chebyshev) вокруг точки — зона обстрела.
+ * Включая саму точку; не исключает стены/воду — это чисто визуальная зона.
+ */
+export const getAttackRangeCells = (
+  originX: number,
+  originY: number,
+  range: number,
+) => {
+  const cells = new Set<string>();
+  const minX = Math.max(0, originX - range);
+  const maxX = Math.min(GRID_SIZE - 1, originX + range);
+  const minY = Math.max(0, originY - range);
+  const maxY = Math.min(GRID_SIZE - 1, originY + range);
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      if (Math.max(Math.abs(x - originX), Math.abs(y - originY)) <= range) {
+        cells.add(cellKey(x, y));
+      }
+    }
+  }
+  return cells;
+};
+
+/**
+ * Зона обстрела с учётом препятствий: только те клетки квадрата дальности,
+ * до которых линия огня не перекрыта стеной. Используется для подсветки,
+ * чтобы враг за стеной не выглядел «в радиусе» оружия.
+ */
+export const getShootableCells = (
+  originX: number,
+  originY: number,
+  range: number,
+) => {
+  const shootable = new Set<string>();
+  for (const key of getAttackRangeCells(originX, originY, range)) {
+    const separator = key.indexOf(":");
+    const x = Number(key.slice(0, separator));
+    const y = Number(key.slice(separator + 1));
+    if (!isLineOfSightBlocked(originX, originY, x, y)) {
+      shootable.add(key);
+    }
+  }
+  return shootable;
+};
+
+/**
+ * Точная копия серверного raycast: линию обстрела блокируют только стены,
+ * точка попадания - интерполяция по шагам max(|dx|, |dy|).
+ */
+export const isLineOfSightBlocked = (
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+) => {
+  const steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
+  for (let step = 1; step < steps; step++) {
+    const x = fromX + Math.round(((toX - fromX) * step) / steps);
+    const y = fromY + Math.round(((toY - fromY) * step) / steps);
+    if (WALL_CELLS.has(cellKey(x, y))) return true;
+  }
+  return false;
+};

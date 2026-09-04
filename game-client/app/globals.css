@@ -92,6 +92,16 @@
   box-shadow: inset 0 0 0 2px rgba(253, 224, 71, 0.5);
 }
 
+/* Visual weapon range zone — subtle rose tint over neutral cells */
+.combat-cell-in-range {
+  background: rgba(153, 27, 27, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.18);
+}
+
+.combat-cell-in-range.combat-cell-checker {
+  background: rgba(153, 27, 27, 0.24);
+}
+
 @keyframes reachable-pulse {
   0%,
   100% { background: rgba(20, 184, 166, 0.3); }

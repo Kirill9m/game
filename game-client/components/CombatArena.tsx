@@ -9,9 +9,11 @@ import { CombatLog } from "./combat/CombatLog";
 import { CombatModeControls } from "./combat/CombatModeControls";
 import { CombatStatus } from "./combat/CombatStatus";
 import {
+  getShootableCells,
   getLatestMove,
   getLatestPosture,
   getReachableCells,
+  isLineOfSightBlocked,
   isMovementBlocked,
   postureMovement,
 } from "./combat/board";
@@ -33,9 +35,9 @@ export default function CombatArena({
   inventory,
   onCombatUpdate,
   onCombatFinished,
+  onOpenInventory,
 }: CombatArenaProps) {
   const [combat, setCombat] = useState(initialCombat);
-  const [mode, setMode] = useState<"move" | "shoot">("move");
   const [error, setError] = useState("");
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [plannedActions, setPlannedActions] = useState<PlannedAction[]>([]);
@@ -63,6 +65,36 @@ export default function CombatArena({
   const replayedRoundRef = useRef<string | null>(null);
   const replayTimersRef = useRef<number[]>([]);
   const previousCombatRef = useRef(initialCombat);
+
+  // Размер поля: mobile — вписываемся в высоту экрана (до 440px),
+  // desktop — растем по ширине колонки вплоть до 760px.
+  const gridWrapRef = useRef<HTMLDivElement>(null);
+  const [boardSize, setBoardSize] = useState(320);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    const el = gridWrapRef.current;
+    if (!el) return;
+    const compute = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      // Квадрат по min(ширина, высота) — поле всегда влезает в экран.
+      const cap = isDesktop ? 760 : 440;
+      setBoardSize(Math.max(140, Math.min(w, h, cap)));
+    };
+    compute();
+    const observer = new ResizeObserver(compute);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isDesktop]);
 
   const isPlayer1 = playerId === combat.player1Id;
   const myX = isPlayer1 ? combat.p1X : combat.p2X;
@@ -97,6 +129,40 @@ export default function CombatArena({
     plannedEnd?.y ?? myY,
     movementRemaining,
   );
+
+  // Дальность текущего (или запланированного к экипировке) оружия.
+  const attackOrigin = plannedEnd ?? { x: myX, y: myY };
+  const myAttackRange =
+    inventory.find((item) => item.code === plannedEquipment)?.attackRange ?? 3;
+  // Зона обстрела вокруг точки, из которой будем стрелять в этом ходе.
+  // Подсветка учитывает препятствия: клетки за стеной не входят в зону.
+  const attackRangeCells = getShootableCells(
+    attackOrigin.x,
+    attackOrigin.y,
+    myAttackRange,
+  );
+  // Сервер считает дистанцию как max(|dx|, |dy|) (Chebyshev) и блокирует
+  // выстрел стеной (raycast отрисовывается в isLineOfSightBlocked).
+  const distanceToEnemy = Math.max(
+    Math.abs(attackOrigin.x - enemyX),
+    Math.abs(attackOrigin.y - enemyY),
+  );
+  const canAttack =
+    isMyTurn &&
+    !isReplaying &&
+    distanceToEnemy <= myAttackRange &&
+    !isLineOfSightBlocked(
+      attackOrigin.x,
+      attackOrigin.y,
+      enemyX,
+      enemyY,
+    ) &&
+    plannedActions.length < combat.actionPoints;
+  // Зону обстрела показываем только когда ей можно воспользоваться.
+  const showAttackRange =
+    isMyTurn &&
+    !isReplaying &&
+    plannedActions.length < combat.actionPoints;
 
   useEffect(() => {
     const previous = previousCombatRef.current;
@@ -258,71 +324,91 @@ export default function CombatArena({
   }, [combatId, onCombatUpdate]);
 
   const handleTileClick = useCallback(
-    async (targetX: number, targetY: number) => {
+    (targetX: number, targetY: number) => {
       if (!isMyTurn || isActing || combat.status !== "IN_PROGRESS") {
         setError("Not your turn!");
         return;
       }
-      try {
-        setError("");
-        if (mode === "move" && isMovementBlocked(targetX, targetY)) {
-          setError("This cell is blocked by terrain");
-          return;
-        }
-        if (mode === "move" && movementRemaining <= 0) {
-          setError(
-            `${plannedPosture.toLowerCase()} allows ${postureMovement(plannedPosture)} movement cells`,
-          );
-          return;
-        }
-        if (mode === "shoot") {
-          if (targetX !== enemyX || targetY !== enemyY) {
-            setError("Select the enemy cell to shoot");
-            return;
-          }
-          if (plannedActions.length + 1 > combat.actionPoints) {
-            setError(
-              `You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`,
-            );
-            return;
-          }
-          setPlannedActions((actions) => [
-            ...actions,
-            { type: "ATTACK", x: targetX, y: targetY },
-          ]);
-          return;
-        }
-        if (!reachableCells.has(`${targetX}:${targetY}`)) {
-          setError(
-            `Choose a reachable cell within ${postureMovement(plannedPosture)} cells`,
-          );
-          return;
-        }
+      setError("");
+      const targetKey = `${targetX}:${targetY}`;
+
+      // Нажатие на врага = выстрел по умолчанию (режима "Shoot" больше нет).
+      if (targetX === enemyX && targetY === enemyY) {
         if (plannedActions.length >= combat.actionPoints) {
           setError(
             `You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`,
           );
           return;
         }
+        if (!canAttack) {
+          // Точная причина отказа: за стеной враг не «вне радиуса»,
+          // поэтому сообщаем реальный повод отдельно от дальности.
+          const origin = getLatestMove(plannedActions) ?? {
+            x: myX,
+            y: myY,
+          };
+          const distance = Math.max(
+            Math.abs(origin.x - enemyX),
+            Math.abs(origin.y - enemyY),
+          );
+          const losBlocked = isLineOfSightBlocked(
+            origin.x,
+            origin.y,
+            enemyX,
+            enemyY,
+          );
+          if (distance > myAttackRange) {
+            setError(
+              `Enemy is out of weapon range (${myAttackRange} cells or closer)`,
+            );
+          } else if (losBlocked) {
+            setError(
+              "Line of sight is blocked by a wall — move to get a clear shot",
+            );
+          } else {
+            setError("You cannot attack right now");
+          }
+          return;
+        }
         setPlannedActions((actions) => [
           ...actions,
-          { type: "MOVE", x: targetX, y: targetY },
+          { type: "ATTACK", x: targetX, y: targetY },
         ]);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Action failed");
-      } finally {
-        setIsActing(false);
+        return;
       }
+
+      if (isMovementBlocked(targetX, targetY)) {
+        setError("This cell is blocked by terrain");
+        return;
+      }
+      if (!reachableCells.has(targetKey)) {
+        setError(
+          `Choose a reachable cell within ${postureMovement(plannedPosture)} cells`,
+        );
+        return;
+      }
+      if (plannedActions.length >= combat.actionPoints) {
+        setError(
+          `You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`,
+        );
+        return;
+      }
+      setPlannedActions((actions) => [
+        ...actions,
+        { type: "MOVE", x: targetX, y: targetY },
+      ]);
     },
     [
+      canAttack,
       combat,
       enemyX,
       enemyY,
       isActing,
       isMyTurn,
-      mode,
-      movementRemaining,
-      plannedActions.length,
+      myAttackRange,
+      myX,
+      myY,
+      plannedActions,
       plannedPosture,
       reachableCells,
     ],
@@ -384,7 +470,7 @@ export default function CombatArena({
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 240, damping: 22 }}
-      className="flex flex-col items-center space-y-4 w-full max-w-lg"
+      className="flex flex-col items-center gap-2 md:gap-2 w-full max-w-2xl xl:max-w-3xl min-h-0 flex-1"
     >
       <CombatStatus
         actionPoints={combat.actionPoints}
@@ -404,13 +490,11 @@ export default function CombatArena({
         </div>
       )}
       <CombatModeControls
-        mode={mode}
         plannedActions={plannedActions}
         plannedPosture={plannedPosture}
         actionPoints={combat.actionPoints}
         isMyTurn={isMyTurn}
         isReplaying={isReplaying}
-        onModeChange={setMode}
         onPostureChange={(posture) =>
           setPlannedActions((actions) => [
             ...actions,
@@ -423,20 +507,27 @@ export default function CombatArena({
           setPlannedActions((actions) => [...actions, { type: "EQUIP", itemCode }])
         }
       />
-      <CombatGrid
-        combat={combat}
-        playerId={playerId}
-        mode={mode}
-        isMyTurn={isMyTurn}
-        plannedActions={plannedActions}
-        reachableCells={reachableCells}
-        displayPositions={displayPositions}
-        displayPostures={displayPostures}
-        replayAction={replayAction}
-        animationTarget={animationTarget}
-        damagePopup={damagePopup}
-        onTileClick={(x, y) => void handleTileClick(x, y)}
-      />
+      <div
+        ref={gridWrapRef}
+        className="flex-1 min-h-0 w-full flex items-center justify-center"
+      >
+        <CombatGrid
+          combat={combat}
+          playerId={playerId}
+          canAttack={canAttack}
+          attackRangeCells={showAttackRange ? attackRangeCells : null}
+          isMyTurn={isMyTurn}
+          plannedActions={plannedActions}
+          reachableCells={reachableCells}
+          displayPositions={displayPositions}
+          displayPostures={displayPostures}
+          replayAction={replayAction}
+          animationTarget={animationTarget}
+          damagePopup={damagePopup}
+          boardSize={boardSize}
+          onTileClick={(x, y) => void handleTileClick(x, y)}
+        />
+      </div>
       <CombatActions
         combat={combat}
         plannedActions={plannedActions}
@@ -449,6 +540,21 @@ export default function CombatArena({
         onFinishCombat={handleFinishCombat}
         onCombatFinished={onCombatFinished}
       />
+      {/* Кнопка инвентаря на мобильных — инвентарь открывается только по нажатию */}
+      {onOpenInventory && (
+        <button
+          type="button"
+          onClick={onOpenInventory}
+          className="md:hidden w-full flex items-center justify-center gap-2 rounded-xl border border-amber-500/60 bg-amber-900/40 px-3 py-2 text-xs font-bold uppercase tracking-wider text-amber-300 active:scale-[0.98] transition"
+        >
+          🎒 Open Inventory
+          {inventory.length > 0 && (
+            <span className="rounded-full bg-black/40 px-1.5 text-[10px]">
+              {inventory.length}
+            </span>
+          )}
+        </button>
+      )}
       <CombatLog entries={combatLog} />
     </motion.div>
   );

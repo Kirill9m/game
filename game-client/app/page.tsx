@@ -2,6 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { playerApi } from "@/services/playerApi";
 import {
   CombatSession,
@@ -56,6 +57,8 @@ export default function GameMapPage() {
   const [gameMaps, setGameMaps] = useState<GameMap[]>([]);
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  // Инвентарь во время боя на мобильных открывается только по кнопке
+  const [isMobileInventoryOpen, setIsMobileInventoryOpen] = useState(false);
   const [quests, setQuests] = useState<QuestProgress[]>([]);
   const [playerRole, setPlayerRole] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -345,7 +348,7 @@ export default function GameMapPage() {
       ) : (
         <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col gap-3">
           {/* ВЕРХНЯЯ ПАНЕЛЬ СТАТУСА */}
-          <header className="flex justify-between items-center bg-gray-900 px-4 py-2.5 rounded-2xl border border-gray-800 shrink-0">
+          <header className="flex justify-between items-center bg-gray-900 px-4 py-2 rounded-2xl border border-gray-800 shrink-0">
             <div className="flex items-center gap-3">
               {playerAvatar && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -413,17 +416,21 @@ export default function GameMapPage() {
           {/* ОСНОВНОЙ DASHBOARD */}
           <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-3">
             {/* ЛЕВАЯ ЧАСТЬ: Арена боя ИЛИ Панель управления мирной зоны */}
-            <div className="md:col-span-7 lg:col-span-8 bg-gray-900/90 border border-gray-800 rounded-2xl p-3 flex flex-col min-h-0 relative overflow-hidden">
+            <div className="md:col-span-7 lg:col-span-8 bg-gray-900/90 border border-gray-800 rounded-2xl p-2.5 md:p-3 flex flex-col min-h-0 relative overflow-hidden">
               {combatSession ? (
                 /* БОЕВАЯ АРЕНА */
-                <div className="w-full h-full flex flex-col min-h-0 overflow-y-auto">
+                <div className="w-full h-full flex flex-col min-h-0 overflow-hidden">
                   <CombatArena
                     combatId={combatSession.id}
                     playerId={playerId}
                     initialCombat={combatSession}
                     inventory={inventory}
                     onCombatUpdate={(updated) => setCombatSession(updated)}
-                    onCombatFinished={() => setCombatSession(null)}
+                    onCombatFinished={() => {
+                      setCombatSession(null);
+                      setIsMobileInventoryOpen(false);
+                    }}
+                    onOpenInventory={() => setIsMobileInventoryOpen(true)}
                   />
                 </div>
               ) : (
@@ -533,8 +540,13 @@ export default function GameMapPage() {
               )}
             </div>
 
-            {/* ПРАВАЯ ЧАСТЬ: ИНВЕНТАРЬ (В бою) ИЛИ ДЖОЙСТИК И КАРТА (Вне боя) */}
-            <div className="md:col-span-5 lg:col-span-4 bg-gray-900/90 border border-gray-800 rounded-2xl p-3 flex flex-col justify-between shrink-0 min-h-0">
+            {/* ПРАВАЯ ЧАСТЬ: ИНВЕНТАРЬ (В бою на desktop) ИЛИ ДЖОЙСТИК И КАРТА (Вне боя) */}
+            {/* На мобильных во время боя инвентарь скрыт и открывается кнопкой 🎒 (bottom-sheet). */}
+            <div
+              className={`md:col-span-5 lg:col-span-4 bg-gray-900/90 border border-gray-800 rounded-2xl p-3 justify-between shrink-0 min-h-0 ${
+                combatSession ? "hidden md:flex md:flex-col" : "flex flex-col"
+              }`}
+            >
               {combatSession ? (
                 /* ИНВЕНТАРЬ ВО ВРЕМЯ БОЯ */
                 <div className="flex-1 flex flex-col min-h-0">
@@ -680,6 +692,52 @@ export default function GameMapPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* ИНВЕНТАРЬ В БОЮ НА МОБИЛЬНЫХ: открывается только по кнопке 🎒 */}
+      {combatSession && (
+        <AnimatePresence>
+          {isMobileInventoryOpen && (
+            <motion.div
+              className="fixed inset-0 z-50 flex items-end md:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+                onClick={() => setIsMobileInventoryOpen(false)}
+              />
+              <motion.div
+                className="relative w-full h-[68dvh] rounded-t-3xl border-t border-amber-500/40 bg-gray-900 p-3 flex flex-col"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              >
+                <div className="flex items-center justify-between shrink-0 border-b border-gray-800 pb-2 mb-2">
+                  <span className="text-xs uppercase font-bold tracking-wider text-amber-400 flex items-center gap-1.5">
+                    🎒 Combat Inventory
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileInventoryOpen(false)}
+                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 active:scale-95 transition"
+                  >
+                    ✕ Close
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <InventoryPanel
+                    items={inventory}
+                    playerId={playerId}
+                    onItemsChange={setInventory}
+                  />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       )}
     </main>
   );

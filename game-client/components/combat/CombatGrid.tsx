@@ -12,12 +12,12 @@ import {
   ReplayAction,
 } from "./types";
 
-type CombatMode = "move" | "shoot";
-
 interface CombatGridProps {
   combat: CombatSession;
   playerId: string;
-  mode: CombatMode;
+  canAttack: boolean;
+  /** Клетки зоны обстрела (визуальная подсветка); null — не показывать. */
+  attackRangeCells?: Set<string> | null;
   isMyTurn: boolean;
   plannedActions: PlannedAction[];
   reachableCells: Set<string>;
@@ -26,6 +26,8 @@ interface CombatGridProps {
   replayAction: ReplayAction | null;
   animationTarget: "p1" | "p2" | null;
   damagePopup: DamagePopup | null;
+  /** Размер квадратного поля в px (адаптация под экран). */
+  boardSize?: number;
   onTileClick: (x: number, y: number) => void;
 }
 
@@ -34,7 +36,8 @@ const CENTER = (coord: number) => `${(coord + 0.5) * 10}%`;
 export function CombatGrid({
   combat,
   playerId,
-  mode,
+  canAttack,
+  attackRangeCells,
   isMyTurn,
   plannedActions,
   reachableCells,
@@ -43,6 +46,7 @@ export function CombatGrid({
   replayAction,
   animationTarget,
   damagePopup,
+  boardSize,
   onTileClick,
 }: CombatGridProps) {
   const moveActions = plannedActions.filter(
@@ -53,7 +57,8 @@ export function CombatGrid({
   const isPlayer1 = playerId === combat.player1Id;
   const enemyCell =
     isPlayer1 ? `${combat.p2X}:${combat.p2Y}` : `${combat.p1X}:${combat.p1Y}`;
-  const attackableCell = mode === "shoot" && isMyTurn ? enemyCell : null;
+  // Клик по врагу = выстрел по умолчанию, поэтому подсвечиваем его клетку.
+  const attackableCell = canAttack ? enemyCell : null;
 
   const tokenFor = (playerKey: "p1" | "p2") => {
     const isYou =
@@ -72,7 +77,14 @@ export function CombatGrid({
   };
 
   return (
-    <div className="combat-board-inner w-[min(92vw,440px)]">
+    <div
+      className="combat-board-inner"
+      style={
+        boardSize
+          ? { width: boardSize, height: boardSize }
+          : undefined
+      }
+    >
       <div className="combat-grid">
         {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
           const x = index % GRID_SIZE;
@@ -81,17 +93,20 @@ export function CombatGrid({
           const stepIndex = moveActions.findIndex(
             (cell) => cell.x === x && cell.y === y,
           );
-          const reachable =
-            mode === "move" && isMyTurn && reachableCells.has(key);
+          const reachable = isMyTurn && reachableCells.has(key);
           const attackable = attackableCell === key;
           const planned = stepIndex >= 0;
+          // Зона обстрела — тонкая подсветка на нейтральных клетках,
+          // чтобы не перебивать более важные состояния (маршрут/атака).
+          const inRange =
+            !reachable && !attackable && !planned && attackRangeCells?.has(key);
           return (
             <button
               key={key}
               type="button"
               aria-label={`Cell ${x}, ${y}`}
               onClick={() => onTileClick(x, y)}
-              className={`combat-cell ${(x + y) % 2 === 0 ? "combat-cell-checker" : ""} ${reachable ? "combat-cell-reachable" : ""} ${attackable ? "combat-cell-attackable" : ""} ${planned ? "combat-cell-planned" : ""}`}
+              className={`combat-cell ${(x + y) % 2 === 0 ? "combat-cell-checker" : ""} ${reachable ? "combat-cell-reachable" : ""} ${attackable ? "combat-cell-attackable" : ""} ${planned ? "combat-cell-planned" : ""} ${inRange ? "combat-cell-in-range" : ""}`}
             >
               {WATER_CELLS.has(key) && <TerrainTile variant="water" />}
               {WALL_CELLS.has(key) && <TerrainTile variant="wall" />}

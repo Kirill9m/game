@@ -34,4 +34,6 @@ export interface CombatArenaProps {
   inventory: InventoryItem[];
   onCombatUpdate: (combat: CombatSession) => void;
   onCombatFinished: () => void;
+  /** Показать инвентарь (мобильный bottom-sheet). */
+  onOpenInventory?: () => void;
 }

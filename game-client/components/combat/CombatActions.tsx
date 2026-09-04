@@ -35,12 +35,12 @@ export function CombatActions({
 
   return (
     <motion.div
-      className="w-full flex flex-col gap-2"
+      className="w-full shrink-0 flex flex-col gap-2"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 260, damping: 22, delay: 0.1 }}
     >
-      {/* Action points + clear */}
+      {/* Action points + clear + (desktop) End Turn */}
       <div className="flex items-center gap-2">
         <div className="flex-1 flex items-center justify-between rounded-xl border border-amber-500/40 bg-amber-950/25 px-3 py-2 backdrop-blur-sm">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-500/90">
@@ -56,10 +56,28 @@ export function CombatActions({
         <button
           onClick={onClear}
           disabled={isActing || plannedActions.length === 0}
-          className="h-full px-4 py-2 rounded-xl border border-gray-600 bg-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-300 hover:bg-gray-700 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 px-4 py-2 rounded-xl border border-gray-600 bg-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-300 hover:bg-gray-700 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-40"
         >
           Clear
         </button>
+
+        {/* Desktop End Turn inline */}
+        <motion.button
+          onClick={onEndTurn}
+          disabled={!isMyTurn || isEndingTurn}
+          whileTap={{ scale: 0.97 }}
+          className={`hidden md:block md:w-44 py-2.5 rounded-xl font-bold text-sm tracking-wide uppercase transition-shadow ${
+            isMyTurn
+              ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_24px_rgba(217,119,6,0.4)]"
+              : "bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed"
+          }`}
+        >
+          {isEndingTurn
+            ? "Ending Turn…"
+            : isMyTurn
+              ? "End Turn"
+              : "Enemy Turn…"}
+        </motion.button>
       </div>
 
       {/* Planned attacks */}
@@ -89,7 +107,7 @@ export function CombatActions({
         </motion.div>
       )}
 
-      {/* End turn */}
+      {/* Mobile End Turn full-width */}
       <motion.button
         onClick={onEndTurn}
         disabled={!isMyTurn || isEndingTurn}
@@ -97,7 +115,7 @@ export function CombatActions({
         animate={{ scale: isMyTurn && !isEndingTurn ? 1.02 : 1, opacity: isMyTurn ? 1 : 0.55 }}
         transition={{ type: "spring", stiffness: 260, damping: 20 }}
         whileTap={{ scale: 0.97 }}
-        className={`w-full py-3 rounded-xl font-bold text-sm tracking-wide uppercase transition-shadow ${
+        className={`md:hidden w-full py-3 rounded-xl font-bold text-sm tracking-wide uppercase transition-shadow ${
           isMyTurn
             ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_24px_rgba(217,119,6,0.4)]"
             : "bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed"
