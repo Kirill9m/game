@@ -35,9 +35,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secretpassword}
       ADMIN_PLAYER_IDS: ${ADMIN_PLAYER_IDS:-}
       ADMIN_BOOTSTRAP_CODE: ${ADMIN_BOOTSTRAP_CODE:-let-me-in}
-      # Разрешённые CORS-источники (comma-separated). После настройки туннеля
-      # добавьте его адрес, например: * или https://game.example.com,http://localhost:8080
-      GAME_CORS_ALLOWED_ORIGINS: ${GAME_CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000,http://192.168.8.96:3000}
+      # Разрешённые CORS-источники (comma-separated). По умолчанию "*"
+      # разрешает любой origin (http/https, любой домен) — удобно для туннелей.
+      # Для ужесточения перечислите конкретные, например:
+      #   https://game.example.com,http://localhost:8080,http://localhost:3000
+      GAME_CORS_ALLOWED_ORIGINS: ${GAME_CORS_ALLOWED_ORIGINS:-*}
     depends_on:
       postgres:
         condition: service_healthy

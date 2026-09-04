@@ -18,9 +18,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     // Разрешённые CORS-источники. Задаётся через env GAME_CORS_ALLOWED_ORIGINS
-    // (comma-separated). Значение * разрешает любые источники — удобно,
-    // когда домен выдаёт случайный туннель (cloudflared/ngrok).
-    @Value("${game.cors.allowed-origins:http://localhost:8080,http://localhost:3000,http://192.168.8.96:3000}")
+    // (comma-separated). Значение * разрешает любые источники — работает и с http,
+    // и с https, и с произвольным адресом туннеля (cloudflared/ngrok).
+    @Value("${game.cors.allowed-origins:*}")
     private String[] allowedOrigins;
 
     @Bean
