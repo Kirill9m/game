@@ -10,7 +10,6 @@ import java.util.UUID;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,7 +22,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/combat")
 @RequiredArgsConstructor
-@CrossOrigin(origins = {"http://localhost:3000", "http://192.168.8.96:3000"})
 public class CombatController {
 
     private final CombatService combatService;

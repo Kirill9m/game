@@ -408,8 +408,8 @@ export default function GameMapPage() {
       ) : (
         <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col gap-3">
           {/* ВЕРХНЯЯ ПАНЕЛЬ СТАТУСА */}
-          <header className="flex justify-between items-center bg-gray-900 px-4 py-2 rounded-2xl border border-gray-800 shrink-0">
-            <div className="flex items-center gap-3">
+          <header className="flex justify-between items-center gap-2 bg-gray-900 px-3 md:px-4 py-2 rounded-2xl border border-gray-800 shrink-0 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
               {playerAvatar && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -419,7 +419,7 @@ export default function GameMapPage() {
                 />
               )}
               <div className="leading-tight">
-                <span className="font-bold text-blue-300 text-sm block">
+                <span className="font-bold text-blue-300 text-sm block truncate max-w-[140px] sm:max-w-none">
                   {playerName} {isGuestMode && "(Guest)"}
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -521,23 +521,48 @@ export default function GameMapPage() {
               ) : (
                 /* ВНЕ БОЯ: ПЕРЕКЛЮЧАЕМЫЕ ВКЛАДКИ */
                 <div className="flex-1 min-h-0 flex flex-col">
-                  <div className="flex items-center justify-between mb-3 shrink-0 border-b border-gray-800 pb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  {/* МОБИЛЬНЫЕ: компактная сводка лута и игроки на тайле (на десктопе это правая колонка) */}
+                  <div className="md:hidden shrink-0 space-y-2 mb-2 max-h-[38%] overflow-y-auto">
+                    <LootPanel
+                      lootBag={lootBag}
+                      fieldLoot={fieldLoot}
+                      inSafeZone={inSafeZone}
+                      playerId={playerId}
+                      onPickup={handlePickupLoot}
+                      compact
+                    />
+                    {playersOnTile.length + npcs.length > 0 && (
+                      <div className="overflow-hidden">
+                        <PlayersList
+                          players={playersOnTile}
+                          currentId={playerId}
+                          onAttack={handleStartCombat}
+                          npcs={npcs}
+                          onTalk={setActiveNpc}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between mb-3 shrink-0 border-b border-gray-800 pb-2 gap-2">
+                    <span className="hidden sm:block text-xs font-bold uppercase tracking-wider text-gray-400">
                       World View
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1 md:gap-2 overflow-x-auto w-full sm:w-auto justify-start sm:justify-end">
                       {menuTabs.map((tab) => (
                         <button
                           key={tab.id}
                           onClick={() => setActiveTab(tab.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all ${
+                          className={`flex items-center gap-1 md:gap-1.5 px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl border transition-all shrink-0 ${
                             activeTab === tab.id
                               ? "border-blue-500 bg-blue-950/60 text-blue-200 shadow-md scale-105"
                               : "border-gray-800 bg-gray-800/40 text-gray-400 hover:bg-gray-800"
                           }`}
                         >
                           <span className="text-base">{tab.icon}</span>
-                          <span className="text-xs font-bold">{tab.label}</span>
+                          <span className="text-[11px] md:text-xs font-bold whitespace-nowrap">
+                            {tab.label}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -621,17 +646,39 @@ export default function GameMapPage() {
                       <AdminPanel playerId={playerId} />
                     )}
                   </div>
+
+                  {/* МОБИЛЬНЫЕ: компактная нижняя навигация — мини-D-pad и карта */}
+                  <div className="md:hidden shrink-0 mt-2 border-t border-gray-800 pt-2 flex flex-col items-center gap-1.5">
+                    <div className="w-full flex items-center justify-between px-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
+                        Navigation
+                      </span>
+                      <span className="font-mono text-[11px] text-blue-400 bg-blue-950 px-2 py-0.5 rounded border border-blue-900">
+                        [{positionX} : {positionY}]
+                      </span>
+                    </div>
+                    <MovementPad
+                      onMove={handleMove}
+                      currentCell={`[${positionX}/${positionY}]`}
+                      cooldown={cooldown}
+                    />
+                    {safeZone && (
+                      <button
+                        type="button"
+                        onClick={() => openMap()}
+                        className="w-full py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-[11px] font-bold uppercase tracking-wider text-gray-200 transition active:scale-[0.98] flex items-center justify-center gap-2"
+                      >
+                        🗺️ Open World Map
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
             {/* ПРАВАЯ ЧАСТЬ: ИНВЕНТАРЬ (В бою на desktop) ИЛИ ДЖОЙСТИК И КАРТА (Вне боя) */}
             {/* На мобильных во время боя инвентарь скрыт и открывается кнопкой 🎒 (bottom-sheet). */}
-            <div
-              className={`md:col-span-5 lg:col-span-4 bg-gray-900/90 border border-gray-800 rounded-2xl p-3 justify-between shrink-0 min-h-0 ${
-                combatSession ? "hidden md:flex md:flex-col" : "flex flex-col"
-              }`}
-            >
+            <div className="hidden md:flex md:col-span-5 lg:col-span-4 bg-gray-900/90 border border-gray-800 rounded-2xl p-3 justify-between flex-col shrink-0 min-h-0">
               {combatSession ? (
                 /* ИНВЕНТАРЬ ВО ВРЕМЯ БОЯ */
                 <div className="flex-1 flex flex-col min-h-0">

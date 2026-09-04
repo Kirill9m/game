@@ -86,19 +86,19 @@ export default function MovementPad({
   return (
     <div className="flex flex-col items-center gap-2">
       {currentCell && (
-        <div className="text-white text-sm font-medium mb-1">
+        <div className="text-white text-xs md:text-sm font-medium mb-1">
           Location:{" "}
           <span className="font-bold text-teal-300">{currentCell}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-1.5 w-72 mx-auto bg-black/40 p-2 rounded-xl border border-white/10 backdrop-blur-sm relative">
+      <div className="grid grid-cols-3 gap-1 md:gap-1.5 w-36 md:w-56 mx-auto bg-black/40 p-1.5 md:p-2 rounded-xl border border-white/10 backdrop-blur-sm relative">
         {gridCells.map((cell) => {
           if (cell.isCurrent) {
             return (
               <div
                 key={cell.id}
-                className={`h-16 rounded-lg border flex flex-col items-center justify-center transition-all ${
+                className={`h-10 md:h-14 rounded-lg border flex flex-col items-center justify-center transition-all ${
                   secondsLeft > 0
                     ? "bg-red-500/30 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]"
                     : "bg-teal-200/40 border-teal-300/60 shadow-[0_0_15px_rgba(45,212,191,0.3)]"
@@ -106,10 +106,10 @@ export default function MovementPad({
               >
                 {secondsLeft > 0 ? (
                   <>
-                    <span className="text-[10px] text-red-200 uppercase font-bold tracking-wider">
+                    <span className="text-[8px] md:text-[10px] text-red-200 uppercase font-bold tracking-wider">
                       Moving
                     </span>
-                    <span className="text-lg font-extrabold text-white">
+                    <span className="text-sm md:text-lg font-extrabold text-white">
                       {secondsLeft}с
                     </span>
                   </>
@@ -125,7 +125,7 @@ export default function MovementPad({
               key={cell.id}
               disabled={secondsLeft > 0}
               onClick={() => handleCellClick(cell.deltaX, cell.deltaY)}
-              className={`h-16 rounded-lg border backdrop-blur-md transition-all shadow-md flex items-center justify-center ${
+              className={`h-10 md:h-14 rounded-lg border backdrop-blur-md transition-all shadow-md flex items-center justify-center ${
                 secondsLeft > 0
                   ? "bg-white/5 border-white/5 cursor-not-allowed opacity-40"
                   : "bg-white/10 hover:bg-white/20 active:scale-95 border-white/20 cursor-pointer"

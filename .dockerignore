@@ -1,0 +1,11 @@
+target
+.git
+.idea
+.vscode
+game-client
+docker
+.env
+.env.*
+*.iml
+.DS_Store
+HELP.md
