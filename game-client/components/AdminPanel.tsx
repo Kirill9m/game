@@ -1023,6 +1023,290 @@ export default function AdminPanel({ playerId }: Props) {
         </div>
       )}
 
+{/* ================= ITEMS ================= */}
+      {section === "items" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                ⚔️ Items — {items.length} defined
+              </span>
+            </div>
+            <button type="button" disabled={busy} onClick={handleGenerateItem} className={primaryBtn}>
+              🎲 Generate Random Item
+            </button>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              ✍️ Create Item Manually
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Code</label>
+                <input
+                  className={inputClass}
+                  value={itemCode}
+                  onChange={(e) => setItemCode(e.target.value.toUpperCase())}
+                  placeholder="PISTOL"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Name</label>
+                <input
+                  className={inputClass}
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  placeholder="Pistol"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Type</label>
+                <select
+                  className={inputClass}
+                  value={itemType}
+                  onChange={(e) => setItemType(e.target.value)}
+                >
+                  <option value="WEAPON">WEAPON</option>
+                  <option value="ARMOR">ARMOR</option>
+                  <option value="UTILITY">UTILITY</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Damage</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={itemDamage}
+                  onChange={(e) => setItemDamage(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Attack range</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={itemRange}
+                  onChange={(e) => setItemRange(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Width</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    value={itemWidth}
+                    onChange={(e) => setItemWidth(Number(e.target.value) || 1)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Height</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    value={itemHeight}
+                    onChange={(e) => setItemHeight(Number(e.target.value) || 1)}
+                  />
+                </div>
+              </div>
+            </div>
+            <button type="button" disabled={busy} onClick={handleCreateItem} className={primaryBtn}>
+              ➕ Create Item
+            </button>
+          </div>
+
+          {/* Item list */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              📦 All Items ({items.length})
+            </span>
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-start justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">{item.name}</div>
+                  <div className="text-[10px] text-gray-500 font-mono">{item.code}</div>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    <span className="bg-purple-900/40 border border-purple-800 text-purple-200 px-2 py-0.5 rounded-full text-[10px]">
+                      {item.type}
+                    </span>
+                    <span className="bg-red-900/40 border border-red-800 text-red-200 px-2 py-0.5 rounded-full text-[10px]">
+                      ⚔️ {item.damage}
+                    </span>
+                    <span className="bg-blue-900/40 border border-blue-800 text-blue-200 px-2 py-0.5 rounded-full text-[10px]">
+                      🎯 {item.attackRange}
+                    </span>
+                    <span className="bg-gray-800/60 border border-gray-700 text-gray-300 px-2 py-0.5 rounded-full text-[10px]">
+                      {item.width}×{item.height}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleDeleteItem(item.id)}
+                  className={dangerBtn}
+                >
+                  🗑 Delete
+                </button>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div className="text-center text-gray-600 text-xs py-4">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+{/* ================= ENEMY TYPES ================= */}
+      {section === "enemies" && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                👹 Enemies — {enemies.length} defined
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className={labelClass}>Difficulty</label>
+              <select
+                className={inputClass}
+                value={enemyDifficulty}
+                onChange={(e) => setEnemyDifficulty(Number(e.target.value) || 1)}
+              >
+                <option value={1}>1 (weak)</option>
+                <option value={2}>2 (medium)</option>
+                <option value={3}>3 (boss)</option>
+              </select>
+              <button type="button" disabled={busy} onClick={handleGenerateEnemy} className={primaryBtn}>
+                🎲 Generate Random Enemy
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              ✍️ Create Enemy Manually
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Code</label>
+                <input
+                  className={inputClass}
+                  value={enemyCode}
+                  onChange={(e) => setEnemyCode(e.target.value.toUpperCase())}
+                  placeholder="RADROACH"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Name</label>
+                <input
+                  className={inputClass}
+                  value={enemyName}
+                  onChange={(e) => setEnemyName(e.target.value)}
+                  placeholder="Rad Roach"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Max health</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={enemyHealth}
+                  onChange={(e) => setEnemyHealth(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Damage</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={enemyDamage}
+                  onChange={(e) => setEnemyDamage(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Attack range</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={enemyRange}
+                  onChange={(e) => setEnemyRange(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Action points</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={enemyAp}
+                  onChange={(e) => setEnemyAp(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Movement range</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={enemyMove}
+                  onChange={(e) => setEnemyMove(Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <button type="button" disabled={busy} onClick={handleCreateEnemy} className={primaryBtn}>
+              ➕ Create Enemy
+            </button>
+          </div>
+
+          {/* Enemy list */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              👹 All Enemies ({enemies.length})
+            </span>
+{enemies.map((enemy) => (
+              <div
+                key={enemy.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-start justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-100 truncate">{enemy.name}</div>
+                  <div className="text-[10px] text-gray-500 font-mono">{enemy.code}</div>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    <span className="bg-red-900/40 border border-red-800 text-red-200 px-2 py-0.5 rounded-full text-[10px]">
+                      ❤️ {enemy.maxHealth}
+                    </span>
+                    <span className="bg-amber-900/40 border border-amber-800 text-amber-200 px-2 py-0.5 rounded-full text-[10px]">
+                      ⚔️ {enemy.damage}
+                    </span>
+                    <span className="bg-blue-900/40 border border-blue-800 text-blue-200 px-2 py-0.5 rounded-full text-[10px]">
+                      🎯 {enemy.attackRange}
+                    </span>
+                    <span className="bg-yellow-900/40 border border-yellow-800 text-yellow-200 px-2 py-0.5 rounded-full text-[10px]">
+                      ⚡ {enemy.actionPoints} AP
+                    </span>
+                    <span className="bg-green-900/40 border border-green-800 text-green-200 px-2 py-0.5 rounded-full text-[10px]">
+                      👣 {enemy.movementRange}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleDeleteEnemy(enemy.id)}
+                  className={dangerBtn}
+                >
+                  🗑 Delete
+                </button>
+              </div>
+            ))}
+            {enemies.length === 0 && (
+              <div className="text-center text-gray-600 text-xs py-4">No enemies yet.</div>
+            )}
+          </div>
+        </div>
+      )}
       {/* ================= WORLD CELLS ================= */}
       {section === "world" && (
         <div className="flex flex-col gap-3">

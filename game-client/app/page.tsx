@@ -61,7 +61,7 @@ export default function GameMapPage() {
   const [notice, setNotice] = useState("");
 
   const [activeTab, setActiveTab] = useState<
-    "inventory" | "territory" | "players" | "quests" | "admin"
+    "inventory" | "territory" | "quests" | "admin"
   >("inventory");
 
   const sessionUser = session?.user as
@@ -309,7 +309,6 @@ export default function GameMapPage() {
   const menuTabs = [
     { id: "inventory", icon: "🎒", label: "Inventory" },
     { id: "territory", icon: "🐺", label: "Hunt" },
-    { id: "players", icon: "👥", label: "Players" },
     { id: "quests", icon: "📜", label: "Quests" },
     // The admin panel is only visible to players with the ADMIN role
     ...(playerRole === "ADMIN"
@@ -501,16 +500,6 @@ export default function GameMapPage() {
                       </div>
                     )}
 
-                    {activeTab === "players" && (
-                      <PlayersList
-                        players={playersOnTile}
-                        currentId={playerId}
-                        onAttack={handleStartCombat}
-                        npcs={npcs}
-                        onTalk={setActiveNpc}
-                      />
-                    )}
-
                     {activeTab === "quests" && (
                       <QuestPanel
                         quests={quests}
@@ -582,15 +571,29 @@ export default function GameMapPage() {
                     />
                   </div>
 
-                  {safeZone && (
-                    <button
-                      type="button"
-                      onClick={() => openMap()}
-                      className="w-full mt-2 py-2.5 px-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-200 transition flex items-center justify-center gap-2"
-                    >
-                      🗺️ Open World Map
-                    </button>
-                  )}
+                  <div className="w-full flex flex-col items-stretch gap-2">
+                    {safeZone && (
+                      <button
+                        type="button"
+                        onClick={() => openMap()}
+                        className="w-full py-2.5 px-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-200 transition flex items-center justify-center gap-2"
+                      >
+                        🗺️ Open World Map
+                      </button>
+                    )}
+
+                    {playersOnTile.length + npcs.length > 0 && (
+                      <div className="w-full max-h-64 overflow-y-auto shrink-0 text-left">
+                        <PlayersList
+                          players={playersOnTile}
+                          currentId={playerId}
+                          onAttack={handleStartCombat}
+                          npcs={npcs}
+                          onTalk={setActiveNpc}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
