@@ -4,8 +4,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import spring.backend.game.service.AdminService;
-
 /**
  * Container for admin panel request/response payloads.
  */
@@ -166,11 +164,15 @@ public final class AdminDtos {
             Set<UUID> requiredNpcIds) {
     }
 
+    /** A single dialogue reply in a create-dialogue-node request. */
+    public record DialogueChoiceRequest(String text, UUID nextNodeId) {
+    }
+
     public record CreateDialogueNodeRequest(
             UUID npcId,
             String text,
             Boolean isStart,
-            List<AdminService.DialogueChoiceRequest> choices) {
+            List<DialogueChoiceRequest> choices) {
     }
 
     public record CreateItemRequest(

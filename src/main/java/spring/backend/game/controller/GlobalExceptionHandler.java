@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
-import spring.backend.game.service.AdminService.AdminAccessDeniedException;
+import spring.backend.game.service.AdminAccessDeniedException;
 
 @Slf4j
 @RestControllerAdvice

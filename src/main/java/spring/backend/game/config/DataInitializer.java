@@ -30,7 +30,7 @@ import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
 import spring.backend.game.repository.QuestSystem.QuestRepository;
 import spring.backend.game.repository.WeaponTypeRepository;
-import spring.backend.game.service.AdminService;
+import spring.backend.game.service.PlayerAdminService;
 
 @Slf4j
 @Component
@@ -48,13 +48,13 @@ public class DataInitializer implements CommandLineRunner {
     private final ObstacleTypeRepository obstacleTypeRepository;
     private final JdbcTemplate jdbcTemplate;
     @Lazy
-    private final AdminService adminService;
+    private final PlayerAdminService playerAdminService;
 
     @Override
     public void run(String... args) {
         fixDatabaseSchema();
         seedData();
-        adminService.promoteConfiguredAdmins();
+        playerAdminService.promoteConfiguredAdmins();
     }
 
     @Transactional

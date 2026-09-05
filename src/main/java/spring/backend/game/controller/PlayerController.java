@@ -11,7 +11,7 @@ import spring.backend.game.dto.PickupLootResponse;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
-import spring.backend.game.service.AdminService;
+import spring.backend.game.service.PlayerAdminService;
 import spring.backend.game.service.InventoryService;
 import spring.backend.game.service.LootService;
 import spring.backend.game.service.MovementService;
@@ -32,7 +32,7 @@ public class PlayerController {
     private final PlayerRepository playerRepository;
     private final InventoryService inventoryService;
     private final NpcRepository npcRepository;
-    private final AdminService adminService;
+    private final PlayerAdminService playerAdminService;
     private final LootService lootService;
     private final WorldZoneService worldZoneService;
     private final MovementService movementService;
@@ -58,7 +58,7 @@ public class PlayerController {
         playerRepository.save(player);
 
         // Grant the ADMIN role to players listed in the configuration
-        adminService.promoteConfiguredAdmins();
+        playerAdminService.promoteConfiguredAdmins();
         if (playerRepository.findById(player.getId()).isPresent()) {
             player = playerRepository.findById(player.getId()).get();
         }

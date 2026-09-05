@@ -49,7 +49,12 @@ import spring.backend.game.dto.AdminDtos.UpdateWorldZoneRequest;
 import spring.backend.game.dto.GameMapResponse;
 import spring.backend.game.dto.WorldZoneResponse;
 import spring.backend.game.dto.LocationDtos;
-import spring.backend.game.service.AdminService;
+import spring.backend.game.service.AdminAccessService;
+import spring.backend.game.service.EnemyAdminService;
+import spring.backend.game.service.ItemAdminService;
+import spring.backend.game.service.ObstacleAdminService;
+import spring.backend.game.service.PlayerAdminService;
+import spring.backend.game.service.QuestAdminService;
 import spring.backend.game.service.GameMapService;
 import spring.backend.game.service.LocationService;
 import spring.backend.game.service.WorldCellService;
@@ -65,7 +70,12 @@ import spring.backend.game.service.WorldZoneService;
 @RequiredArgsConstructor
 public class AdminController {
 
-    private final AdminService adminService;
+    private final AdminAccessService adminAccessService;
+    private final PlayerAdminService playerAdminService;
+    private final QuestAdminService questAdminService;
+    private final ItemAdminService itemAdminService;
+    private final EnemyAdminService enemyAdminService;
+    private final ObstacleAdminService obstacleAdminService;
     private final WorldCellService worldCellService;
     private final GameMapService gameMapService;
     private final WorldZoneService worldZoneService;
@@ -76,15 +86,15 @@ public class AdminController {
     /** Promote the first admin using the secret bootstrap code. */
     @PostMapping("/bootstrap")
     public ResponseEntity<AdminPlayerDto> bootstrapAdmin(@RequestBody BootstrapAdminRequest request) {
-        return ResponseEntity.ok(adminService.bootstrapAdmin(request.playerId(), request.code()));
+        return ResponseEntity.ok(playerAdminService.bootstrapAdmin(request.playerId(), request.code()));
     }
 
     // --- PLAYERS & ROLES ---
 
     @GetMapping("/players")
     public ResponseEntity<List<AdminPlayerDto>> getPlayers(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllPlayers());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(playerAdminService.getAllPlayers());
     }
 
     @PostMapping("/players/{targetPlayerId}/role")
@@ -92,8 +102,8 @@ public class AdminController {
             @PathVariable String targetPlayerId,
             @RequestParam String playerId,
             @RequestBody SetRoleRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.setPlayerRole(targetPlayerId, request.role()));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(playerAdminService.setPlayerRole(targetPlayerId, request.role()));
     }
 
     /** Update player stats (username, level, gold, health, attributes, position). */
@@ -102,8 +112,8 @@ public class AdminController {
             @PathVariable String targetPlayerId,
             @RequestParam String playerId,
             @RequestBody UpdatePlayerRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.updatePlayer(targetPlayerId, request));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(playerAdminService.updatePlayer(targetPlayerId, request));
     }
 
     /** Delete a player with inventory, quest progress and combat history. */
@@ -111,8 +121,8 @@ public class AdminController {
     public ResponseEntity<Void> deletePlayer(
             @PathVariable String targetPlayerId,
             @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deletePlayer(targetPlayerId);
+        adminAccessService.requireAdmin(playerId);
+        playerAdminService.deletePlayer(targetPlayerId);
         return ResponseEntity.noContent().build();
     }
 
@@ -122,11 +132,11 @@ public class AdminController {
             @PathVariable String targetPlayerId,
             @RequestParam String playerId,
             @RequestBody GiveItemRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
-        return ResponseEntity.ok(adminService.giveItemToPlayer(
+        return ResponseEntity.ok(itemAdminService.giveItemToPlayer(
                 targetPlayerId,
                 request.itemCode(),
                 request.quantity()));
@@ -136,16 +146,16 @@ public class AdminController {
 
     @GetMapping("/npcs")
     public ResponseEntity<List<AdminNpcDto>> getNpcs(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllNpcs());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.getAllNpcs());
     }
 
     @PostMapping("/npcs")
     public ResponseEntity<AdminNpcDto> createNpc(
             @RequestParam String playerId,
             @RequestBody CreateNpcRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.createNpc(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.createNpc(
                 request.code(),
                 request.name(),
                 request.positionX() == null ? 0 : request.positionX(),
@@ -157,15 +167,15 @@ public class AdminController {
             @PathVariable UUID npcId,
             @RequestParam String playerId,
             @RequestBody UpdateNpcRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.updateNpc(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.updateNpc(
                 npcId, request.name(), request.positionX(), request.positionY()));
     }
 
     @DeleteMapping("/npcs/{npcId}")
     public ResponseEntity<Void> deleteNpc(@PathVariable UUID npcId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteNpc(npcId);
+        adminAccessService.requireAdmin(playerId);
+        questAdminService.deleteNpc(npcId);
         return ResponseEntity.noContent().build();
     }
 
@@ -173,16 +183,16 @@ public class AdminController {
 
     @GetMapping("/quests")
     public ResponseEntity<List<AdminQuestDto>> getQuests(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllQuests());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.getAllQuests());
     }
 
     @PostMapping("/quests")
     public ResponseEntity<AdminQuestDto> createQuest(
             @RequestParam String playerId,
             @RequestBody CreateQuestRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.createQuest(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.createQuest(
                 request.code(),
                 request.title(),
                 request.rewardExp() == null ? 0 : request.rewardExp(),
@@ -196,8 +206,8 @@ public class AdminController {
             @PathVariable UUID questId,
             @RequestParam String playerId,
             @RequestBody UpdateQuestRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.updateQuest(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.updateQuest(
                 questId,
                 request.title(),
                 request.rewardExp(),
@@ -208,8 +218,8 @@ public class AdminController {
 
     @DeleteMapping("/quests/{questId}")
     public ResponseEntity<Void> deleteQuest(@PathVariable UUID questId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteQuest(questId);
+        adminAccessService.requireAdmin(playerId);
+        questAdminService.deleteQuest(questId);
         return ResponseEntity.noContent().build();
     }
 
@@ -218,8 +228,8 @@ public class AdminController {
     public ResponseEntity<AdminQuestDto> generateQuest(
             @RequestParam String playerId,
             @RequestParam(defaultValue = "false") boolean createNewNpc) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.generateRandomQuest(createNewNpc));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.generateRandomQuest(createNewNpc));
     }
 
     /** Random enemy generator: difficulty 1 (weak) .. 3 (boss-like). */
@@ -227,8 +237,8 @@ public class AdminController {
     public ResponseEntity<AdminEnemyTypeDto> generateEnemy(
             @RequestParam String playerId,
             @RequestParam(defaultValue = "1") int difficulty) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.generateRandomEnemy(difficulty));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(enemyAdminService.generateRandomEnemy(difficulty));
     }
 
     // --- DIALOGUES ---
@@ -237,22 +247,22 @@ public class AdminController {
     public ResponseEntity<?> getDialogueNodes(
             @RequestParam String playerId,
             @RequestParam(required = false) UUID npcId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (npcId == null) {
             return ResponseEntity.badRequest().body("npcId is required");
         }
-        return ResponseEntity.ok(adminService.getDialogueNodes(npcId));
+        return ResponseEntity.ok(questAdminService.getDialogueNodes(npcId));
     }
 
     @PostMapping("/dialogues")
     public ResponseEntity<?> createDialogueNode(
             @RequestParam String playerId,
             @RequestBody CreateDialogueNodeRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request.npcId() == null) {
             return ResponseEntity.badRequest().body("npcId is required");
         }
-        return ResponseEntity.ok(adminService.createDialogueNode(
+        return ResponseEntity.ok(questAdminService.createDialogueNode(
                 request.npcId(),
                 request.text(),
                 Boolean.TRUE.equals(request.isStart()),
@@ -261,14 +271,14 @@ public class AdminController {
 
     @PostMapping("/dialogues/{nodeId}/start")
     public ResponseEntity<?> setStartNode(@PathVariable UUID nodeId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.setStartNode(nodeId));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(questAdminService.setStartNode(nodeId));
     }
 
     @DeleteMapping("/dialogues/{nodeId}")
     public ResponseEntity<Void> deleteDialogueNode(@PathVariable UUID nodeId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteDialogueNode(nodeId);
+        adminAccessService.requireAdmin(playerId);
+        questAdminService.deleteDialogueNode(nodeId);
         return ResponseEntity.noContent().build();
     }
 
@@ -276,16 +286,16 @@ public class AdminController {
 
     @GetMapping("/items")
     public ResponseEntity<List<AdminItemDto>> getItems(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllItems());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(itemAdminService.getAllItems());
     }
 
     @PostMapping("/items")
     public ResponseEntity<AdminItemDto> createItem(
             @RequestParam String playerId,
             @RequestBody CreateItemRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.createItem(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(itemAdminService.createItem(
                 request.code(),
                 request.name(),
                 request.type(),
@@ -302,14 +312,14 @@ public class AdminController {
     /** Random item generator: random type (WEAPON/ARMOR/CONSUMABLE/UTILITY), name and stats. */
     @PostMapping("/items/generate")
     public ResponseEntity<AdminItemDto> generateItem(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.generateRandomItem());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(itemAdminService.generateRandomItem());
     }
 
     @DeleteMapping("/items/{itemId}")
     public ResponseEntity<Void> deleteItem(@PathVariable UUID itemId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteItem(itemId);
+        adminAccessService.requireAdmin(playerId);
+        itemAdminService.deleteItem(itemId);
         return ResponseEntity.noContent().build();
     }
 
@@ -317,16 +327,16 @@ public class AdminController {
 
     @GetMapping("/weapon-types")
     public ResponseEntity<List<AdminWeaponTypeDto>> getWeaponTypes(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllWeaponTypes());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(itemAdminService.getAllWeaponTypes());
     }
 
     @PostMapping("/weapon-types")
     public ResponseEntity<AdminWeaponTypeDto> createWeaponType(
             @RequestParam String playerId,
             @RequestBody CreateWeaponTypeRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.createWeaponType(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(itemAdminService.createWeaponType(
                 request.code(),
                 request.name(),
                 request.accuracyPerLevel(),
@@ -338,8 +348,8 @@ public class AdminController {
             @PathVariable UUID weaponTypeId,
             @RequestParam String playerId,
             @RequestBody UpdateWeaponTypeRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.updateWeaponType(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(itemAdminService.updateWeaponType(
                 weaponTypeId,
                 request.name(),
                 request.accuracyPerLevel(),
@@ -348,8 +358,8 @@ public class AdminController {
 
     @DeleteMapping("/weapon-types/{weaponTypeId}")
     public ResponseEntity<Void> deleteWeaponType(@PathVariable UUID weaponTypeId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteWeaponType(weaponTypeId);
+        adminAccessService.requireAdmin(playerId);
+        itemAdminService.deleteWeaponType(weaponTypeId);
         return ResponseEntity.noContent().build();
     }
 
@@ -358,8 +368,8 @@ public class AdminController {
     @GetMapping("/players/{targetPlayerId}/proficiencies")
     public ResponseEntity<List<AdminProficiencyDto>> getPlayerProficiencies(
             @PathVariable String targetPlayerId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getPlayerProficiencies(targetPlayerId));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(playerAdminService.getPlayerProficiencies(targetPlayerId));
     }
 
     @PutMapping("/players/{targetPlayerId}/proficiencies")
@@ -367,8 +377,8 @@ public class AdminController {
             @PathVariable String targetPlayerId,
             @RequestParam String playerId,
             @RequestBody SetProficiencyRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.setPlayerProficiency(
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(playerAdminService.setPlayerProficiency(
                 targetPlayerId, request.weaponTypeCode(), request.level()));
     }
 
@@ -376,16 +386,16 @@ public class AdminController {
 
     @GetMapping("/enemies")
     public ResponseEntity<List<AdminEnemyTypeDto>> getEnemyTypes(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllEnemyTypes());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(enemyAdminService.getAllEnemyTypes());
     }
 
     @PostMapping("/enemies")
     public ResponseEntity<AdminEnemyTypeDto> createEnemyType(
             @RequestParam String playerId,
             @RequestBody CreateEnemyTypeRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.createEnemyType(request));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(enemyAdminService.createEnemyType(request));
     }
 
     @PatchMapping("/enemies/{enemyId}")
@@ -393,14 +403,14 @@ public class AdminController {
             @PathVariable UUID enemyId,
             @RequestParam String playerId,
             @RequestBody UpdateEnemyTypeRequest request) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.updateEnemyType(enemyId, request));
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(enemyAdminService.updateEnemyType(enemyId, request));
     }
 
     @DeleteMapping("/enemies/{enemyId}")
     public ResponseEntity<Void> deleteEnemyType(@PathVariable UUID enemyId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteEnemyType(enemyId);
+        adminAccessService.requireAdmin(playerId);
+        enemyAdminService.deleteEnemyType(enemyId);
         return ResponseEntity.noContent().build();
     }
 
@@ -408,7 +418,7 @@ public class AdminController {
 
     @GetMapping("/world-zones")
     public ResponseEntity<WorldZoneResponse> getWorldZone(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         return ResponseEntity.ok(worldZoneService.getSafeZone());
     }
 
@@ -417,7 +427,7 @@ public class AdminController {
     public ResponseEntity<WorldZoneResponse> updateWorldZone(
             @RequestParam String playerId,
             @RequestBody UpdateWorldZoneRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -432,7 +442,7 @@ public class AdminController {
 
     @GetMapping("/world-cells")
     public ResponseEntity<List<AdminWorldCellDto>> getWorldCells(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         return ResponseEntity.ok(worldCellService.getAllCells());
     }
 
@@ -441,14 +451,14 @@ public class AdminController {
     public ResponseEntity<AdminWorldCellDto> upsertWorldCell(
             @RequestParam String playerId,
             @RequestBody UpsertWorldCellRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         return ResponseEntity.ok(worldCellService.upsertCell(request));
     }
 
     /** Remove per-cell settings (the cell becomes a normal world tile again). */
     @DeleteMapping("/world-cells/{cellId}")
     public ResponseEntity<Void> deleteWorldCell(@PathVariable Long cellId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         worldCellService.deleteCell(cellId);
         return ResponseEntity.noContent().build();
     }
@@ -457,7 +467,7 @@ public class AdminController {
 
     @GetMapping("/maps")
     public ResponseEntity<List<GameMapResponse>> getMaps(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         return ResponseEntity.ok(gameMapService.getAllMaps());
     }
 
@@ -465,19 +475,19 @@ public class AdminController {
 
     @GetMapping("/obstacle-types")
     public ResponseEntity<List<AdminObstacleTypeDto>> getObstacleTypes(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        return ResponseEntity.ok(adminService.getAllObstacleTypes());
+        adminAccessService.requireAdmin(playerId);
+        return ResponseEntity.ok(obstacleAdminService.getAllObstacleTypes());
     }
 
     @PostMapping("/obstacle-types")
     public ResponseEntity<AdminObstacleTypeDto> createObstacleType(
             @RequestParam String playerId,
             @RequestBody CreateObstacleTypeRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
-        return ResponseEntity.ok(adminService.createObstacleType(request.code(), request.name(), request.maxHealth()));
+        return ResponseEntity.ok(obstacleAdminService.createObstacleType(request.code(), request.name(), request.maxHealth()));
     }
 
     @PatchMapping("/obstacle-types/{obstacleTypeId}")
@@ -485,19 +495,19 @@ public class AdminController {
             @PathVariable UUID obstacleTypeId,
             @RequestParam String playerId,
             @RequestBody UpdateObstacleTypeRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
-        return ResponseEntity.ok(adminService.updateObstacleType(obstacleTypeId, request.name(), request.maxHealth()));
+        return ResponseEntity.ok(obstacleAdminService.updateObstacleType(obstacleTypeId, request.name(), request.maxHealth()));
     }
 
     @DeleteMapping("/obstacle-types/{obstacleTypeId}")
     public ResponseEntity<Void> deleteObstacleType(
             @PathVariable UUID obstacleTypeId,
             @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
-        adminService.deleteObstacleType(obstacleTypeId);
+        adminAccessService.requireAdmin(playerId);
+        obstacleAdminService.deleteObstacleType(obstacleTypeId);
         return ResponseEntity.noContent().build();
     }
 
@@ -505,7 +515,7 @@ public class AdminController {
     public ResponseEntity<GameMapResponse> createMap(
             @RequestParam String playerId,
             @RequestBody CreateGameMapRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -524,7 +534,7 @@ public class AdminController {
             @PathVariable UUID mapId,
             @RequestParam String playerId,
             @RequestBody UpdateGameMapRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -541,7 +551,7 @@ public class AdminController {
 
     @DeleteMapping("/maps/{mapId}")
     public ResponseEntity<Void> deleteMap(@PathVariable UUID mapId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         gameMapService.deleteMap(mapId);
         return ResponseEntity.noContent().build();
     }
@@ -550,7 +560,7 @@ public class AdminController {
 
     @GetMapping("/locations")
     public ResponseEntity<List<LocationDtos.LocationDto>> getLocations(@RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         return ResponseEntity.ok(locationService.getAllLocations());
     }
 
@@ -558,7 +568,7 @@ public class AdminController {
     public ResponseEntity<LocationDtos.LocationDto> createLocation(
             @RequestParam String playerId,
             @RequestBody LocationDtos.CreateLocationRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -573,7 +583,7 @@ public class AdminController {
             @PathVariable UUID locationId,
             @RequestParam String playerId,
             @RequestBody LocationDtos.UpdateLocationRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -583,7 +593,7 @@ public class AdminController {
 
     @DeleteMapping("/locations/{locationId}")
     public ResponseEntity<Void> deleteLocation(@PathVariable UUID locationId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         locationService.deleteLocation(locationId);
         return ResponseEntity.noContent().build();
     }
@@ -593,7 +603,7 @@ public class AdminController {
             @PathVariable UUID locationId,
             @RequestParam String playerId,
             @RequestBody LocationDtos.CreateLocationBuildingRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -606,7 +616,7 @@ public class AdminController {
             @PathVariable UUID buildingId,
             @RequestParam String playerId,
             @RequestBody LocationDtos.UpdateLocationBuildingRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -616,7 +626,7 @@ public class AdminController {
 
     @DeleteMapping("/locations/buildings/{buildingId}")
     public ResponseEntity<Void> deleteBuilding(@PathVariable UUID buildingId, @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         locationService.deleteBuilding(buildingId);
         return ResponseEntity.noContent().build();
     }
@@ -627,7 +637,7 @@ public class AdminController {
             @PathVariable UUID npcId,
             @RequestParam String playerId,
             @RequestBody(required = false) LocationDtos.PlaceLocationNpcRequest request) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         locationService.placeNpc(locationId,
                 request == null ? null : request.buildingId(),
                 npcId,
@@ -641,7 +651,7 @@ public class AdminController {
             @PathVariable UUID locationId,
             @PathVariable UUID npcId,
             @RequestParam String playerId) {
-        adminService.requireAdmin(playerId);
+        adminAccessService.requireAdmin(playerId);
         locationService.removeNpc(locationId, npcId);
         return ResponseEntity.noContent().build();
     }

@@ -2,7 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { playerApi } from "@/services/playerApi";
 import {
   CombatSession,
@@ -17,13 +17,14 @@ import {
 } from "@/types/game";
 import MovementPad from "@/components/MovementPad";
 import PlayersList from "@/components/PlayersList";
-import WorldMap from "@/components/WorldMap";
+import WorldMapModal from "@/components/WorldMapModal";
 import CombatArena from "@/components/CombatArena";
 import { combatApi } from "@/services/combatApi";
 import InventoryPanel from "@/components/InventoryPanel";
 import EquipmentPanel from "@/components/EquipmentPanel";
 import LootPanel from "@/components/LootPanel";
-import NpcDialog from "@/components/NpcDialog";
+import NpcDialogModal from "@/components/NpcDialogModal";
+import MobileCombatInventory from "@/components/MobileCombatInventory";
 import { NpcInfo } from "@/types/npc";
 import QuestPanel from "@/components/QuestPanel";
 import AdminPanel from "@/components/admin/AdminPanel";
@@ -817,131 +818,49 @@ export default function GameMapPage() {
 
       {/* MAP MODAL */}
       {isMapOpen && activeMap && !combatSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-800">
-              <div>
-                <h3 className="font-bold text-gray-200 text-sm uppercase tracking-wider">
-                  🗺️ {activeMap.name} [{positionX}:{positionY}]
-                </h3>
-                <p className="text-[10px] text-gray-500">
-                  You are at [{positionX}:{positionY}] · map center [{activeMap.centerX}:{activeMap.centerY}]
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMapOpen(false)}
-                className="bg-red-950 hover:bg-red-800 border border-red-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition"
-              >
-                ✕ Close
-              </button>
-            </div>
-
-            {ownedMaps.length > 1 && (
-              <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mr-1">
-                  Maps:
-                </span>
-                {ownedMaps.map((gm) => (
-                  <button
-                    key={gm.id}
-                    type="button"
-                    onClick={() => setActiveMap(gm)}
-                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition ${
-                      activeMap.id === gm.id
-                        ? "border-blue-500 bg-blue-950/60 text-blue-200"
-                        : "border-gray-700 bg-gray-800/40 text-gray-400 hover:bg-gray-800"
-                    }`}
-                  >
-                    {gm.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="flex-1 overflow-auto bg-black/50 rounded-xl p-2 flex justify-center items-center min-h-[300px]">
-              <WorldMap
-                positionX={positionX}
-                positionY={positionY}
-                map={activeMap}
-                safeZone={safeZone}
-                npcs={npcs}
-                cells={worldCells}
-                loot={mapLoot}
-                locations={locations}
-                onTalk={setActiveNpc}
-              />
-            </div>
-          </div>
-        </div>
+        <WorldMapModal
+          activeMap={activeMap}
+          ownedMaps={ownedMaps}
+          positionX={positionX}
+          positionY={positionY}
+          safeZone={safeZone}
+          npcs={npcs}
+          worldCells={worldCells}
+          mapLoot={mapLoot}
+          locations={locations}
+          onClose={() => setIsMapOpen(false)}
+          onSelectMap={setActiveMap}
+          onTalk={setActiveNpc}
+        />
       )}
 
       {/* DIALOG NPC */}
       {activeNpc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-2xl">
-            <NpcDialog
-              npc={activeNpc}
-              playerId={playerId}
-              onClose={() => {
-                setActiveNpc(null);
-                if (playerId) {
-                  playerApi.getInventory(playerId).then(setInventory).catch(() => {});
-                  playerApi.getPlayerState(playerId).then((state) => {
-                    if (typeof state?.gold === "number") setGold(state.gold);
-                  }).catch(() => {});
-                  questApi.getPlayerQuests(playerId).then(setQuests).catch(() => {});
-                }
-              }}
-            />
-          </div>
-        </div>
+        <NpcDialogModal
+          npc={activeNpc}
+          playerId={playerId}
+          onClose={() => {
+            setActiveNpc(null);
+            if (playerId) {
+              playerApi.getInventory(playerId).then(setInventory).catch(() => {});
+              playerApi.getPlayerState(playerId).then((state) => {
+                if (typeof state?.gold === "number") setGold(state.gold);
+              }).catch(() => {});
+              questApi.getPlayerQuests(playerId).then(setQuests).catch(() => {});
+            }
+          }}
+        />
       )}
 
       {/* MOBILE COMBAT INVENTORY: opened only via the 🎒 button */}
       {combatSession && (
-        <AnimatePresence>
-          {isMobileInventoryOpen && (
-            <motion.div
-              className="fixed inset-0 z-50 flex items-end md:hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="absolute inset-0 bg-black/75 backdrop-blur-sm"
-                onClick={() => setIsMobileInventoryOpen(false)}
-              />
-              <motion.div
-                className="relative w-full h-[68dvh] rounded-t-3xl border-t border-amber-500/40 bg-gray-900 p-3 flex flex-col"
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              >
-                <div className="flex items-center justify-between shrink-0 border-b border-gray-800 pb-2 mb-2">
-                  <span className="text-xs uppercase font-bold tracking-wider text-amber-400 flex items-center gap-1.5">
-                    🎒 Combat Inventory
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsMobileInventoryOpen(false)}
-                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 active:scale-95 transition"
-                  >
-                    ✕ Close
-                  </button>
-                </div>
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  <InventoryPanel
-                    items={inventory}
-                    playerId={playerId}
-                    onItemsChange={setInventory}
-                  />
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <MobileCombatInventory
+          open={isMobileInventoryOpen}
+          inventory={inventory}
+          playerId={playerId}
+          onClose={() => setIsMobileInventoryOpen(false)}
+          onItemsChange={setInventory}
+        />
       )}
     </main>
   );
