@@ -79,8 +79,8 @@ export const getReachableCells = (
 };
 
 /**
- * Все клетки в квадрате дальности (Chebyshev) вокруг точки — зона обстрела.
- * Препятствия зону не ограничивают: пули проходят сквозь них и разрушают их.
+ * Every cell in the Chebyshev range square around a point is the firing zone.
+ * Obstacles do not limit the zone: bullets pass through and destroy them.
  */
 export const getAttackRangeCells = (
   originX: number,

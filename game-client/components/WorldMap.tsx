@@ -93,7 +93,7 @@ export default function WorldMap({
       </div>
 
       <div className="aspect-square w-full overflow-hidden rounded-md border border-red-300/40 bg-red-700/50 p-1">
-        {/* Внутренний relative-контейнер без p-1 для точного позиционирования оверлея */}
+        {/* Inner relative container without p-1 for precise overlay positioning */}
         <div className="relative h-full w-full">
           <div className="grid h-full w-full grid-cols-20 grid-rows-20 gap-px bg-red-950/70">
             {Array.from({ length: MAP_SIZE * MAP_SIZE }, (_, index) => {

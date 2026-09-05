@@ -4,7 +4,8 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.dto.InventoryItemResponse;
 import spring.backend.game.dto.UseItemResponse;
@@ -18,8 +19,8 @@ import spring.backend.game.repository.PlayerRepository;
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
-    // На старте инвентарь пустой, предметы выдаются в награду за квесты (например, за квест знакомства).
-    // Расходники для восстановления здоровья выдаются сразу, чтобы механика была доступна с первых минут.
+    // The inventory starts empty: items are granted as quest rewards (e.g. the introduction quest).
+    // Health-restoring consumables are granted right away so the mechanic is available from the start.
     private static final List<String> STARTER_ITEMS = List.of("MEDKIT", "BANDAGE");
     private static final int MAX_PLAYER_HEALTH = 100;
 
@@ -30,7 +31,7 @@ public class InventoryService {
     @Transactional
     public void ensureStarterItems(String playerId) {
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found"));
         if (player.isStarterItemsGranted()) {
             return;
         }
@@ -39,7 +40,7 @@ public class InventoryService {
                 continue;
             }
             ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode)
-                    .orElseThrow(() -> new RuntimeException("Item not found: " + itemCode));
+                    .orElseThrow(() -> new EntityNotFoundException("Item not found: " + itemCode));
                 inventoryRepository.save(PlayerInventoryEntity.builder()
                     .player(player)
                     .item(item)
@@ -90,7 +91,7 @@ public class InventoryService {
         PlayerInventoryEntity selected = inventory.stream()
                 .filter(entry -> entry.getItem().getCode().equalsIgnoreCase(itemCode))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+                .orElseThrow(() -> new IllegalArgumentException("Item not found in inventory"));
         String group = equipmentGroup(selected.getItem());
         boolean newEquipped = !selected.isEquipped();
         for (PlayerInventoryEntity entry : inventory) {
@@ -120,7 +121,7 @@ public class InventoryService {
             .toList();
         PlayerInventoryEntity item = inventory.stream()
             .findFirst()
-            .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+            .orElseThrow(() -> new IllegalArgumentException("Item not found in inventory"));
         if (gridX < 0 || gridY < 0 || gridX + item.getItem().getWidth() > 8 || gridY + item.getItem().getHeight() > 6) {
             throw new IllegalArgumentException("Item does not fit in inventory");
         }
@@ -166,9 +167,9 @@ public class InventoryService {
     @Transactional
     public void addItem(String playerId, String itemCode, int quantity) {
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
         ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode)
-                .orElseThrow(() -> new RuntimeException("Item not found: " + itemCode));
+                .orElseThrow(() -> new EntityNotFoundException("Item not found: " + itemCode));
         boolean added = tryAddItem(player, item, quantity);
         if (!added) {
             throw new IllegalStateException("Inventory is full — free some space first");
@@ -239,11 +240,11 @@ public class InventoryService {
     @Transactional
     public UseItemResponse useItem(String playerId, String itemCode) {
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
         PlayerInventoryEntity entry = inventoryRepository.findByPlayerIdOrderByItemNameAsc(playerId).stream()
                 .filter(e -> e.getItem().getCode().equalsIgnoreCase(itemCode))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item not found in inventory"));
+                .orElseThrow(() -> new IllegalArgumentException("Item not found in inventory"));
         ItemEntity item = entry.getItem();
         if (!"CONSUMABLE".equalsIgnoreCase(item.getType())) {
             throw new IllegalArgumentException("This item cannot restore health");

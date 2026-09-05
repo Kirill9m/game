@@ -17,7 +17,7 @@ export default function PlayersList({
   npcs = [],
   onTalk,
 }: PlayersListProps) {
-  const [message, setMessage] = useState("");
+  const [message] = useState("");
 
   return (
     <div className="space-y-2 bg-gray-900 p-3 rounded-lg border border-gray-700">

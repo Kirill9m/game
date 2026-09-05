@@ -113,14 +113,14 @@ export function CombatStatus({
 
   return (
     <div className="w-full shrink-0 flex flex-col gap-1.5 md:gap-2">
-      {/* Desktop (lg+): компактный горизонтальный статус-бар */}
+      {/* Desktop (lg+): compact horizontal status bar */}
       <div className="hidden lg:flex w-full items-center gap-3">
         <div className="shrink-0">{phaseBadge}</div>
         <div className="flex-1 min-w-0">{healthRow}</div>
         <div className="shrink-0">{apBlock}</div>
       </div>
 
-      {/* Mobile / tablets: вертикальная стопка */}
+      {/* Mobile / tablets: vertical stack */}
       <div className="lg:hidden flex flex-col gap-1.5">
         {phaseBadge}
         {healthRow}

@@ -40,7 +40,7 @@ public class DialogueNodeEntity {
     private String text;
 
     @Column(name = "is_start", nullable = false)
-    private boolean isStart; // Флаг начальной реплики NPC
+    private boolean isStart; // Marks the NPC's opening line
 
     @OneToMany(mappedBy = "node", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DialogueChoiceEntity> choices;

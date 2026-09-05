@@ -21,7 +21,7 @@ export default function AdminPanel({ playerId, onHunt }: Props) {
   const [section, setSection] = useState<Section>("quests");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy] = useState(false);
 
   const data = useAdminData(playerId);
 

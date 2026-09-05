@@ -51,7 +51,7 @@ export function CombatModeControls({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 260, damping: 22, delay: 0.05 }}
     >
-      {/* Posture + equipment: на широких экранах в один ряд, иначе стопкой */}
+      {/* Posture + equipment: one row on wide screens, otherwise stacked */}
       <div className="lg:flex lg:items-stretch lg:gap-2">
         {/* Posture switch */}
         <div className="relative flex w-full overflow-hidden rounded-xl border border-gray-700/70 bg-gray-900/70 p-0.5 lg:w-56 lg:shrink-0">

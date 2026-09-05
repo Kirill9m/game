@@ -22,13 +22,13 @@ public class DialogueController {
 
     private final QuestService questService;
 
-    // Старт диалога с NPC (возвращает первую реплику и кнопки)
+    // Start a dialogue with the NPC (returns the opening line and buttons)
     @GetMapping("/start/{npcId}")
     public ResponseEntity<DialogueNodeDto> startDialogue(
             @PathVariable UUID npcId,
             @RequestParam(required = false) String playerId) {
 
-        // Если квест завершён — блокируем диалог с NPC
+        // If the quest is finished — block further dialogue with the NPC
         if (playerId != null && questService.isNpcTalkBlocked(playerId, npcId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -36,7 +36,7 @@ public class DialogueController {
         return ResponseEntity.ok(questService.startDialogue(npcId));
     }
 
-    // Выбор ответа в диалоге
+    // Choose a dialogue reply
     @PostMapping("/choice")
     public ResponseEntity<DialogueNodeDto> selectChoice(
             @RequestParam String playerId,
@@ -45,7 +45,7 @@ public class DialogueController {
 
         DialogueNodeDto nextNode = questService.selectChoice(playerId, choiceId, activeQuestId);
         if (nextNode == null) {
-            return ResponseEntity.noContent().build(); // 204 No Content -> Диалог окончен
+            return ResponseEntity.noContent().build(); // 204 No Content -> dialogue finished
         }
         return ResponseEntity.ok(nextNode);
     }

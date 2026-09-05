@@ -22,7 +22,7 @@ public class QuestController {
 
     private final QuestService questService;
 
-    /** Взять квест */
+    /** Accept a quest */
     @PostMapping("/start")
     public ResponseEntity<QuestProgressDto> startQuest(
             @RequestParam String playerId,
@@ -30,7 +30,7 @@ public class QuestController {
         return ResponseEntity.ok(questService.startQuest(playerId, questCode));
     }
 
-    /** Список всех квестов игрока с прогрессом */
+    /** List every quest the player has with its progress */
     @GetMapping("/progress")
     public ResponseEntity<List<QuestProgressDto>> getQuestProgress(@RequestParam String playerId) {
         return ResponseEntity.ok(questService.getPlayerQuests(playerId));
@@ -42,7 +42,7 @@ public class QuestController {
         return ResponseEntity.ok(questService.getAvailableQuests(playerId));
     }
 
-    /** Получить награду за завершённый квест */
+    /** Claim the reward for a completed quest */
     @PostMapping("/claim")
     public ResponseEntity<QuestProgressDto> claimReward(
             @RequestParam String playerId,

@@ -13,7 +13,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.time.Instant;
 
 import org.springframework.stereotype.Service;
-import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.entity.CombatLoot;
 import spring.backend.game.entity.CombatObstacle;
@@ -61,27 +62,27 @@ public class CombatService {
     @Transactional
     public CombatSessionEntity startCombat(String attackerId, String targetId) {
         var attacker = playerRepository.findById(attackerId)
-                .orElseThrow(() -> new RuntimeException("Attacking player not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Attacking player not found"));
         var target = playerRepository.findById(targetId)
-                .orElseThrow(() -> new RuntimeException("Target player not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Target player not found"));
 
         // Check safe zone
         if (worldZoneService.isInsideSafeZone(attacker.getPositionX(), attacker.getPositionY())
             || worldZoneService.isInsideSafeZone(target.getPositionX(), target.getPositionY())) {
-            throw new RuntimeException("PvP attacks are disabled inside the safe zone");
+            throw new IllegalStateException("PvP attacks are disabled inside the safe zone");
         }
 
         // Check that both players are in the same location context (both outside or both inside the same building)
         UUID attackerLoc = attacker.getCurrentLocationId();
         UUID targetLoc = target.getCurrentLocationId();
         if (attackerLoc != targetLoc && (attackerLoc == null || !attackerLoc.equals(targetLoc))) {
-            throw new RuntimeException("Target is in another location — you cannot attack them");
+            throw new IllegalStateException("Target is in another location — you cannot attack them");
         }
 
         // Check that the target is online (lastSeen within the last 90 seconds)
         if (target.getLastSeen() == null
                 || target.getLastSeen().isBefore(Instant.now().minusSeconds(90))) {
-            throw new RuntimeException("Target player is offline — you cannot attack them");
+            throw new IllegalStateException("Target player is offline — you cannot attack them");
         }
 
         // Check that both players are on the same tile
@@ -112,9 +113,9 @@ public class CombatService {
     @Transactional
     public CombatSessionEntity startBotCombat(String playerId, String enemyCode) {
         EnemyTypeEntity enemy = enemyTypeRepository.findByCodeIgnoreCase(enemyCode)
-                .orElseThrow(() -> new RuntimeException("Enemy type not found: " + enemyCode));
+                .orElseThrow(() -> new EntityNotFoundException("Enemy type not found: " + enemyCode));
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(playerId)
                 .player2Id("bot_" + enemy.getCode().toLowerCase())
@@ -135,7 +136,7 @@ public class CombatService {
 
     public CombatSessionEntity getCombat(UUID combatId) {
         return combatRepository.findById(combatId)
-                .orElseThrow(() -> new RuntimeException("Combat not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Combat not found"));
     }
 
     public List<EnemyTypeEntity> getEnemyTypes() {
@@ -146,7 +147,7 @@ public class CombatService {
     public CombatSessionEntity moveInCombat(UUID combatId, String playerId, int dx, int dy) {
         CombatSessionEntity combat = getCombatForUpdate(combatId);
         if (Math.abs(dx) + Math.abs(dy) != 1) {
-            throw new RuntimeException("You can move only one tile at a time");
+            throw new IllegalArgumentException("You can move only one tile at a time");
         }
         return appendAction(combat, playerId, "M:" + dx + ":" + dy);
     }
@@ -192,15 +193,15 @@ public class CombatService {
         int playerY = combat.getP1Y();
         int maxMoves = Math.min(enemy.getMovementRange(), enemy.getActionPoints());
 
-        // Уже в зоне поражения — сразу атакуем, не тратя очки на перемещение.
+        // Already in range — attack right away instead of spending points on movement.
         int initialDistance = Math.max(Math.abs(playerX - botX), Math.abs(playerY - botY));
         if (initialDistance <= enemy.getAttackRange() && enemy.getActionPoints() > 0) {
             plan.add("A:" + playerX + ":" + playerY);
             return String.join(";", plan);
         }
 
-        // Сначала пробуем дойти до игрока. Если за этот ход до него не добраться,
-        // идём к ближайшей достижимой клетке — бот должен двигаться каждый раунд.
+        // First try to reach the player. If we cannot reach him this turn,
+        // walk towards the closest reachable cell — the bot must move every round.
         List<int[]> path = findMovementPath(combat, botX, botY, playerX, playerY, maxMoves);
         // Bot should not move onto the player's cell
         if (path != null && path.size() > 1) {
@@ -220,7 +221,7 @@ public class CombatService {
             }
         }
         if (path == null || path.size() <= 1) {
-            // Не можем ни подойти, ни атаковать — просто пропускаем ход.
+            // Cannot approach nor attack — just skip the turn.
             return "";
         }
         int steps = Math.min(maxMoves, path.size() - 1);
@@ -231,7 +232,7 @@ public class CombatService {
             botX = current[0];
             botY = current[1];
             int distance = Math.max(Math.abs(playerX - botX), Math.abs(playerY - botY));
-            // Атакуем только будучи в зоне поражения и если хватает очков действия.
+            // Attack only when in range and with enough action points left.
             if (distance <= enemy.getAttackRange() && plan.size() < enemy.getActionPoints()) {
                 plan.add("A:" + playerX + ":" + playerY);
                 break;
@@ -241,10 +242,10 @@ public class CombatService {
     }
 
     /**
-     * BFS-поход как в {@link #findMovementPath}, но не требующий полного пути до
-     * целевой клетки: возвращает путь до достижимой клетки, минимально удалённой
-     * от цели (по шахматному расстоянию). Нужно, чтобы бот подбирался к игроку,
-     * даже когда за текущий ход до него не дойти.
+     * BFS walk like {@link #findMovementPath}, but without requiring a full path
+     * to the target cell: returns the path to the reachable cell that is closest
+     * to the target (Chebyshev distance). Used so the bot keeps approaching the
+     * player even when it cannot reach him within the current turn.
      */
     private List<int[]> findClosestApproachPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
         ArrayDeque<int[]> queue = new ArrayDeque<>();
@@ -324,7 +325,7 @@ public class CombatService {
         ensureParticipant(combat, playerId);
         String plan = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Plan() : combat.getP2Plan();
         if (countActions(plan) >= combat.getActionPoints()) {
-            throw new RuntimeException("No action points left!");
+            throw new IllegalStateException("No action points left!");
         }
         String updatedPlan = plan == null || plan.isBlank() ? action : plan + ";" + action;
         validatePlan(combat, playerId, updatedPlan);
@@ -338,7 +339,7 @@ public class CombatService {
 
     private CombatSessionEntity getCombatForUpdate(UUID combatId) {
         return combatRepository.findByIdForUpdate(combatId)
-                .orElseThrow(() -> new RuntimeException("Combat not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Combat not found"));
     }
 
     private String encodePlan(CombatPlanRequest request) {
@@ -361,20 +362,20 @@ public class CombatService {
             if ("USE".equalsIgnoreCase(action.type())) {
                 return "U:" + requiredText(action.itemCode(), "itemCode");
             }
-            throw new RuntimeException("Unknown combat action: " + action.type());
+            throw new IllegalArgumentException("Unknown combat action: " + action.type());
         }).reduce((left, right) -> left + ";" + right).orElse("");
     }
 
     private int required(Integer value, String name) {
         if (value == null) {
-            throw new RuntimeException("Missing action field: " + name);
+            throw new IllegalArgumentException("Missing action field: " + name);
         }
         return value;
     }
 
     private String requiredText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new RuntimeException("Missing action field: " + name);
+            throw new IllegalArgumentException("Missing action field: " + name);
         }
         return value.toUpperCase();
     }
@@ -385,7 +386,7 @@ public class CombatService {
         String posture = playerId.equals(combat.getPlayer1Id()) ? combat.getP1Posture() : combat.getP2Posture();
         String[] actions = plan == null || plan.isBlank() ? new String[0] : plan.split(";");
         if (actions.length > combat.getActionPoints()) {
-            throw new RuntimeException("A plan cannot use more than " + combat.getActionPoints() + " action points");
+            throw new IllegalArgumentException("A plan cannot use more than " + combat.getActionPoints() + " action points");
         }
         Map<String, Integer> useCounts = new HashMap<>();
         for (String action : actions) {
@@ -400,19 +401,19 @@ public class CombatService {
                 posture = normalizePosture(parts[1]);
             } else if ("E".equals(parts[0])) {
                 if (parts.length != 2 || !player1HasItem(playerId, parts[1])) {
-                    throw new RuntimeException("You do not have this item");
+                    throw new IllegalArgumentException("You do not have this item");
                 }
             } else if ("M".equals(parts[0])) {
                 int dx = Integer.parseInt(parts[1]);
                 int dy = Integer.parseInt(parts[2]);
                 int distance = Math.abs(dx) + Math.abs(dy);
                 if (distance < 1 || distance > movementRange(posture)) {
-                    throw new RuntimeException("This posture allows moving up to " + movementRange(posture) + " cells per action");
+                    throw new IllegalArgumentException("This posture allows moving up to " + movementRange(posture) + " cells per action");
                 }
                 x += dx;
                 y += dy;
                 if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
-                    throw new RuntimeException("You cannot leave the combat board");
+                    throw new IllegalArgumentException("You cannot leave the combat board");
                 }
                 int opponentX = playerId.equals(combat.getPlayer1Id()) ? combat.getP2X() : combat.getP1X();
                 int opponentY = playerId.equals(combat.getPlayer1Id()) ? combat.getP2Y() : combat.getP1Y();
@@ -422,34 +423,34 @@ public class CombatService {
                 // A dead opponent no longer blocks the cell: their body (and the
                 // loot that dropped on it) can be walked onto to collect it.
                 if (opponentAlive && x == opponentX && y == opponentY) {
-                    throw new RuntimeException("You cannot move to the opponent's cell");
+                    throw new IllegalStateException("You cannot move to the opponent's cell");
                 }
                 validateMovementPath(combat, x - dx, y - dy, x, y, movementRange(posture));
             } else if ("A".equals(parts[0])) {
                 if (parts.length != 3) {
-                    throw new RuntimeException("Invalid combat plan");
+                    throw new IllegalArgumentException("Invalid combat plan");
                 }
                 boolean targetDead = playerId.equals(combat.getPlayer1Id())
                         ? combat.getP2Health() <= 0
                         : combat.getP1Health() <= 0;
                 if (targetDead) {
-                    throw new RuntimeException("The target is already dead");
+                    throw new IllegalStateException("The target is already dead");
                 }
             } else if ("U".equals(parts[0])) {
                 if (parts.length != 2) {
-                    throw new RuntimeException("Invalid combat plan");
+                    throw new IllegalArgumentException("Invalid combat plan");
                 }
                 String itemCode = parts[1].toUpperCase();
                 ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode).orElse(null);
                 if (item == null || !"CONSUMABLE".equalsIgnoreCase(item.getType()) || item.getHeal() <= 0) {
-                    throw new RuntimeException("This item cannot be used in combat");
+                    throw new IllegalArgumentException("This item cannot be used in combat");
                 }
                 int plannedUses = useCounts.getOrDefault(itemCode, 0);
                 if (inventoryQuantity(playerId, itemCode) < plannedUses) {
-                    throw new RuntimeException("You do not have enough " + itemCode);
+                    throw new IllegalArgumentException("You do not have enough " + itemCode);
                 }
             } else {
-                throw new RuntimeException("Invalid combat plan");
+                throw new IllegalArgumentException("Invalid combat plan");
             }
         }
     }
@@ -477,9 +478,9 @@ public class CombatService {
             }
         }
         combat.setLastRoundActions(roundActions.toArray(String[]::new));
-        // Лоут выпадает ровно один раз — в раунд, когда боец погиб. Без этой
-        // проверки каждый последующий раунд бросал дроп-таблицу заново и
-        // добавлял на доску новые кучи (бой никогда не заканчивался).
+        // Loot drops exactly once — in the round a fighter died. Without this
+        // check every following round would roll the drop table again and
+        // add fresh piles to the board (combat would never end).
         boolean someoneFellThisRound = (p1WasAlive && combat.getP1Health() == 0)
                 || (p2WasAlive && combat.getP2Health() == 0);
         if (someoneFellThisRound) {
@@ -547,9 +548,9 @@ public class CombatService {
             return;
         }
         List<CombatLoot> loot = new ArrayList<>(combat.getLoot());
-        // Первая выпавшая куча ложится на саму клетку трупа — если победитель
-        // добил врага вплотную (или в этом же раунде подошёл), он сразу стоит
-        // на луте и забирает его без лишних ходов. Остальные — вокруг.
+        // The first pile lands on the corpse's own cell — if the winner finished
+        // the enemy up close (or walked over in the same round) they are already
+        // standing on the loot and collect it without extra moves. The rest scatter around.
         boolean firstPile = true;
         for (EnemyLootDrop drop : drops) {
             if (drop == null || drop.itemCode() == null
@@ -799,10 +800,10 @@ public class CombatService {
         if (Math.max(Math.abs(attackerX - actualTargetX), Math.abs(attackerY - actualTargetY)) > maxShotDistance) return 0;
         String targetPosture = player1 ? combat.getP2Posture() : combat.getP1Posture();
         if (ThreadLocalRandom.current().nextInt(100) >= hitChance(combat, player1, weapon, targetPosture)) return 0;
-        // Пуля не блокируется препятствиями — она проходит насквозь, но каждое
-        // препятствие на линии огня получает урон и может разрушиться.
+        // Bullets are not blocked by obstacles — they pass through, but every
+        // obstacle on the line of fire takes damage and may be destroyed.
         damageObstaclesAlongLine(combat, attackerX, attackerY, actualTargetX, actualTargetY, shotDamage);
-        // Экипированная броня защитника снижает входящий урон.
+        // The defender's equipped armor reduces incoming damage.
         String defenderId = player1 ? combat.getPlayer2Id() : combat.getPlayer1Id();
         int actualDamage = Math.max(0, shotDamage - armorDefense(defenderId));
         if (player1) combat.setP2Health(Math.max(0, combat.getP2Health() - actualDamage));
@@ -831,7 +832,7 @@ public class CombatService {
 
     private void validateMovementPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
         if (findMovementPath(combat, startX, startY, targetX, targetY, maxSteps) == null) {
-            throw new RuntimeException("This cell is blocked by terrain");
+            throw new IllegalStateException("This cell is blocked by terrain");
         }
     }
 
@@ -897,10 +898,10 @@ public class CombatService {
     }
 
     private String normalizePosture(String posture) {
-        if (posture == null) throw new RuntimeException("Missing posture");
+        if (posture == null) throw new IllegalArgumentException("Missing posture");
         String normalized = posture.toUpperCase();
         if (!STANDING.equals(normalized) && !CROUCHING.equals(normalized) && !PRONE.equals(normalized)) {
-            throw new RuntimeException("Unknown posture");
+            throw new IllegalArgumentException("Unknown posture");
         }
         return normalized;
     }
@@ -947,7 +948,7 @@ public class CombatService {
         if (types.isEmpty()) {
             return List.of();
         }
-        int count = 4 + ThreadLocalRandom.current().nextInt(5); // 4..8 препятствий
+        int count = 4 + ThreadLocalRandom.current().nextInt(5); // 4..8 obstacles
         Set<String> occupied = new HashSet<>();
         occupied.add(cell(1, 5));
         occupied.add(cell(8, 5));
@@ -970,13 +971,13 @@ public class CombatService {
 
     private void ensureInProgress(CombatSessionEntity combat) {
         if (!"IN_PROGRESS".equals(combat.getStatus())) {
-            throw new RuntimeException("Combat is already finished");
+            throw new IllegalStateException("Combat is already finished");
         }
     }
 
     private void ensureParticipant(CombatSessionEntity combat, String playerId) {
         if (!playerId.equals(combat.getPlayer1Id()) && !playerId.equals(combat.getPlayer2Id())) {
-            throw new RuntimeException("Player is not part of this combat");
+            throw new IllegalStateException("Player is not part of this combat");
         }
     }
 
@@ -1059,7 +1060,7 @@ public class CombatService {
     private ItemEntity getWeapon(CombatSessionEntity combat, boolean player1) {
         String itemCode = player1 ? combat.getP1EquippedItemCode() : combat.getP2EquippedItemCode();
         return itemRepository.findByCodeIgnoreCase(itemCode == null ? "PISTOL" : itemCode)
-                .orElseThrow(() -> new RuntimeException("Equipped item not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Equipped item not found"));
     }
 
     public CombatSessionEntity getActiveCombatForPlayer(String playerId) {

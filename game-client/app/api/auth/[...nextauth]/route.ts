@@ -18,8 +18,8 @@ const handler = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).githubId = token.githubId;
-        (session.user as any).username = token.username;
+        session.user.githubId = token.githubId as string | undefined;
+        session.user.username = token.username as string | undefined;
       }
       return session;
     },

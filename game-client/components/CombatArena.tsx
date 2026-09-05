@@ -79,8 +79,8 @@ export default function CombatArena({
   // Tracks the last resolved round so inventory refreshes exactly once per round.
   const inventoryRoundRef = useRef<string | null>(null);
 
-  // Размер поля: mobile — вписываемся в высоту экрана (до 440px),
-  // desktop — растем по ширине колонки вплоть до 760px.
+  // Board size: mobile fits the screen height (up to 440px),
+  // desktop grows with the column width up to 760px.
   const gridWrapRef = useRef<HTMLDivElement>(null);
   const [boardSize, setBoardSize] = useState(320);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -99,7 +99,7 @@ export default function CombatArena({
     const compute = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
-      // Квадрат по min(ширина, высота) — поле всегда влезает в экран.
+      // Square based on min(width, height) — the board always fits on screen.
       const cap = isDesktop ? 760 : 440;
       setBoardSize(Math.max(140, Math.min(w, h, cap)));
     };
@@ -164,18 +164,18 @@ export default function CombatArena({
     enemyCellBlocked,
   );
 
-  // Дальность текущего (или запланированного к экипировке) оружия.
+  // Range of the currently equipped (or planned-to-equip) weapon.
   const attackOrigin = plannedEnd ?? { x: myX, y: myY };
   const myAttackRange =
     inventory.find((item) => item.code === plannedEquipment)?.attackRange ?? 3;
-  // Зона обстрела вокруг точки, из которой будем стрелять в этом ходе.
-  // Препятствия её не ограничивают — пули проходят сквозь них, повреждая их.
+  // Firing zone around the point we will shoot from this turn.
+  // Obstacles do not limit it — bullets pass through and damage them.
   const attackRangeCells = getAttackRangeCells(
     attackOrigin.x,
     attackOrigin.y,
     myAttackRange,
   );
-  // Сервер считает дистанцию как max(|dx|, |dy|) (Chebyshev).
+  // The server computes distance as max(|dx|, |dy|) (Chebyshev).
   const distanceToEnemy = Math.max(
     Math.abs(attackOrigin.x - enemyX),
     Math.abs(attackOrigin.y - enemyY),
@@ -186,7 +186,7 @@ export default function CombatArena({
     enemyHealth > 0 && // a dead enemy cannot be shot anymore
     distanceToEnemy <= myAttackRange &&
     plannedActions.length < combat.actionPoints;
-  // Зону обстрела показываем только когда ей можно воспользоваться.
+  // Show the firing zone only when it can actually be used.
   const showAttackRange =
     isMyTurn &&
     !isReplaying &&
@@ -401,9 +401,9 @@ export default function CombatArena({
       setError("");
       const targetKey = `${targetX}:${targetY}`;
 
-      // Нажатие на врага = выстрел по умолчанию (режима "Shoot" больше нет).
-      // Мёртвого врага нельзя обстрелять — клик идёт как передвижение, чтобы
-      // подойти к его телу и забрать выпавший лут.
+      // Clicking an enemy = a shot by default (there is no "Shoot" mode anymore).
+      // A dead enemy cannot be shot — the click becomes movement so you can
+      // walk to its body and collect the dropped loot.
       if (targetX === enemyX && targetY === enemyY && enemyHealth > 0) {
         if (plannedActions.length >= combat.actionPoints) {
           setError(
@@ -680,7 +680,7 @@ export default function CombatArena({
         onFinishCombat={handleFinishCombat}
         onCombatFinished={onCombatFinished}
       />
-      {/* Кнопка инвентаря на мобильных — инвентарь открывается только по нажатию */}
+      {/* Mobile inventory button — the inventory opens only on tap */}
       {onOpenInventory && (
         <button
           type="button"

@@ -18,7 +18,7 @@ export function CombatLog({ entries }: CombatLogProps) {
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
       className="w-full shrink-0"
     >
-      {/* Компактный переключатель — одна строка, не съедает место в бою */}
+      {/* Compact toggle — a single row that does not eat combat space */}
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}

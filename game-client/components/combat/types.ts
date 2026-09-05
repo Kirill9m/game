@@ -38,7 +38,7 @@ export interface CombatArenaProps {
   inventory: InventoryItem[];
   onCombatUpdate: (combat: CombatSession) => void;
   onCombatFinished: () => void;
-  /** Показать инвентарь (мобильный bottom-sheet). */
+  /** Show the inventory (mobile bottom sheet). */
   onOpenInventory?: () => void;
   /** Called after a combat round resolves (inventory may have changed: used consumables). */
   onInventoryChanged?: () => void;

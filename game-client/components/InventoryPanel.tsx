@@ -28,14 +28,14 @@ export default function InventoryPanel({
   );
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Динамический расчет рядов (если вещей больше, чем на 6 рядов — сетка растет вниз)
+  // Dynamic row count (if there are more items than 6 rows, the grid grows downwards)
   const maxItemRow = items.reduce(
     (max, item) => Math.max(max, item.gridY + item.height),
     0,
   );
   const totalRows = Math.max(MIN_ROWS, maxItemRow);
 
-  // Вспомогательная функция расчета ячейки по координатам экрана
+  // Helper that resolves the grid cell from screen coordinates
   const getGridCoordinates = (clientX: number, clientY: number) => {
     if (!gridRef.current) return { gridX: 0, gridY: 0 };
     const bounds = gridRef.current.getBoundingClientRect();
@@ -58,14 +58,14 @@ export default function InventoryPanel({
     return { gridX, gridY };
   };
 
-  // Метод перемещения
+  // Move handler
   const moveItemTo = async (itemCode: string, gridX: number, gridY: number) => {
     try {
       onItemsChange(
         await playerApi.moveInventoryItem(playerId, itemCode, gridX, gridY),
       );
     } catch {
-      // Игнорируем ошибку, сервер вернет прежнее состояние
+      // Ignore the error — the server keeps the previous state
     } finally {
       setSelectedItemCode(null);
       setTouchDraggingCode(null);
@@ -95,7 +95,7 @@ export default function InventoryPanel({
     await moveItemTo(touchDraggingCode, gridX, gridY);
   };
 
-  // --- Tap-to-Move (Клик по предмету -> Клик по ячейке) ---
+  // --- Tap-to-Move (click an item -> click a cell) ---
   const handleGridClick = async (event: MouseEvent<HTMLDivElement>) => {
     if (!selectedItemCode) return;
     const { gridX, gridY } = getGridCoordinates(event.clientX, event.clientY);
@@ -122,7 +122,7 @@ export default function InventoryPanel({
         <span className="text-xs text-gray-500">8 x {totalRows} stash</span>
       </div>
 
-      {/* Обертка со скроллом для переполнения */}
+      {/* Scroll wrapper for overflow */}
       <div className="max-h-[420px] overflow-y-auto overflow-x-hidden rounded-md border border-gray-700 bg-gray-950 p-1">
         <div
           ref={gridRef}
@@ -132,11 +132,11 @@ export default function InventoryPanel({
           onTouchEnd={(event) => void handleTouchEnd(event)}
           className="relative w-full"
           style={{
-            // Фиксируем пропорциональную высоту сетки в зависимости от кол-ва рядов
+            // Lock the grid's proportional height based on the number of rows
             aspectRatio: `${COLUMNS} / ${totalRows}`,
           }}
         >
-          {/* Сетка ячеек */}
+          {/* Cell grid */}
           <div
             className="pointer-events-none absolute inset-0 grid gap-1"
             style={{
@@ -156,7 +156,7 @@ export default function InventoryPanel({
             })}
           </div>
 
-          {/* Предметы */}
+          {/* Items */}
           {items.map((item) => {
             const isSelected = selectedItemCode === item.code;
             const isTouchDragging = touchDraggingCode === item.code;

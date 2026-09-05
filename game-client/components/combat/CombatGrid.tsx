@@ -17,7 +17,7 @@ interface CombatGridProps {
   combat: CombatSession;
   playerId: string;
   canAttack: boolean;
-  /** Клетки зоны обстрела (визуальная подсветка); null — не показывать. */
+  /** Firing-zone cells (visual highlight); null — hide. */
   attackRangeCells?: Set<string> | null;
   isMyTurn: boolean;
   plannedActions: PlannedAction[];
@@ -28,7 +28,7 @@ interface CombatGridProps {
   animationTarget: "p1" | "p2" | null;
   damagePopup: DamagePopup | null;
   healPopup: HealPopup | null;
-  /** Размер квадратного поля в px (адаптация под экран). */
+  /** Square board size in px (adapts to the screen). */
   boardSize?: number;
   onTileClick: (x: number, y: number) => void;
 }
@@ -60,7 +60,7 @@ export function CombatGrid({
   const isPlayer1 = playerId === combat.player1Id;
   const enemyCell =
     isPlayer1 ? `${combat.p2X}:${combat.p2Y}` : `${combat.p1X}:${combat.p1Y}`;
-  // Клик по врагу = выстрел по умолчанию, поэтому подсвечиваем его клетку.
+  // Clicking an enemy = a shot by default, so highlight its cell.
   const attackableCell = canAttack ? enemyCell : null;
 
   // The player's current footprint on the board — used to highlight when loot
@@ -118,8 +118,8 @@ export function CombatGrid({
           const lootPile = combat.loot?.find(
             (pile) => pile.x === x && pile.y === y && pile.quantity > 0,
           );
-          // Зона обстрела — тонкая подсветка на нейтральных клетках,
-          // чтобы не перебивать более важные состояния (маршрут/атака).
+          // Firing zone — a subtle highlight on neutral cells,
+          // so it does not override more important states (route/attack).
           const inRange =
             !reachable && !attackable && !planned && attackRangeCells?.has(key);
           return (

@@ -65,7 +65,7 @@ export default function GameMapPage() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Loot piles visible on the currently opened map viewport.
   const [mapLoot, setMapLoot] = useState<WorldLoot[]>([]);
-  // Инвентарь во время боя на мобильных открывается только по кнопке
+  // On mobile the combat inventory opens only via the 🎒 button
   const [isMobileInventoryOpen, setIsMobileInventoryOpen] = useState(false);
   const [quests, setQuests] = useState<QuestProgress[]>([]);
   const [playerRole, setPlayerRole] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export default function GameMapPage() {
   // Loot piles lying on the player's current tile.
   const [fieldLoot, setFieldLoot] = useState<WorldLoot[]>([]);
   const [inSafeZone, setInSafeZone] = useState(true);
-  // Всплывающая анимация лечения (вне боя): вспышка "+N" над показателем HP.
+  // Pop-up heal animation (out of combat): a "+N" flash above the HP bar.
   const [healFlash, setHealFlash] = useState<{ amount: number; id: number } | null>(
     null,
   );
@@ -218,7 +218,7 @@ export default function GameMapPage() {
         if (activeCombat && activeCombat.id) {
           setCombatSession(activeCombat);
         }
-      } catch (e) {}
+      } catch {}
     }, 3000);
 
     return () => clearInterval(interval);
@@ -454,7 +454,7 @@ export default function GameMapPage() {
         </div>
       ) : (
         <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col gap-3">
-          {/* ВЕРХНЯЯ ПАНЕЛЬ СТАТУСА */}
+          {/* TOP STATUS BAR */}
           <header className="flex justify-between items-center gap-2 bg-gray-900 px-3 md:px-4 py-2 rounded-2xl border border-gray-800 shrink-0 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
               {playerAvatar && (
@@ -538,12 +538,12 @@ export default function GameMapPage() {
             </div>
           )}
 
-          {/* ОСНОВНОЙ DASHBOARD */}
+          {/* MAIN DASHBOARD */}
           <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-3">
-            {/* ЛЕВАЯ ЧАСТЬ: Арена боя ИЛИ Панель управления мирной зоны */}
+            {/* LEFT COLUMN: combat arena OR peaceful-zone controls */}
             <div className="md:col-span-7 lg:col-span-8 bg-gray-900/90 border border-gray-800 rounded-2xl p-2.5 md:p-3 flex flex-col min-h-0 relative overflow-hidden">
               {combatSession ? (
-                /* БОЕВАЯ АРЕНА */
+                /* COMBAT ARENA */
                 <div className="w-full h-full flex flex-col min-h-0 overflow-hidden">
                   <CombatArena
                     combatId={combatSession.id}
@@ -583,9 +583,9 @@ export default function GameMapPage() {
                   />
                 </div>
               ) : (
-                /* ВНЕ БОЯ: ПЕРЕКЛЮЧАЕМЫЕ ВКЛАДКИ */
+                /* OUT OF COMBAT: switchable tabs */
                 <div className="flex-1 min-h-0 flex flex-col">
-                  {/* МОБИЛЬНЫЕ: компактная сводка лута и игроки на тайле (на десктопе это правая колонка) */}
+                  {/* MOBILE: compact loot + players-on-tile summary (desktop shows it in the right column) */}
                   <div className="md:hidden shrink-0 space-y-2 mb-2 max-h-[38%] overflow-y-auto">
                     <LootPanel
                       fieldLoot={fieldLoot}
@@ -631,7 +631,7 @@ export default function GameMapPage() {
                     </div>
                   </div>
 
-                  {/* Контент активного окна */}
+                  {/* Active window content */}
                   <div className="flex-1 min-h-0 overflow-y-auto pr-1">
                     {activeTab === "inventory" && (
                       <div className="flex flex-col gap-3">
@@ -692,7 +692,7 @@ export default function GameMapPage() {
                     )}
                   </div>
 
-                  {/* МОБИЛЬНЫЕ: компактная нижняя навигация — мини-D-pad и карта */}
+                  {/* MOBILE: compact bottom navigation — mini D-pad and map */}
                   <div className="md:hidden shrink-0 mt-2 border-t border-gray-800 pt-2 flex flex-col items-center gap-1.5">
                     <div className="w-full flex items-center justify-between px-1">
                       <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
@@ -722,11 +722,11 @@ export default function GameMapPage() {
               )}
             </div>
 
-            {/* ПРАВАЯ ЧАСТЬ: ИНВЕНТАРЬ (В бою на desktop) ИЛИ ДЖОЙСТИК И КАРТА (Вне боя) */}
-            {/* На мобильных во время боя инвентарь скрыт и открывается кнопкой 🎒 (bottom-sheet). */}
+            {/* RIGHT COLUMN: inventory (in combat on desktop) OR joystick + map (out of combat) */}
+            {/* On mobile during combat the inventory is hidden and opened via the 🎒 button (bottom sheet). */}
             <div className="hidden md:flex md:col-span-5 lg:col-span-4 bg-gray-900/90 border border-gray-800 rounded-2xl p-3 justify-between flex-col shrink-0 min-h-0">
               {combatSession ? (
-                /* ИНВЕНТАРЬ ВО ВРЕМЯ БОЯ */
+                /* COMBAT INVENTORY */
                 <div className="flex-1 flex flex-col min-h-0">
                   <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
                     <span className="text-xs uppercase font-bold tracking-wider text-amber-400 flex items-center gap-1.5">
@@ -742,7 +742,7 @@ export default function GameMapPage() {
                   </div>
                 </div>
               ) : (
-                /* ДЖОЙСТИК И КАРТА ВНЕ БОЯ */
+                /* JOYSTICK AND MAP OUT OF COMBAT */
                 <div className="h-full flex flex-col justify-between items-center">
                   <div className="w-full">
                     <LootPanel
@@ -815,7 +815,7 @@ export default function GameMapPage() {
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО КАРТЫ */}
+      {/* MAP MODAL */}
       {isMapOpen && activeMap && !combatSession && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
           <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-2xl flex flex-col max-h-[90vh]">
@@ -898,7 +898,7 @@ export default function GameMapPage() {
         </div>
       )}
 
-      {/* ИНВЕНТАРЬ В БОЮ НА МОБИЛЬНЫХ: открывается только по кнопке 🎒 */}
+      {/* MOBILE COMBAT INVENTORY: opened only via the 🎒 button */}
       {combatSession && (
         <AnimatePresence>
           {isMobileInventoryOpen && (

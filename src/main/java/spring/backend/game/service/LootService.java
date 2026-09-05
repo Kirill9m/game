@@ -6,7 +6,8 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import spring.backend.game.dto.PickupLootResponse;
 import spring.backend.game.dto.WorldLootResponse;
@@ -91,7 +92,7 @@ public class LootService {
     @Transactional
     public void addLootToPlayer(String playerId, ItemEntity item, int quantity) {
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
         boolean marked = worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY());
         if (!inventoryService.tryAddItem(player, item, quantity, marked)) {
             dropAsWorldLoot(player, item, quantity);
@@ -102,7 +103,7 @@ public class LootService {
     @Transactional
     public void addLootByCode(String playerId, String itemCode, int quantity) {
         ItemEntity item = itemRepository.findByCodeIgnoreCase(itemCode)
-                .orElseThrow(() -> new RuntimeException("Item not found: " + itemCode));
+                .orElseThrow(() -> new EntityNotFoundException("Item not found: " + itemCode));
         addLootToPlayer(playerId, item, quantity);
     }
 
@@ -138,7 +139,7 @@ public class LootService {
     @Transactional
     public void dropMarkedItemsAsWorldLoot(String playerId) {
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
         if (!worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY())) {
             return;
         }
@@ -174,9 +175,9 @@ public class LootService {
     @Transactional
     public PickupLootResponse pickupLoot(String playerId, UUID lootId) {
         WorldLootEntity pile = worldLootRepository.findById(lootId)
-                .orElseThrow(() -> new RuntimeException("Loot pile not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Loot pile not found"));
         PlayerEntity player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new RuntimeException("Player not found: " + playerId));
+                .orElseThrow(() -> new EntityNotFoundException("Player not found: " + playerId));
         if (pile.getPositionX() != player.getPositionX() || pile.getPositionY() != player.getPositionY()) {
             throw new IllegalStateException("You must be on the same tile as the loot");
         }

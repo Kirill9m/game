@@ -16,7 +16,7 @@ export const npcApi = {
   ): Promise<DialogueNodeDto> => {
     if (!npcId) throw new Error("NPC ID is required");
 
-    // Добавлен ${API_URL}
+    // Base URL: ${API_URL}
     const params = new URLSearchParams();
     if (playerId) params.append("playerId", playerId);
     const query = params.toString() ? `?${params.toString()}` : "";
@@ -36,7 +36,7 @@ export const npcApi = {
     const params = new URLSearchParams({ playerId, choiceId });
     if (activeQuestId) params.append("activeQuestId", activeQuestId);
 
-    // Добавлен ${API_URL}
+    // Base URL: ${API_URL}
     const res = await fetch(
       `${API_URL}/api/dialogues/choice?${params.toString()}`,
       {

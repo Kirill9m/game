@@ -123,7 +123,7 @@ export default function MovementPad({
                       Moving
                     </span>
                     <span className="text-sm md:text-lg font-extrabold text-white">
-                      {secondsLeft}с
+                      {secondsLeft}s
                     </span>
                   </>
                 ) : (
