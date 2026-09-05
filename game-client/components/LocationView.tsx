@@ -30,6 +30,8 @@ export default function LocationView({
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [inside, setInside] = useState(false);
+  // When inside a building that has its own background image, store it here.
+  const [buildingImage, setBuildingImage] = useState<string | null>(null);
   // The location we entered from, used to teleport back on the final "Exit".
   const entryRef = useRef<string | null>(null);
 
@@ -63,6 +65,7 @@ export default function LocationView({
       if (history.length === 0) entryRef.current = parentId;
       setHistory((h) => [...h, parentId]);
       setCurrentId(building.targetLocationId);
+      setBuildingImage(building.backgroundImageUrl);
       setInside(true);
     } catch {
       // Teleport failed (e.g. cooldown) — stay where we are.
@@ -77,16 +80,18 @@ export default function LocationView({
         await onEnterLocation(prev);
         setCurrentId(prev);
         setHistory((h) => h.slice(0, -1));
+        setBuildingImage(null);
       } catch {
         // ignore — keep current location on failure
       }
     } else {
-      // Last level — exit back to the location we entered from.
-      const entry = entryRef.current ?? history[0] ?? rootId ?? "";
+      // Last level — exit back to the outside world.
+      // Pass empty string to clear the location context on the server.
       try {
-        await onEnterLocation(entry);
+        await onEnterLocation("");
         setCurrentId(null);
         setHistory([]);
+        setBuildingImage(null);
         setInside(false);
         entryRef.current = null;
       } catch {
@@ -137,10 +142,10 @@ export default function LocationView({
 
       {/* The location image (or a placeholder) with buildings & NPCs */}
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-emerald-700/60 bg-emerald-950/40">
-        {current.backgroundImageUrl ? (
+        {(buildingImage ?? current.backgroundImageUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={current.backgroundImageUrl}
+            src={buildingImage ?? current.backgroundImageUrl!}
             alt={current.name}
             className="absolute inset-0 h-full w-full object-cover"
           />

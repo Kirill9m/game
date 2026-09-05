@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Builder
@@ -30,4 +31,10 @@ public class PlayerLoginResponse {
 
     /** True when the player is inside the city (safe zone). */
     private boolean inSafeZone;
+
+    /** When non-null, the player is inside this location/building. */
+    private UUID currentLocationId;
+
+    /** Players inside the same location/building as the player. */
+    private List<PlayerInfo> playersInLocation;
 }

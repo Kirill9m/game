@@ -598,7 +598,7 @@ public class AdminController {
             throw new IllegalArgumentException("Request body is required");
         }
         return ResponseEntity.ok(locationService.createBuilding(locationId, request.name(), request.x(), request.y(),
-                request.width(), request.height(), request.emoji(), request.targetLocationId()));
+                request.width(), request.height(), request.emoji(), request.backgroundImageUrl(), request.targetLocationId()));
     }
 
     @PatchMapping("/locations/buildings/{buildingId}")
@@ -611,7 +611,7 @@ public class AdminController {
             throw new IllegalArgumentException("Request body is required");
         }
         return ResponseEntity.ok(locationService.updateBuilding(buildingId, request.name(), request.x(), request.y(),
-                request.width(), request.height(), request.emoji(), request.targetLocationId()));
+                request.width(), request.height(), request.emoji(), request.backgroundImageUrl(), request.targetLocationId()));
     }
 
     @DeleteMapping("/locations/buildings/{buildingId}")

@@ -280,6 +280,7 @@ export interface AdminLocationBuilding {
   width: number;
   height: number;
   emoji: string | null;
+  backgroundImageUrl: string | null;
   targetLocationId: string | null;
 }
 
@@ -314,6 +315,7 @@ export interface CreateLocationBuildingPayload {
   width: number;
   height: number;
   emoji: string | null;
+  backgroundImageUrl: string | null;
   targetLocationId: string | null;
 }
 

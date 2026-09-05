@@ -33,13 +33,14 @@ public class LocationController {
     }
 
     /**
-     * Enters a named location ("room"): the player is teleported to that
-     * location's world coordinates, sharing a tile with everyone else inside the
-     * same location (PvP allowed outside the safe zone). Passing the previous
-     * location's id returns the player back to it.
+     * Enters a location (building/room). The player's world position stays the
+     * same, but their currentLocationId is set so that only other players inside
+     * the same building are visible. Pass an empty/blank locationId to exit the
+     * current location (clears currentLocationId).
      */
-    @PostMapping("/{locationId}/enter")
-    public MoveResponse enterLocation(@PathVariable UUID locationId, @RequestParam String playerId) {
-        return locationService.enterLocation(locationId, playerId);
+    @PostMapping("/enter")
+    public MoveResponse enterLocation(@RequestParam String locationId, @RequestParam String playerId) {
+        UUID parsed = locationId.isBlank() ? null : UUID.fromString(locationId);
+        return locationService.enterLocation(parsed, playerId);
     }
 }

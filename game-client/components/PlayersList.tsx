@@ -44,6 +44,8 @@ export default function PlayersList({
         {players.map((p) => {
           const identifier = p.username || p.playerId;
           const isSelf = p.playerId === currentId;
+          const isOnline = p.online !== false; // default to true for backward compat
+          if (!isSelf && !isOnline) return null; // hide offline players
           return (
             <li
               key={p.playerId}

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.time.Instant;
 
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
@@ -63,10 +64,27 @@ public class CombatService {
                 .orElseThrow(() -> new RuntimeException("Attacking player not found"));
         var target = playerRepository.findById(targetId)
                 .orElseThrow(() -> new RuntimeException("Target player not found"));
+
+        // Check safe zone
         if (worldZoneService.isInsideSafeZone(attacker.getPositionX(), attacker.getPositionY())
             || worldZoneService.isInsideSafeZone(target.getPositionX(), target.getPositionY())) {
             throw new RuntimeException("PvP attacks are disabled inside the safe zone");
         }
+
+        // Check that both players are in the same location context (both outside or both inside the same building)
+        UUID attackerLoc = attacker.getCurrentLocationId();
+        UUID targetLoc = target.getCurrentLocationId();
+        if (attackerLoc != targetLoc && (attackerLoc == null || !attackerLoc.equals(targetLoc))) {
+            throw new RuntimeException("Target is in another location — you cannot attack them");
+        }
+
+        // Check that the target is online (lastSeen within the last 90 seconds)
+        if (target.getLastSeen() == null
+                || target.getLastSeen().isBefore(Instant.now().minusSeconds(90))) {
+            throw new RuntimeException("Target player is offline — you cannot attack them");
+        }
+
+        // Check that both players are on the same tile
 
         CombatSessionEntity combat = CombatSessionEntity.builder()
                 .player1Id(attackerId)

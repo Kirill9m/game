@@ -45,4 +45,10 @@ public class MoveResponse {
 
     /** True when the target cell is inside the city (safe zone). */
     private boolean inSafeZone;
+
+    /** When non-null, the player is inside this location/building. */
+    private UUID currentLocationId;
+
+    /** Players inside the same location/building as the player. */
+    private List<PlayerInfo> playersInLocation;
 }

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -73,6 +74,20 @@ public class PlayerEntity {
     @Column(name = "starter_items_granted", nullable = false, columnDefinition = "boolean default false")
     @Builder.Default
     private boolean starterItemsGranted = false;
+
+    /**
+     * When set, the player is inside this location (building). Players outside
+     * (null) cannot see players inside and vice versa. Movement clears this field.
+     */
+    @Column(name = "current_location_id")
+    private UUID currentLocationId;
+
+    /**
+     * Last time the player made any request to the server.
+     * Used to determine online/offline status (offline if absent for >5 min).
+     */
+    @Column(name = "last_seen")
+    private Instant lastSeen;
 
     public static final String ROLE_PLAYER = "PLAYER";
     public static final String ROLE_ADMIN = "ADMIN";

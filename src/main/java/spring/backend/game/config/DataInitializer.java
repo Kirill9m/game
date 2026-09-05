@@ -132,6 +132,7 @@ public class DataInitializer implements CommandLineRunner {
                 .width(22)
                 .height(30)
                 .emoji("🏨")
+                .backgroundImageUrl(null)
                 .targetLocation(inn)
                 .build());
         locationBuildingRepository.save(LocationBuildingEntity.builder()
@@ -142,11 +143,14 @@ public class DataInitializer implements CommandLineRunner {
                 .width(22)
                 .height(30)
                 .emoji("⚒️")
+                .backgroundImageUrl(null)
                 .targetLocation(smithy)
                 .build());
 
+        // Place NPCs inside buildings (their target locations) instead of
+        // the primary Town, so they appear when the player enters a building.
         npcRepository.findByCodeIgnoreCase("ELDER").ifPresent(elder -> {
-            elder.setLocationId(town.getId());
+            elder.setLocationId(inn.getId());
             elder.setLocationX(50);
             elder.setLocationY(75);
             npcRepository.save(elder);
@@ -166,6 +170,12 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE player_quests ADD COLUMN IF NOT EXISTS reward_claimed BOOLEAN NOT NULL DEFAULT FALSE");
         } catch (Exception e) {
             log.warn("Database schema update info (player_quests.reward_claimed): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE location_buildings ADD COLUMN IF NOT EXISTS background_image_url VARCHAR(1000)");
+        } catch (Exception e) {
+            log.warn("Database schema update info (location_buildings.background_image_url): {}", e.getMessage());
         }
 
         try {

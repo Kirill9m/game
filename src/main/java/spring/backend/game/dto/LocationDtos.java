@@ -36,6 +36,7 @@ public final class LocationDtos {
             int width,
             int height,
             String emoji,
+            String backgroundImageUrl,
             UUID targetLocationId) {
     }
 
@@ -73,6 +74,7 @@ public final class LocationDtos {
             Integer width,
             Integer height,
             String emoji,
+            String backgroundImageUrl,
             UUID targetLocationId) {
     }
 
@@ -83,6 +85,7 @@ public final class LocationDtos {
             Integer width,
             Integer height,
             String emoji,
+            String backgroundImageUrl,
             UUID targetLocationId) {
     }
 

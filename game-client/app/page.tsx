@@ -60,6 +60,7 @@ export default function GameMapPage() {
   const [gameMaps, setGameMaps] = useState<GameMap[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [insideLocation, setInsideLocation] = useState(false);
+  const [playersInLocation, setPlayersInLocation] = useState<PlayerInfo[]>([]);
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Loot piles visible on the currently opened map viewport.
@@ -153,6 +154,15 @@ export default function GameMapPage() {
   const playerId = sessionUser?.githubId || guestData?.id || "";
   const playerName = sessionUser?.username || guestData?.username || "Player";
   const playerAvatar = sessionUser?.image || "/default-avatar.png";
+
+  // Heartbeat — keep the player marked as online
+  useEffect(() => {
+    if (!playerId) return;
+    const interval = setInterval(() => {
+      playerApi.heartbeat(playerId).catch(() => {});
+    }, 20_000); // every 20 seconds
+    return () => clearInterval(interval);
+  }, [playerId]);
 
   const handleLoginPlayer = useCallback(async () => {
     if (!playerId) return;
@@ -260,6 +270,7 @@ export default function GameMapPage() {
       setPositionX(data.positionX);
       setPositionY(data.positionY);
       setPlayersOnTile(data.playersOnTile || []);
+      setPlayersInLocation([]); // movement clears building context
       setNpcs(data.npcs || []);
       setCooldown(data.cooldown);
       setActiveNpc(null);
@@ -291,15 +302,16 @@ export default function GameMapPage() {
     }
   };
 
-  /** Teleports the player into a named location (a "room"). */
+  /** Enters/exits a location (building). No longer teleports — just sets the
+   *  location context on the server. */
   const handleEnterLocation = async (locationId: string) => {
     setError("");
     setNotice("");
     try {
       const data = await locationApi.enterLocation(playerId, locationId);
-      setPositionX(data.positionX);
-      setPositionY(data.positionY);
+      // Position stays the same — only location context changes
       setPlayersOnTile(data.playersOnTile || []);
+      setPlayersInLocation(data.playersInLocation || []);
       setNpcs(data.npcs || []);
       setCooldown(data.cooldown);
       setActiveNpc(null);
@@ -776,6 +788,20 @@ export default function GameMapPage() {
                           currentId={playerId}
                           onAttack={handleStartCombat}
                           npcs={npcs}
+                          onTalk={setActiveNpc}
+                        />
+                      </div>
+                    )}
+                    {playersInLocation.length > 0 && (
+                      <div className="w-full max-h-64 overflow-y-auto shrink-0 text-left mt-2">
+                        <h4 className="text-[11px] font-bold uppercase tracking-wide text-amber-400 mb-1">
+                          🏠 Inside the same building
+                        </h4>
+                        <PlayersList
+                          players={playersInLocation}
+                          currentId={playerId}
+                          onAttack={handleStartCombat}
+                          npcs={[]}
                           onTalk={setActiveNpc}
                         />
                       </div>

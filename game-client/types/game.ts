@@ -4,6 +4,7 @@ export interface PlayerInfo {
   playerId: string;
   userId: string;
   username?: string;
+  online?: boolean;
 }
 
 export interface InventoryItem {
@@ -53,6 +54,10 @@ export interface MoveResponse {
   lootDepositedCount?: number;
   /** True when the player is inside the city (safe zone). */
   inSafeZone?: boolean;
+  /** When non-null, the player is inside this location/building. */
+  currentLocationId?: string | null;
+  /** Players inside the same location/building as the player. */
+  playersInLocation?: PlayerInfo[];
 }
 
 export interface WorldCell {
@@ -136,6 +141,10 @@ export interface PlayerStateResponse {
   fieldLoot?: WorldLoot[];
   /** True when the player is inside the city (safe zone). */
   inSafeZone?: boolean;
+  /** When non-null, the player is inside this location/building. */
+  currentLocationId?: string | null;
+  /** Players inside the same location/building as the player. */
+  playersInLocation?: PlayerInfo[];
 }
 
 /** A loot pile lying on a world cell, dropped by a defeated player. */

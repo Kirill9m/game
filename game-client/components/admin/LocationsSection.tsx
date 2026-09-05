@@ -41,6 +41,7 @@ export default function LocationsSection({
   const [bY, setBY] = useState(50);
   const [bW, setBW] = useState(20);
   const [bH, setBH] = useState(25);
+  const [bBg, setBBg] = useState("");
   const [bTarget, setBTarget] = useState("");
 
   // NPC placement
@@ -58,7 +59,7 @@ export default function LocationsSection({
 
   const resetBuildingDraft = () => {
     setBuildingId(null); setBName(""); setBEmoji("🏠");
-    setBX(50); setBY(50); setBW(20); setBH(25); setBTarget("");
+    setBX(50); setBY(50); setBW(20); setBH(25); setBBg(""); setBTarget("");
   };
 
   const selectLocation = (loc: AdminLocation) => {
@@ -74,6 +75,7 @@ export default function LocationsSection({
   const selectBuilding = (b: AdminLocationBuilding) => {
     setBuildingId(b.id); setBName(b.name); setBEmoji(b.emoji ?? "🏠");
     setBX(b.x); setBY(b.y); setBW(b.width); setBH(b.height);
+    setBBg(b.backgroundImageUrl ?? "");
     setBTarget(b.targetLocationId ?? "");
   };
 
@@ -94,6 +96,7 @@ export default function LocationsSection({
       width: Math.max(1, clamp(bW)),
       height: Math.max(1, clamp(bH)),
       emoji: bEmoji.trim() || null,
+      backgroundImageUrl: bBg.trim() || null,
       targetLocationId: bTarget || null,
     };
     if (buildingId) await adminApi.updateLocationBuilding(playerId, buildingId, payload);
@@ -227,6 +230,7 @@ export default function LocationsSection({
               <div><label className={labelClass}>Y %</label><input type="number" className={inputClass} value={bY} onChange={(e) => setBY(Number(e.target.value) || 0)} /></div>
               <div><label className={labelClass}>Width %</label><input type="number" className={inputClass} value={bW} onChange={(e) => setBW(Number(e.target.value) || 1)} /></div>
               <div><label className={labelClass}>Height %</label><input type="number" className={inputClass} value={bH} onChange={(e) => setBH(Number(e.target.value) || 1)} /></div>
+              <div className="col-span-2"><label className={labelClass}>Background image URL</label><input className={inputClass} value={bBg} onChange={(e) => setBBg(e.target.value)} placeholder="https://..." /></div>
               <div className="col-span-2"><label className={labelClass}>Enter → location</label>
                 <select className={inputClass} value={bTarget} onChange={(e) => setBTarget(e.target.value)}>
                   <option value="">(none — decorative)</option>

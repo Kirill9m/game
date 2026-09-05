@@ -194,4 +194,11 @@ export const playerApi = {
     }
     return response.json();
   },
+/** Sends a heartbeat to keep the player marked as online. */
+  async heartbeat(playerId: string): Promise<void> {
+    await fetch(
+      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/heartbeat`,
+      { method: "POST" },
+    ).catch(() => { /* ignore */ });
+  },
 };

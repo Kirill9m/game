@@ -61,6 +61,15 @@ public class LocationBuildingEntity {
     @Column(length = 50)
     private String emoji;
 
+    /**
+     * URL to the building's own background image. When set and a player enters
+     * this building, the Location tab will display this image instead of the
+     * target location's background, giving each building its own visual identity
+     * (e.g. an interior photo). Null falls back to the target location's image.
+     */
+    @Column(name = "background_image_url", length = 1000)
+    private String backgroundImageUrl;
+
     /** The location opened when the building is entered (nullable = decorative). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "target_location_id")

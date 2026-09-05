@@ -11,14 +11,17 @@ export const locationApi = {
   },
 
   /**
-   * Enters a named location ("room"): the server teleports the player to that
-   * location's world coordinates and returns the new world state (including the
-   * other players now sharing the same tile). Passing the previous location's
-   * id teleports the player back to it.
+   * Enters a location (building). The server sets currentLocationId on the
+   * player so they can only see other players inside the same building.
+   * Pass an empty string to exit the current location.
    */
   async enterLocation(playerId: string, locationId: string): Promise<MoveResponse> {
+    const params = new URLSearchParams({
+      playerId: playerId,
+      locationId: locationId,
+    });
     const res = await fetch(
-      `${API_URL}/api/v1/locations/${encodeURIComponent(locationId)}/enter?playerId=${encodeURIComponent(playerId)}`,
+      `${API_URL}/api/v1/locations/enter?${params}`,
       { method: "POST" },
     );
     if (!res.ok) {

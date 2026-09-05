@@ -71,6 +71,13 @@ public class MovementService {
 
         player.setPositionX(targetX);
         player.setPositionY(targetY);
+
+        // Moving clears any building/location context
+        player.setCurrentLocationId(null);
+
+        // Update lastSeen for online status
+        player.setLastSeen(now);
+
         Instant newCooldown = now.plusSeconds(3);
         player.setCooldown(newCooldown);
 
@@ -106,12 +113,16 @@ public class MovementService {
             combatStarted = true;
         }
 
-        List<PlayerEntity> playersOnSameTile = playerRepository.findByPositionXAndPositionY(targetX, targetY);
+        Instant onlineSince = now.minusSeconds(90);
+
+        List<PlayerEntity> playersOnSameTile = playerRepository.findOnlineOutsideByPosition(targetX, targetY, onlineSince);
 
         List<PlayerInfo> playerInfos = playersOnSameTile.stream()
+                .filter(p -> !p.getId().equals(playerId))
                 .map(p -> PlayerInfo.builder()
                         .playerId(p.getId())
-                        .username(p.getUsername()) // Since id is now the unique string identifier (GitHub/Guest ID)
+                        .username(p.getUsername())
+                        .online(true)
                         .build())
                 .toList();
                 List<NpcInfoResponse> npcInfos = npcRepository.findByPositionXAndPositionYAndLocationIdIsNull(targetX, targetY)
@@ -141,6 +152,8 @@ public class MovementService {
                 .lootDeposited(securedLoot > 0)
                 .lootDepositedCount(securedLoot)
                 .inSafeZone(targetInSafeZone)
+                .currentLocationId(null)
+                .playersInLocation(List.of())
                 .build();
     }
 
@@ -170,6 +183,11 @@ public class MovementService {
 
         player.setPositionX(targetX);
         player.setPositionY(targetY);
+
+        // Teleporting clears any building/location context
+        player.setCurrentLocationId(null);
+        player.setLastSeen(now);
+
         Instant newCooldown = now.plusSeconds(3);
         player.setCooldown(newCooldown);
 
@@ -187,11 +205,14 @@ public class MovementService {
         }
         playerRepository.save(player);
 
-        List<PlayerEntity> playersOnSameTile = playerRepository.findByPositionXAndPositionY(targetX, targetY);
+        Instant onlineSince = now.minusSeconds(90);
+        List<PlayerEntity> playersOnSameTile = playerRepository.findOnlineOutsideByPosition(targetX, targetY, onlineSince);
         List<PlayerInfo> playerInfos = playersOnSameTile.stream()
+                .filter(p -> !p.getId().equals(playerId))
                 .map(p -> PlayerInfo.builder()
                         .playerId(p.getId())
                         .username(p.getUsername())
+                        .online(true)
                         .build())
                 .toList();
         List<NpcInfoResponse> npcInfos = npcRepository
@@ -211,6 +232,8 @@ public class MovementService {
                 .positionY(targetY)
                 .cooldown(newCooldown)
                 .playersOnTile(playerInfos)
+                .playersInLocation(List.of())
+                .currentLocationId(null)
                 .npcs(npcInfos)
                 .health(player.getHealth())
                 .radiationDamage(radiationDamage)

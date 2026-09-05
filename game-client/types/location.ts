@@ -19,6 +19,12 @@ export interface LocationBuilding {
   width: number;
   height: number;
   emoji: string | null;
+  /**
+   * URL to the building's own background image. When set and a player enters
+   * this building, the Location tab shows this image instead of the target
+   * location's image, giving each building its own visual identity.
+   */
+  backgroundImageUrl: string | null;
   /** Location opened when the building is entered (null = decorative). */
   targetLocationId: string | null;
 }
