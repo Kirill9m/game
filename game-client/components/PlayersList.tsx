@@ -41,34 +41,37 @@ export default function PlayersList({
             </button>
           </li>
         ))}
-        {players.map((p) => {
-          const identifier = p.username || p.playerId;
-          const isSelf = p.playerId === currentId;
-          const isOnline = p.online !== false; // default to true for backward compat
-          if (!isSelf && !isOnline) return null; // hide offline players
-          return (
-            <li
-              key={p.playerId}
-              className="flex justify-between items-center text-sm py-1"
-            >
-              <span
-                className={
-                  isSelf ? "text-green-400 font-bold" : "text-gray-300"
-                }
+        {players
+          .filter((p) => {
+            if (p.playerId === currentId) return true; // always show self
+            return p.online === true; // strictly only show truly online players
+          })
+          .map((p) => {
+            const identifier = p.username || p.playerId;
+            const isSelf = p.playerId === currentId;
+            return (
+              <li
+                key={p.playerId}
+                className="flex justify-between items-center text-sm py-1"
               >
-                {identifier} {isSelf && "(You)"}
-              </span>
-              {!isSelf && (
-                <button
-                  onClick={() => onAttack(p.playerId)}
-                  className="bg-red-700 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition"
+                <span
+                  className={
+                    isSelf ? "text-green-400 font-bold" : "text-gray-300"
+                  }
                 >
-                  Attack
-                </button>
-              )}
-            </li>
-          );
-        })}
+                  {identifier} {isSelf && "(You)"}
+                </span>
+                {!isSelf && (
+                  <button
+                    onClick={() => onAttack(p.playerId)}
+                    className="bg-red-700 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition"
+                  >
+                    Attack
+                  </button>
+                )}
+              </li>
+            );
+          })}
       </ul>
     </div>
   );

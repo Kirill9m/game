@@ -49,6 +49,9 @@ public class MoveResponse {
     /** When non-null, the player is inside this location/building. */
     private UUID currentLocationId;
 
+    /** When non-null, the player entered through this specific building. */
+    private UUID currentBuildingId;
+
     /** Players inside the same location/building as the player. */
     private List<PlayerInfo> playersInLocation;
 }

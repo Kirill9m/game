@@ -24,6 +24,9 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 @RequiredArgsConstructor
 public class MovementService {
+    /** Players are considered offline after this duration of inactivity. */
+    private static final long ONLINE_THRESHOLD_SECONDS = 300; // 5 minutes
+
     private final PlayerRepository playerRepository;
     private final NpcRepository npcRepository;
     private final WorldCellService worldCellService;
@@ -74,6 +77,7 @@ public class MovementService {
 
         // Moving clears any building/location context
         player.setCurrentLocationId(null);
+        player.setCurrentBuildingId(null);
 
         // Update lastSeen for online status
         player.setLastSeen(now);
@@ -113,7 +117,7 @@ public class MovementService {
             combatStarted = true;
         }
 
-        Instant onlineSince = now.minusSeconds(90);
+        Instant onlineSince = now.minusSeconds(ONLINE_THRESHOLD_SECONDS);
 
         List<PlayerEntity> playersOnSameTile = playerRepository.findOnlineOutsideByPosition(targetX, targetY, onlineSince);
 
@@ -122,7 +126,7 @@ public class MovementService {
                 .map(p -> PlayerInfo.builder()
                         .playerId(p.getId())
                         .username(p.getUsername())
-                        .online(true)
+                        .online(p.getLastSeen() != null && p.getLastSeen().isAfter(onlineSince))
                         .build())
                 .toList();
                 List<NpcInfoResponse> npcInfos = npcRepository.findByPositionXAndPositionYAndLocationIdIsNull(targetX, targetY)
@@ -186,6 +190,7 @@ public class MovementService {
 
         // Teleporting clears any building/location context
         player.setCurrentLocationId(null);
+        player.setCurrentBuildingId(null);
         player.setLastSeen(now);
 
         Instant newCooldown = now.plusSeconds(3);
@@ -205,14 +210,14 @@ public class MovementService {
         }
         playerRepository.save(player);
 
-        Instant onlineSince = now.minusSeconds(90);
+        Instant onlineSince = now.minusSeconds(ONLINE_THRESHOLD_SECONDS);
         List<PlayerEntity> playersOnSameTile = playerRepository.findOnlineOutsideByPosition(targetX, targetY, onlineSince);
         List<PlayerInfo> playerInfos = playersOnSameTile.stream()
                 .filter(p -> !p.getId().equals(playerId))
                 .map(p -> PlayerInfo.builder()
                         .playerId(p.getId())
                         .username(p.getUsername())
-                        .online(true)
+                        .online(p.getLastSeen() != null && p.getLastSeen().isAfter(onlineSince))
                         .build())
                 .toList();
         List<NpcInfoResponse> npcInfos = npcRepository

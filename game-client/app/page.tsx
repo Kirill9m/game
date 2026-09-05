@@ -304,11 +304,11 @@ export default function GameMapPage() {
 
   /** Enters/exits a location (building). No longer teleports — just sets the
    *  location context on the server. */
-  const handleEnterLocation = async (locationId: string) => {
+  const handleEnterLocation = async (locationId: string, buildingId?: string) => {
     setError("");
     setNotice("");
     try {
-      const data = await locationApi.enterLocation(playerId, locationId);
+      const data = await locationApi.enterLocation(playerId, locationId, buildingId);
       // Position stays the same — only location context changes
       setPlayersOnTile(data.playersOnTile || []);
       setPlayersInLocation(data.playersInLocation || []);
@@ -678,6 +678,7 @@ export default function GameMapPage() {
                     {activeTab === "location" && (
                       <LocationView
                         locations={locations}
+                        npcs={npcs}
                         positionX={positionX}
                         positionY={positionY}
                         onTalk={setActiveNpc}

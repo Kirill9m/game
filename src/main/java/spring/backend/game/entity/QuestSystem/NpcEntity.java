@@ -48,6 +48,15 @@ public class NpcEntity {
     @Column(name = "location_id")
     private UUID locationId;
 
+    /**
+     * When set, the NPC is only visible when the player entered through this
+     * specific building (the building's target location must match this NPC's
+     * locationId). This lets different buildings leading to the same location
+     * show different sets of NPCs.
+     */
+    @Column(name = "building_id")
+    private UUID buildingId;
+
     @Column(name = "location_x")
     private Integer locationX;
 

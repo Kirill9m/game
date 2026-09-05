@@ -268,6 +268,7 @@ export interface AdminLocationNpc {
   name: string;
   locationX: number;
   locationY: number;
+  buildingId: string | null;
 }
 
 /** A clickable building on a location image. */
@@ -326,4 +327,5 @@ export type UpdateLocationBuildingPayload = Partial<
 export interface PlaceLocationNpcPayload {
   locationX: number;
   locationY: number;
+  buildingId: string | null;
 }

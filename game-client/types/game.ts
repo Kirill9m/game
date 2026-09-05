@@ -56,6 +56,8 @@ export interface MoveResponse {
   inSafeZone?: boolean;
   /** When non-null, the player is inside this location/building. */
   currentLocationId?: string | null;
+  /** When non-null, the player entered through this specific building. */
+  currentBuildingId?: string | null;
   /** Players inside the same location/building as the player. */
   playersInLocation?: PlayerInfo[];
 }
@@ -143,6 +145,8 @@ export interface PlayerStateResponse {
   inSafeZone?: boolean;
   /** When non-null, the player is inside this location/building. */
   currentLocationId?: string | null;
+  /** When non-null, the player entered through this specific building. */
+  currentBuildingId?: string | null;
   /** Players inside the same location/building as the player. */
   playersInLocation?: PlayerInfo[];
 }

@@ -35,7 +35,8 @@ public final class AdminDtos {
             int positionY,
             UUID locationId,
             Integer locationX,
-            Integer locationY) {
+            Integer locationY,
+            UUID buildingId) {
     }
 
     public record AdminQuestDto(

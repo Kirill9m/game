@@ -48,6 +48,7 @@ export default function LocationsSection({
   const [npcId, setNpcId] = useState("");
   const [npcX, setNpcX] = useState(50);
   const [npcY, setNpcY] = useState(50);
+  const [npcBuildingId, setNpcBuildingId] = useState("");
 
   const previewRef = useRef<HTMLDivElement | null>(null);
 
@@ -129,6 +130,7 @@ export default function LocationsSection({
     if (!selected || !npcId) return;
     await adminApi.placeLocationNpc(playerId, selected.id, npcId, {
       locationX: clamp(npcX), locationY: clamp(npcY),
+      buildingId: npcBuildingId || null,
     });
     setNotice("NPC placed");
   });
@@ -231,6 +233,17 @@ export default function LocationsSection({
               <div><label className={labelClass}>Width %</label><input type="number" className={inputClass} value={bW} onChange={(e) => setBW(Number(e.target.value) || 1)} /></div>
               <div><label className={labelClass}>Height %</label><input type="number" className={inputClass} value={bH} onChange={(e) => setBH(Number(e.target.value) || 1)} /></div>
               <div className="col-span-2"><label className={labelClass}>Background image URL</label><input className={inputClass} value={bBg} onChange={(e) => setBBg(e.target.value)} placeholder="https://..." /></div>
+              {bBg.trim() && (
+                <div className="col-span-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={bBg.trim()}
+                    alt="Building preview"
+                    className="w-full h-32 object-cover rounded-lg border border-gray-700"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
               <div className="col-span-2"><label className={labelClass}>Enter → location</label>
                 <select className={inputClass} value={bTarget} onChange={(e) => setBTarget(e.target.value)}>
                   <option value="">(none — decorative)</option>
@@ -263,6 +276,14 @@ export default function LocationsSection({
                     <option key={n.id} value={n.id}>
                       {n.name} ({n.code}){n.locationId ? (n.locationId === selected.id ? " · here" : " · in location") : " · world"}
                     </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-40"><label className={labelClass}>In Building</label>
+                <select className={inputClass} value={npcBuildingId} onChange={(e) => setNpcBuildingId(e.target.value)}>
+                  <option value="">(location-wide)</option>
+                  {selected.buildings.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name} {b.emoji || "🏠"}</option>
                   ))}
                 </select>
               </div>

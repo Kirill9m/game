@@ -124,7 +124,7 @@ public class DataInitializer implements CommandLineRunner {
                 .isStart(false)
                 .build());
 
-        locationBuildingRepository.save(LocationBuildingEntity.builder()
+        LocationBuildingEntity innBuilding = locationBuildingRepository.save(LocationBuildingEntity.builder()
                 .location(town)
                 .name("Inn")
                 .x(25)
@@ -135,7 +135,7 @@ public class DataInitializer implements CommandLineRunner {
                 .backgroundImageUrl(null)
                 .targetLocation(inn)
                 .build());
-        locationBuildingRepository.save(LocationBuildingEntity.builder()
+        LocationBuildingEntity smithBuilding = locationBuildingRepository.save(LocationBuildingEntity.builder()
                 .location(town)
                 .name("Blacksmith")
                 .x(68)
@@ -147,13 +147,28 @@ public class DataInitializer implements CommandLineRunner {
                 .targetLocation(smithy)
                 .build());
 
-        // Place NPCs inside buildings (their target locations) instead of
-        // the primary Town, so they appear when the player enters a building.
+        // Place NPCs inside specific buildings so they appear only when
+        // the player enters through that building.
         npcRepository.findByCodeIgnoreCase("ELDER").ifPresent(elder -> {
             elder.setLocationId(inn.getId());
+            elder.setBuildingId(innBuilding.getId());
             elder.setLocationX(50);
             elder.setLocationY(75);
             npcRepository.save(elder);
+        });
+        npcRepository.findByCodeIgnoreCase("MERCHANT").ifPresent(merchant -> {
+            merchant.setLocationId(inn.getId());
+            merchant.setBuildingId(innBuilding.getId());
+            merchant.setLocationX(25);
+            merchant.setLocationY(50);
+            npcRepository.save(merchant);
+        });
+        npcRepository.findByCodeIgnoreCase("SMITH").ifPresent(smith -> {
+            smith.setLocationId(smithy.getId());
+            smith.setBuildingId(smithBuilding.getId());
+            smith.setLocationX(50);
+            smith.setLocationY(50);
+            npcRepository.save(smith);
         });
 
         log.info("Seeded example locations: Town, Inn, Blacksmith");
@@ -176,6 +191,18 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE location_buildings ADD COLUMN IF NOT EXISTS background_image_url VARCHAR(1000)");
         } catch (Exception e) {
             log.warn("Database schema update info (location_buildings.background_image_url): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE npcs ADD COLUMN IF NOT EXISTS building_id UUID");
+        } catch (Exception e) {
+            log.warn("Database schema update info (npcs.building_id): {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS current_building_id UUID");
+        } catch (Exception e) {
+            log.warn("Database schema update info (players.current_building_id): {}", e.getMessage());
         }
 
         try {

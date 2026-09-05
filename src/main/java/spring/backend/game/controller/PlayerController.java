@@ -38,7 +38,7 @@ public class PlayerController {
     private final MovementService movementService;
 
     /** Players are considered offline after this duration of inactivity. */
-    private static final long ONLINE_THRESHOLD_SECONDS = 90; // 1.5 minutes
+    private static final long ONLINE_THRESHOLD_SECONDS = 300; // 5 minutes
 
     @PostMapping("/login")
     public ResponseEntity<PlayerLoginResponse> loginOrCreate(@RequestBody PlayerLoginRequest request) {
@@ -129,17 +129,36 @@ public class PlayerController {
             playersInLocation = List.of();
         }
 
-        List<NpcInfoResponse> npcs = npcRepository
-                .findByPositionXAndPositionYAndLocationIdIsNull(player.getPositionX(), player.getPositionY())
-                .stream()
-                .map(npc -> NpcInfoResponse.builder()
-                        .id(npc.getId())
-                        .code(npc.getCode())
-                        .name(npc.getName())
-                        .positionX(npc.getPositionX())
-                        .positionY(npc.getPositionY())
-                        .build())
-                .toList();
+        List<NpcInfoResponse> npcs;
+        UUID bldId = player.getCurrentBuildingId();
+        if (bldId != null) {
+            // Inside a building — show NPCs assigned to this building
+            npcs = npcRepository.findByBuildingId(bldId)
+                    .stream()
+                    .map(npc -> NpcInfoResponse.builder()
+                            .id(npc.getId())
+                            .code(npc.getCode())
+                            .name(npc.getName())
+                            .positionX(npc.getPositionX())
+                            .positionY(npc.getPositionY())
+                            .locationX(npc.getLocationX())
+                            .locationY(npc.getLocationY())
+                            .build())
+                    .toList();
+        } else {
+            // Outside — show world NPCs on the same tile
+            npcs = npcRepository
+                    .findByPositionXAndPositionYAndLocationIdIsNull(player.getPositionX(), player.getPositionY())
+                    .stream()
+                    .map(npc -> NpcInfoResponse.builder()
+                            .id(npc.getId())
+                            .code(npc.getCode())
+                            .name(npc.getName())
+                            .positionX(npc.getPositionX())
+                            .positionY(npc.getPositionY())
+                            .build())
+                    .toList();
+        }
 
         return PlayerLoginResponse.builder()
                 .id(player.getId())
@@ -159,6 +178,7 @@ public class PlayerController {
                 .playersOnTile(playersOnTile)
                 .playersInLocation(playersInLocation)
                 .currentLocationId(locId)
+                .currentBuildingId(player.getCurrentBuildingId())
                 .npcs(npcs)
                 .fieldLoot(lootService.getFieldLoot(player.getPositionX(), player.getPositionY()))
                 .inSafeZone(!worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY()))
@@ -166,10 +186,12 @@ public class PlayerController {
     }
 
     private PlayerInfo toPlayerInfo(PlayerEntity p) {
+        Instant now = Instant.now();
+        Instant onlineSince = now.minusSeconds(ONLINE_THRESHOLD_SECONDS);
         return PlayerInfo.builder()
                 .playerId(p.getId())
                 .username(p.getUsername())
-                .online(true)
+                .online(p.getLastSeen() != null && p.getLastSeen().isAfter(onlineSince))
                 .build();
     }
 

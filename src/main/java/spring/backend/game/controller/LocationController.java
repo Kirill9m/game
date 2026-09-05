@@ -39,8 +39,11 @@ public class LocationController {
      * current location (clears currentLocationId).
      */
     @PostMapping("/enter")
-    public MoveResponse enterLocation(@RequestParam String locationId, @RequestParam String playerId) {
-        UUID parsed = locationId.isBlank() ? null : UUID.fromString(locationId);
-        return locationService.enterLocation(parsed, playerId);
+    public MoveResponse enterLocation(@RequestParam String locationId,
+                                       @RequestParam(required = false) String buildingId,
+                                       @RequestParam String playerId) {
+        UUID parsedLoc = locationId.isBlank() ? null : UUID.fromString(locationId);
+        UUID parsedBld = (buildingId == null || buildingId.isBlank()) ? null : UUID.fromString(buildingId);
+        return locationService.enterLocation(parsedLoc, parsedBld, playerId);
     }
 }

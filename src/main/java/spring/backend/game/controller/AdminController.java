@@ -628,7 +628,10 @@ public class AdminController {
             @RequestParam String playerId,
             @RequestBody(required = false) LocationDtos.PlaceLocationNpcRequest request) {
         adminService.requireAdmin(playerId);
-        locationService.placeNpc(locationId, npcId, request == null ? null : request.locationX(),
+        locationService.placeNpc(locationId,
+                request == null ? null : request.buildingId(),
+                npcId,
+                request == null ? null : request.locationX(),
                 request == null ? null : request.locationY());
         return ResponseEntity.noContent().build();
     }

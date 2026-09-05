@@ -4,6 +4,10 @@ export interface NpcInfo {
   name: string;
   positionX: number;
   positionY: number;
+  /** Percentage position on the location image (0-100), for NPCs inside a building. */
+  locationX?: number | null;
+  /** Percentage position on the location image (0-100), for NPCs inside a building. */
+  locationY?: number | null;
 }
 
 export interface QuestInfo {

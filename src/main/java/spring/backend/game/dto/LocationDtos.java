@@ -45,7 +45,8 @@ public final class LocationDtos {
             String code,
             String name,
             int locationX,
-            int locationY) {
+            int locationY,
+            UUID buildingId) {
     }
 
     // --- REQUESTS ---
@@ -91,6 +92,7 @@ public final class LocationDtos {
 
     public record PlaceLocationNpcRequest(
             Integer locationX,
-            Integer locationY) {
+            Integer locationY,
+            UUID buildingId) {
     }
 }

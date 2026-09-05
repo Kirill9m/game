@@ -7,6 +7,11 @@ export interface LocationNpc {
   /** Centre position on the location image, as a percentage (0-100). */
   locationX: number;
   locationY: number;
+  /**
+   * When set, this NPC only appears when the player enters through this
+   * specific building ID. Otherwise it appears location-wide.
+   */
+  buildingId: string | null;
 }
 
 export interface LocationBuilding {

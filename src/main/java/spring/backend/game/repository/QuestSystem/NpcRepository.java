@@ -16,5 +16,8 @@ public interface NpcRepository extends JpaRepository<NpcEntity, UUID> {
 
     List<NpcEntity> findByLocationId(UUID locationId);
 
+    /** NPCs placed specifically under a building (shown when entering that building). */
+    List<NpcEntity> findByBuildingId(UUID buildingId);
+
     Optional<NpcEntity> findByCodeIgnoreCase(String code);
 }

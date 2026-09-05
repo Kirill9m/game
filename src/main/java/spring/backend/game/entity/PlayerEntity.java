@@ -83,6 +83,14 @@ public class PlayerEntity {
     private UUID currentLocationId;
 
     /**
+     * When set, the player entered the current location through this specific
+     * building. Used to filter NPCs: those with a matching buildingId are shown
+     * alongside location-wide NPCs. Cleared when exiting or moving.
+     */
+    @Column(name = "current_building_id")
+    private UUID currentBuildingId;
+
+    /**
      * Last time the player made any request to the server.
      * Used to determine online/offline status (offline if absent for >5 min).
      */

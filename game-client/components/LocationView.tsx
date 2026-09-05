@@ -6,17 +6,19 @@ import type { NpcInfo } from "@/types/npc";
 
 interface LocationViewProps {
   locations: Location[];
+  npcs: NpcInfo[];
   positionX: number;
   positionY: number;
   onTalk: (npc: NpcInfo) => void;
   /** Called when the player enters/leaves a building so the parent can lock movement. */
   onInsideChange: (inside: boolean) => void;
-  /** Teleports the player to the given location's world coordinates. */
-  onEnterLocation: (locationId: string) => Promise<void>;
+  /** Enters/exits a building. Pass buildingId (second arg) for NPC filtering. */
+  onEnterLocation: (locationId: string, buildingId?: string) => Promise<void>;
 }
 
 export default function LocationView({
   locations,
+  npcs,
   positionX,
   positionY,
   onTalk,
@@ -61,7 +63,7 @@ export default function LocationView({
     if (!building.targetLocationId) return;
     const parentId = currentId ?? rootId ?? "";
     try {
-      await onEnterLocation(building.targetLocationId);
+      await onEnterLocation(building.targetLocationId, building.id);
       if (history.length === 0) entryRef.current = parentId;
       setHistory((h) => [...h, parentId]);
       setCurrentId(building.targetLocationId);
@@ -100,14 +102,13 @@ export default function LocationView({
     }
   };
 
-  const talkTo = (npc: LocationNpc) =>
-    onTalk({
-      id: npc.id,
-      code: npc.code,
-      name: npc.name,
-      positionX: 0,
-      positionY: 0,
-    });
+  const talkTo = (npc: NpcInfo | LocationNpc) => {
+    // LocationNpc → NpcInfo conversion (building NPCs from server are already NpcInfo)
+    const info: NpcInfo = 'positionX' in npc
+      ? npc as NpcInfo
+      : { id: npc.id, code: npc.code, name: npc.name, positionX: 0, positionY: 0 };
+    onTalk(info);
+  };
 
   if (!current) {
     return (
@@ -153,8 +154,8 @@ export default function LocationView({
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/80 via-teal-900/60 to-slate-900/80" />
         )}
 
-        {/* Buildings */}
-        {current.buildings.map((building) => (
+        {/* Buildings — hidden when inside a building (interior view) */}
+        {!inside && current.buildings.map((building) => (
           <button
             key={building.id}
             type="button"
@@ -178,14 +179,18 @@ export default function LocationView({
           </button>
         ))}
 
-        {/* NPCs */}
-        {current.npcs.map((npc) => (
+        {/* NPCs — when inside a building, show building NPCs from server response;
+            otherwise show location-wide NPCs from the location data */}
+        {(inside ? npcs : current.npcs).map((npc) => (
           <button
-            key={npc.id}
+            key={npc.id ?? npc.code}
             type="button"
             onClick={() => talkTo(npc)}
             className="absolute z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-sky-200 bg-sky-700 text-base shadow-[0_0_10px_rgba(56,189,248,0.85)] transition hover:scale-110 hover:bg-sky-500"
-            style={{ left: `${npc.locationX}%`, top: `${npc.locationY}%` }}
+            style={{
+              left: `${npc.locationX ?? 50}%`,
+              top: `${npc.locationY ?? 50}%`,
+            }}
             title={`Talk to ${npc.name}`}
             aria-label={`Talk to ${npc.name}`}
           >

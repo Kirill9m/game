@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import spring.backend.game.dto.MoveResponse;
 import spring.backend.game.dto.LocationDtos;
+import spring.backend.game.dto.NpcInfoResponse;
 import spring.backend.game.dto.PlayerInfo;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.repository.PlayerRepository;
@@ -42,7 +43,7 @@ public class LocationService {
     private final InventoryService inventoryService;
 
     /** Players are considered offline after this duration of inactivity. */
-    private static final long ONLINE_THRESHOLD_SECONDS = 90; // 1.5 minutes
+    private static final long ONLINE_THRESHOLD_SECONDS = 300; // 5 minutes
 
     @Transactional(readOnly = true)
     public List<LocationDtos.LocationDto> getAllLocations() {
@@ -184,7 +185,7 @@ public class LocationService {
      * (clears currentLocationId).
      */
     @Transactional
-    public MoveResponse enterLocation(UUID locationId, String playerId) {
+    public MoveResponse enterLocation(UUID locationId, UUID buildingId, String playerId) {
         PlayerEntity player = playerRepository.findById(playerId)
                 .orElseThrow(() -> new IllegalArgumentException("Player not found"));
 
@@ -192,8 +193,10 @@ public class LocationService {
             // Verify the location exists
             getLocation(locationId);
             player.setCurrentLocationId(locationId);
+            player.setCurrentBuildingId(buildingId);
         } else {
             player.setCurrentLocationId(null);
+            player.setCurrentBuildingId(null);
         }
 
         // Update lastSeen (online status)
@@ -212,6 +215,7 @@ public class LocationService {
         int x = player.getPositionX();
         int y = player.getPositionY();
         UUID locId = player.getCurrentLocationId();
+        UUID bldId = player.getCurrentBuildingId();
         Instant now = Instant.now();
         Instant onlineSince = now.minusSeconds(ONLINE_THRESHOLD_SECONDS);
 
@@ -227,6 +231,22 @@ public class LocationService {
             locationPlayers = List.of();
         }
 
+        // NPCs: include those for the specific building (if inside) + generic location NPCs
+        List<NpcInfoResponse> buildingNpcs = (bldId != null)
+                ? npcRepository.findByBuildingId(bldId)
+                        .stream()
+                        .map(npc -> NpcInfoResponse.builder()
+                                .id(npc.getId())
+                                .code(npc.getCode())
+                                .name(npc.getName())
+                                .positionX(npc.getPositionX())
+                                .positionY(npc.getPositionY())
+                                .locationX(npc.getLocationX())
+                                .locationY(npc.getLocationY())
+                                .build())
+                        .toList()
+                : List.of();
+
         boolean inSafe = !worldZoneService.isOutsideSafeZone(x, y);
 
         return MoveResponse.builder()
@@ -235,6 +255,7 @@ public class LocationService {
                 .playersOnTile(toPlayerInfoList(tilePlayers, player.getId()))
                 .playersInLocation(toPlayerInfoList(locationPlayers, player.getId()))
                 .currentLocationId(locId)
+                .currentBuildingId(bldId)
                 .cooldown(player.getCooldown())
                 .health(player.getHealth())
                 .radiationDamage(0)
@@ -246,16 +267,7 @@ public class LocationService {
                 .lootDeposited(false)
                 .lootDepositedCount(0)
                 .inSafeZone(inSafe)
-                .npcs(npcRepository.findByPositionXAndPositionYAndLocationIdIsNull(x, y)
-                        .stream()
-                        .map(npc -> spring.backend.game.dto.NpcInfoResponse.builder()
-                                .id(npc.getId())
-                                .code(npc.getCode())
-                                .name(npc.getName())
-                                .positionX(npc.getPositionX())
-                                .positionY(npc.getPositionY())
-                                .build())
-                        .toList())
+                .npcs(buildingNpcs)
                 .build();
     }
 
@@ -281,15 +293,16 @@ public class LocationService {
     }
 
     @Transactional
-    public void placeNpc(UUID locationId, UUID npcId, Integer locationX, Integer locationY) {
+    public void placeNpc(UUID locationId, UUID buildingId, UUID npcId, Integer locationX, Integer locationY) {
         getLocation(locationId);
         NpcEntity npc = npcRepository.findById(npcId)
                 .orElseThrow(() -> new EntityNotFoundException("NPC not found: " + npcId));
         npc.setLocationId(locationId);
+        npc.setBuildingId(buildingId);
         npc.setLocationX(clampPercent(locationX, 50));
         npc.setLocationY(clampPercent(locationY, 50));
         npcRepository.save(npc);
-        log.info("Placed NPC '{}' into location {}", npc.getCode(), locationId);
+        log.info("Placed NPC '{}' into location {} building {}", npc.getCode(), locationId, buildingId);
     }
 
     @Transactional
@@ -298,6 +311,7 @@ public class LocationService {
                 .orElseThrow(() -> new EntityNotFoundException("NPC not found: " + npcId));
         if (locationId.equals(npc.getLocationId())) {
             npc.setLocationId(null);
+            npc.setBuildingId(null);
             npc.setLocationX(null);
             npc.setLocationY(null);
             npcRepository.save(npc);
@@ -340,10 +354,13 @@ public class LocationService {
                 .stream()
                 .map(this::toBuildingDto)
                 .toList();
+        // Only location-wide NPCs (those NOT assigned to a specific building)
         List<LocationDtos.LocationNpcDto> npcs = npcRepository.findByLocationId(location.getId()).stream()
+                .filter(npc -> npc.getBuildingId() == null)
                 .map(npc -> new LocationDtos.LocationNpcDto(npc.getId(), npc.getCode(), npc.getName(),
                         npc.getLocationX() == null ? 50 : npc.getLocationX(),
-                        npc.getLocationY() == null ? 50 : npc.getLocationY()))
+                        npc.getLocationY() == null ? 50 : npc.getLocationY(),
+                        npc.getBuildingId()))
                 .toList();
         return new LocationDtos.LocationDto(location.getId(), location.getCode(), location.getName(),
                 location.getPositionX(), location.getPositionY(), location.getBackgroundImageUrl(),

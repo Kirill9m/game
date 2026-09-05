@@ -1001,7 +1001,8 @@ public class AdminService {
 
     private AdminDtos.AdminNpcDto toNpcDto(NpcEntity npc) {
         return new AdminDtos.AdminNpcDto(npc.getId(), npc.getCode(), npc.getName(),
-                npc.getPositionX(), npc.getPositionY(), npc.getLocationId(), npc.getLocationX(), npc.getLocationY());
+                npc.getPositionX(), npc.getPositionY(), npc.getLocationId(), npc.getLocationX(), npc.getLocationY(),
+                npc.getBuildingId());
     }
 
     private AdminDtos.AdminQuestDto toQuestDto(QuestEntity quest) {

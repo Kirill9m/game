@@ -15,11 +15,16 @@ export const locationApi = {
    * player so they can only see other players inside the same building.
    * Pass an empty string to exit the current location.
    */
-  async enterLocation(playerId: string, locationId: string): Promise<MoveResponse> {
+  async enterLocation(
+    playerId: string,
+    locationId: string,
+    buildingId?: string,
+  ): Promise<MoveResponse> {
     const params = new URLSearchParams({
       playerId: playerId,
       locationId: locationId,
     });
+    if (buildingId) params.append("buildingId", buildingId);
     const res = await fetch(
       `${API_URL}/api/v1/locations/enter?${params}`,
       { method: "POST" },

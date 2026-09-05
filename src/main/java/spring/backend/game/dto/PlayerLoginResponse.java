@@ -24,7 +24,6 @@ public class PlayerLoginResponse {
     private int stamina;
     private String role;
     private List<PlayerInfo> playersOnTile;
-    private List<NpcInfoResponse> npcs;
 
     /** Loot piles lying on the player's current cell. */
     private List<WorldLootResponse> fieldLoot;
@@ -35,6 +34,13 @@ public class PlayerLoginResponse {
     /** When non-null, the player is inside this location/building. */
     private UUID currentLocationId;
 
+    /** When non-null, the player entered through this specific building. */
+    private UUID currentBuildingId;
+
     /** Players inside the same location/building as the player. */
+
     private List<PlayerInfo> playersInLocation;
+
+    /** NPCs visible on the player's current location/building. */
+    private List<NpcInfoResponse> npcs;
 }

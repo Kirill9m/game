@@ -28,13 +28,13 @@ public interface PlayerRepository extends JpaRepository<PlayerEntity, String> {
      * (lastSeen within the allowed offline threshold).
      */
     @Query("SELECT p FROM PlayerEntity p WHERE p.positionX = :x AND p.positionY = :y "
-            + "AND p.currentLocationId IS NULL AND (p.lastSeen IS NULL OR p.lastSeen >= :onlineSince)")
+            + "AND p.currentLocationId IS NULL AND p.lastSeen >= :onlineSince")
     List<PlayerEntity> findOnlineOutsideByPosition(@Param("x") int x, @Param("y") int y,
                                                    @Param("onlineSince") Instant onlineSince);
 
     /** Players inside the given location, filtered by online status. */
     @Query("SELECT p FROM PlayerEntity p WHERE p.currentLocationId = :locationId "
-            + "AND (p.lastSeen IS NULL OR p.lastSeen >= :onlineSince)")
+            + "AND p.lastSeen >= :onlineSince")
     List<PlayerEntity> findOnlineByCurrentLocationId(@Param("locationId") UUID locationId,
                                                      @Param("onlineSince") Instant onlineSince);
 }
