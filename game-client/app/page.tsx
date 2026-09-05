@@ -6,7 +6,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { playerApi } from "@/services/playerApi";
 import {
   CombatSession,
-  EnemyType,
   GameMap,
   InventoryItem,
   PlayerInfo,
@@ -40,8 +39,6 @@ export default function GameMapPage() {
   const [combatSession, setCombatSession] = useState<CombatSession | null>(
     null,
   );
-  const [enemyTypes, setEnemyTypes] = useState<EnemyType[]>([]);
-  const [selectedEnemyCode, setSelectedEnemyCode] = useState("WOLF");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [gold, setGold] = useState<number>(0);
   const [stats, setStats] = useState<PlayerStats>({
@@ -76,7 +73,7 @@ export default function GameMapPage() {
   );
 
   const [activeTab, setActiveTab] = useState<
-    "inventory" | "territory" | "quests" | "admin"
+    "inventory" | "quests" | "admin"
   >("inventory");
 
   const sessionUser = session?.user as
@@ -128,13 +125,6 @@ export default function GameMapPage() {
       setGuestData(getGuestUser());
     }
   }, [session]);
-
-  useEffect(() => {
-    void combatApi
-      .getEnemyTypes()
-      .then(setEnemyTypes)
-      .catch(() => setError("Failed to load enemy types"));
-  }, []);
 
   useEffect(() => {
     void playerApi
@@ -383,7 +373,6 @@ export default function GameMapPage() {
 
   const menuTabs = [
     { id: "inventory", icon: "🎒", label: "Inventory" },
-    { id: "territory", icon: "🐺", label: "Hunt" },
     { id: "quests", icon: "📜", label: "Quests" },
     // The admin panel is only visible to players with the ADMIN role
     ...(playerRole === "ADMIN"
@@ -615,44 +604,6 @@ export default function GameMapPage() {
                       </div>
                     )}
 
-                    {activeTab === "territory" && (
-                      <div className="w-full rounded-xl border border-amber-800/50 bg-amber-950/20 p-3">
-                        <div className="mb-3">
-                          <span className="block text-sm font-bold text-amber-200">
-                            Check territory
-                          </span>
-                          <span className="text-xs text-amber-200/60">
-                            Choose an enemy in the nearby woods.
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {enemyTypes.map((enemy) => (
-                            <button
-                              key={enemy.code}
-                              type="button"
-                              onClick={() => {
-                                setSelectedEnemyCode(enemy.code);
-                                void handleCheckTerritory(enemy.code);
-                              }}
-                              className={`rounded-xl border p-3 text-left transition ${
-                                selectedEnemyCode === enemy.code
-                                  ? "border-amber-400 bg-amber-900/60 shadow-lg"
-                                  : "border-amber-900/40 bg-black/30 hover:border-amber-600"
-                              }`}
-                            >
-                              <span className="block font-bold text-amber-100 text-sm mb-1">
-                                {enemy.name}
-                              </span>
-                              <span className="block text-[11px] text-amber-200/70">
-                                {enemy.maxHealth} HP | {enemy.damage} DMG | RNG{" "}
-                                {enemy.attackRange}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     {activeTab === "quests" && (
                       <QuestPanel
                         quests={quests}
@@ -679,7 +630,7 @@ export default function GameMapPage() {
                     )}
 
                     {activeTab === "admin" && playerRole === "ADMIN" && (
-                      <AdminPanel playerId={playerId} />
+                      <AdminPanel playerId={playerId} onHunt={handleCheckTerritory} />
                     )}
                   </div>
 

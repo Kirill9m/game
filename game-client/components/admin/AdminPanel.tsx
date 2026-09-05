@@ -12,10 +12,11 @@ import PlayersSection from "./PlayersSection";
 import MapsSection from "./MapsSection";
 import ObstaclesSection from "./ObstaclesSection";
 import WorldSection from "./WorldSection";
+import HuntSection from "./HuntSection";
 
-interface Props { playerId: string; }
+interface Props { playerId: string; onHunt: (enemyCode: string) => void; }
 
-export default function AdminPanel({ playerId }: Props) {
+export default function AdminPanel({ playerId, onHunt }: Props) {
   const [section, setSection] = useState<Section>("quests");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -29,6 +30,7 @@ export default function AdminPanel({ playerId }: Props) {
     { id: "items" as Section, icon: "🎒", label: "Items" },
     { id: "weapons" as Section, icon: "⚔️", label: "Weapons" },
     { id: "enemies" as Section, icon: "👹", label: "Enemies" },
+    { id: "hunt" as Section, icon: "🐺", label: "Hunt" },
     { id: "world" as Section, icon: "🌍", label: "World" },
     { id: "zone" as Section, icon: "🏘️", label: "Safe Zone" },
     { id: "maps" as Section, icon: "🧭", label: "Maps" },
@@ -60,6 +62,7 @@ export default function AdminPanel({ playerId }: Props) {
       {section === "items" && <ItemsSection {...sectionProps} items={data.items} />}
       {section === "weapons" && <WeaponsSection {...sectionProps} weaponTypes={data.weaponTypes} />}
       {section === "enemies" && <EnemiesSection {...sectionProps} enemies={data.enemies} items={data.items} />}
+      {section === "hunt" && <HuntSection {...sectionProps} enemies={data.enemies} onHunt={onHunt} />}
       {section === "players" && <PlayersSection {...sectionProps} players={data.players} items={data.items} weaponTypes={data.weaponTypes} />}
       {section === "maps" && <MapsSection {...sectionProps} maps={data.maps} items={data.items} />}
       {section === "obstacles" && <ObstaclesSection {...sectionProps} obstacleTypes={data.obstacleTypes} />}

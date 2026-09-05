@@ -10,7 +10,8 @@ export type Section =
   | "world"
   | "zone"
   | "maps"
-  | "obstacles";
+  | "obstacles"
+  | "hunt";
 
 export interface ChoiceDraft {
   text: string;
