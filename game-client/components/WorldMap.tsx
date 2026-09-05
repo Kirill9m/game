@@ -13,6 +13,8 @@ interface WorldMapProps {
   cells?: WorldCell[];
   /** Loot piles on cells (dropped bags are shown as a treasure marker). */
   loot?: WorldLoot[];
+  /** Locations anchored to world cells (shown as a 🏛️ marker). */
+  locations?: { positionX: number; positionY: number; name: string }[];
   onTalk: (npc: NpcInfo) => void;
 }
 
@@ -27,6 +29,7 @@ export default function WorldMap({
   npcs,
   cells,
   loot,
+  locations,
   onTalk,
 }: WorldMapProps) {
   const isInsideSafe = (x: number, y: number) => {
@@ -62,6 +65,11 @@ export default function WorldMap({
         ? `${current.names}, ${pile.itemName} ×${pile.quantity}`
         : `${pile.itemName} ×${pile.quantity}`,
     });
+  }
+
+  const locationsAt = new Map<string, string>();
+  for (const loc of locations ?? []) {
+    locationsAt.set(`${loc.positionX}:${loc.positionY}`, loc.name);
   }
 
   return (
@@ -105,6 +113,7 @@ export default function WorldMap({
               );
               const settings = cellSettings.get(`${x}:${y}`);
               const lootInfo = lootAt.get(`${x}:${y}`);
+              const locationName = locationsAt.get(`${x}:${y}`);
 
               let bg = safe
                 ? "bg-blue-500/55"
@@ -151,6 +160,14 @@ export default function WorldMap({
                       title={`Loot here: ${lootInfo.names}`}
                     >
                       💰
+                    </span>
+                  )}
+                  {locationName && (
+                    <span
+                      className="absolute right-0.5 top-0.5 z-10 text-sm leading-none"
+                      title={`Location: ${locationName}`}
+                    >
+                      🏛️
                     </span>
                   )}
                   {npcsAtPosition.map((npc) => (

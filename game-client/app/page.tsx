@@ -27,7 +27,10 @@ import NpcDialog from "@/components/NpcDialog";
 import { NpcInfo } from "@/types/npc";
 import QuestPanel from "@/components/QuestPanel";
 import AdminPanel from "@/components/admin/AdminPanel";
+import LocationView from "@/components/LocationView";
 import { questApi } from "@/services/questApi";
+import { locationApi } from "@/services/locationApi";
+import type { Location } from "@/types/location";
 
 export default function GameMapPage() {
   const { data: session, status } = useSession();
@@ -55,6 +58,8 @@ export default function GameMapPage() {
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [worldCells, setWorldCells] = useState<WorldCell[]>([]);
   const [gameMaps, setGameMaps] = useState<GameMap[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [insideLocation, setInsideLocation] = useState(false);
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Loot piles visible on the currently opened map viewport.
@@ -73,7 +78,7 @@ export default function GameMapPage() {
   );
 
   const [activeTab, setActiveTab] = useState<
-    "inventory" | "quests" | "admin"
+    "inventory" | "quests" | "location" | "admin"
   >("inventory");
 
   const sessionUser = session?.user as
@@ -138,6 +143,10 @@ export default function GameMapPage() {
     void playerApi
       .getGameMaps()
       .then(setGameMaps)
+      .catch(() => {});
+    void locationApi
+      .getLocations()
+      .then(setLocations)
       .catch(() => {});
   }, []);
 
@@ -282,6 +291,30 @@ export default function GameMapPage() {
     }
   };
 
+  /** Teleports the player into a named location (a "room"). */
+  const handleEnterLocation = async (locationId: string) => {
+    setError("");
+    setNotice("");
+    try {
+      const data = await locationApi.enterLocation(playerId, locationId);
+      setPositionX(data.positionX);
+      setPositionY(data.positionY);
+      setPlayersOnTile(data.playersOnTile || []);
+      setNpcs(data.npcs || []);
+      setCooldown(data.cooldown);
+      setActiveNpc(null);
+      setFieldLoot(data.fieldLoot || []);
+      if (data.inventory) setInventory(data.inventory);
+      setInSafeZone(data.inSafeZone ?? true);
+      if (typeof data.health === "number") {
+        setStats((prev) => ({ ...prev, health: data.health as number }));
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to enter location");
+      throw err;
+    }
+  };
+
   /** Picks up a world loot pile on the current tile. */
   const handlePickupLoot = async (lootId: string) => {
     try {
@@ -374,6 +407,7 @@ export default function GameMapPage() {
   const menuTabs = [
     { id: "inventory", icon: "🎒", label: "Inventory" },
     { id: "quests", icon: "📜", label: "Quests" },
+    { id: "location", icon: "📍", label: "Location" },
     // The admin panel is only visible to players with the ADMIN role
     ...(playerRole === "ADMIN"
       ? [{ id: "admin" as const, icon: "🛠️", label: "Admin" }]
@@ -629,6 +663,17 @@ export default function GameMapPage() {
                       />
                     )}
 
+                    {activeTab === "location" && (
+                      <LocationView
+                        locations={locations}
+                        positionX={positionX}
+                        positionY={positionY}
+                        onTalk={setActiveNpc}
+                        onInsideChange={setInsideLocation}
+                        onEnterLocation={handleEnterLocation}
+                      />
+                    )}
+
                     {activeTab === "admin" && playerRole === "ADMIN" && (
                       <AdminPanel playerId={playerId} onHunt={handleCheckTerritory} />
                     )}
@@ -648,6 +693,7 @@ export default function GameMapPage() {
                       onMove={handleMove}
                       currentCell={`[${positionX}/${positionY}]`}
                       cooldown={cooldown}
+                      disabled={insideLocation}
                     />
                     {safeZone && (
                       <button
@@ -708,6 +754,7 @@ export default function GameMapPage() {
                       onMove={handleMove}
                       currentCell={`[${positionX}/${positionY}]`}
                       cooldown={cooldown}
+                      disabled={insideLocation}
                     />
                   </div>
 
@@ -794,6 +841,7 @@ export default function GameMapPage() {
                 npcs={npcs}
                 cells={worldCells}
                 loot={mapLoot}
+                locations={locations}
                 onTalk={setActiveNpc}
               />
             </div>

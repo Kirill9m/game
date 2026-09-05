@@ -48,8 +48,10 @@ import spring.backend.game.dto.AdminDtos.UpsertWorldCellRequest;
 import spring.backend.game.dto.AdminDtos.UpdateWorldZoneRequest;
 import spring.backend.game.dto.GameMapResponse;
 import spring.backend.game.dto.WorldZoneResponse;
+import spring.backend.game.dto.LocationDtos;
 import spring.backend.game.service.AdminService;
 import spring.backend.game.service.GameMapService;
+import spring.backend.game.service.LocationService;
 import spring.backend.game.service.WorldCellService;
 import spring.backend.game.service.WorldZoneService;
 
@@ -67,6 +69,7 @@ public class AdminController {
     private final WorldCellService worldCellService;
     private final GameMapService gameMapService;
     private final WorldZoneService worldZoneService;
+    private final LocationService locationService;
 
     // --- BOOTSTRAP (first admin) ---
 
@@ -540,6 +543,103 @@ public class AdminController {
     public ResponseEntity<Void> deleteMap(@PathVariable UUID mapId, @RequestParam String playerId) {
         adminService.requireAdmin(playerId);
         gameMapService.deleteMap(mapId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // --- LOCATIONS (Location tab of the World View) ---
+
+    @GetMapping("/locations")
+    public ResponseEntity<List<LocationDtos.LocationDto>> getLocations(@RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        return ResponseEntity.ok(locationService.getAllLocations());
+    }
+
+    @PostMapping("/locations")
+    public ResponseEntity<LocationDtos.LocationDto> createLocation(
+            @RequestParam String playerId,
+            @RequestBody LocationDtos.CreateLocationRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(locationService.createLocation(request.code(), request.name(),
+                request.positionX() == null ? 0 : request.positionX(),
+                request.positionY() == null ? 0 : request.positionY(),
+                request.backgroundImageUrl(), Boolean.TRUE.equals(request.isStart())));
+    }
+
+    @PatchMapping("/locations/{locationId}")
+    public ResponseEntity<LocationDtos.LocationDto> updateLocation(
+            @PathVariable UUID locationId,
+            @RequestParam String playerId,
+            @RequestBody LocationDtos.UpdateLocationRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(locationService.updateLocation(locationId, request.name(),
+                request.positionX(), request.positionY(), request.backgroundImageUrl(), request.isStart()));
+    }
+
+    @DeleteMapping("/locations/{locationId}")
+    public ResponseEntity<Void> deleteLocation(@PathVariable UUID locationId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        locationService.deleteLocation(locationId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/locations/{locationId}/buildings")
+    public ResponseEntity<LocationDtos.LocationBuildingDto> createBuilding(
+            @PathVariable UUID locationId,
+            @RequestParam String playerId,
+            @RequestBody LocationDtos.CreateLocationBuildingRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(locationService.createBuilding(locationId, request.name(), request.x(), request.y(),
+                request.width(), request.height(), request.emoji(), request.targetLocationId()));
+    }
+
+    @PatchMapping("/locations/buildings/{buildingId}")
+    public ResponseEntity<LocationDtos.LocationBuildingDto> updateBuilding(
+            @PathVariable UUID buildingId,
+            @RequestParam String playerId,
+            @RequestBody LocationDtos.UpdateLocationBuildingRequest request) {
+        adminService.requireAdmin(playerId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(locationService.updateBuilding(buildingId, request.name(), request.x(), request.y(),
+                request.width(), request.height(), request.emoji(), request.targetLocationId()));
+    }
+
+    @DeleteMapping("/locations/buildings/{buildingId}")
+    public ResponseEntity<Void> deleteBuilding(@PathVariable UUID buildingId, @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        locationService.deleteBuilding(buildingId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/locations/{locationId}/npcs/{npcId}")
+    public ResponseEntity<Void> placeNpc(
+            @PathVariable UUID locationId,
+            @PathVariable UUID npcId,
+            @RequestParam String playerId,
+            @RequestBody(required = false) LocationDtos.PlaceLocationNpcRequest request) {
+        adminService.requireAdmin(playerId);
+        locationService.placeNpc(locationId, npcId, request == null ? null : request.locationX(),
+                request == null ? null : request.locationY());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/locations/{locationId}/npcs/{npcId}")
+    public ResponseEntity<Void> removeNpc(
+            @PathVariable UUID locationId,
+            @PathVariable UUID npcId,
+            @RequestParam String playerId) {
+        adminService.requireAdmin(playerId);
+        locationService.removeNpc(locationId, npcId);
         return ResponseEntity.noContent().build();
     }
 }

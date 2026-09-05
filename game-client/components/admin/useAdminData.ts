@@ -7,6 +7,7 @@ import type {
   AdminEnemyType,
   AdminGameMap,
   AdminItem,
+  AdminLocation,
   AdminNpc,
   AdminObstacleType,
   AdminPlayer,
@@ -27,6 +28,7 @@ export interface AdminDataState {
   safeZone: WorldZone | null;
   maps: AdminGameMap[];
   obstacleTypes: AdminObstacleType[];
+  locations: AdminLocation[];
   dialogueNodes: AdminDialogueNode[];
   selectedNpcId: string;
 }
@@ -47,6 +49,7 @@ export function useAdminData(playerId: string) {
   const [safeZone, setSafeZone] = useState<WorldZone | null>(null);
   const [maps, setMaps] = useState<AdminGameMap[]>([]);
   const [obstacleTypes, setObstacleTypes] = useState<AdminObstacleType[]>([]);
+  const [locations, setLocations] = useState<AdminLocation[]>([]);
   const [dialogueNodes, setDialogueNodes] = useState<AdminDialogueNode[]>([]);
   const [selectedNpcId, setSelectedNpcId] = useState<string>("");
 
@@ -62,6 +65,7 @@ export function useAdminData(playerId: string) {
       adminApi.getSafeZone(playerId),
       adminApi.getMaps(playerId),
       adminApi.getObstacleTypes(playerId),
+      adminApi.getLocations(playerId),
     ]);
 
     const get = <T,>(r: PromiseSettledResult<T>): T =>
@@ -79,6 +83,7 @@ export function useAdminData(playerId: string) {
     );
     setMaps(get(results[8]));
     setObstacleTypes(get(results[9]));
+    setLocations(get(results[10]));
   };
 
   // Initial load
@@ -96,6 +101,7 @@ export function useAdminData(playerId: string) {
       adminApi.getSafeZone(playerId),
       adminApi.getMaps(playerId),
       adminApi.getObstacleTypes(playerId),
+      adminApi.getLocations(playerId),
     ]).then((results) => {
       if (cancelled) return;
       const get = <T,>(r: PromiseSettledResult<T>): T => r.status === "fulfilled" ? r.value : ([] as unknown as T);
@@ -103,7 +109,7 @@ export function useAdminData(playerId: string) {
       setItems(get(results[3])); setWeaponTypes(get(results[4])); setEnemies(get(results[5]));
       setWorldCells(get(results[6]));
       setSafeZone(results[7].status === "fulfilled" ? (results[7].value as WorldZone | null) : null);
-      setMaps(get(results[8])); setObstacleTypes(get(results[9]));
+      setMaps(get(results[8])); setObstacleTypes(get(results[9])); setLocations(get(results[10]));
     });
     return () => { cancelled = true; };
   }, [playerId]);
@@ -134,6 +140,7 @@ export function useAdminData(playerId: string) {
     safeZone, setSafeZone,
     maps, setMaps,
     obstacleTypes, setObstacleTypes,
+    locations, setLocations,
     dialogueNodes, setDialogueNodes,
     selectedNpcId, setSelectedNpcId,
     // actions

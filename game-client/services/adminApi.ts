@@ -3,6 +3,8 @@ import type {
   AdminEnemyType,
   AdminGameMap,
   AdminItem,
+  AdminLocation,
+  AdminLocationBuilding,
   AdminNpc,
   AdminObstacleType,
   AdminPlayer,
@@ -14,14 +16,19 @@ import type {
   CreateEnemyTypePayload,
   CreateGameMapPayload,
   CreateItemPayload,
+  CreateLocationBuildingPayload,
+  CreateLocationPayload,
   CreateNpcPayload,
   CreateObstacleTypePayload,
   CreateQuestPayload,
   CreateWeaponTypePayload,
   GiveItemPayload,
+  PlaceLocationNpcPayload,
   SetProficiencyPayload,
   UpdateEnemyTypePayload,
   UpdateGameMapPayload,
+  UpdateLocationBuildingPayload,
+  UpdateLocationPayload,
   UpdateObstacleTypePayload,
   UpdatePlayerPayload,
   UpdateWeaponTypePayload,
@@ -487,6 +494,105 @@ export const adminApi = {
   async deleteObstacleType(playerId: string, obstacleTypeId: string): Promise<void> {
     await request<void>(
       `${API_URL}/api/admin/obstacle-types/${encodeURIComponent(obstacleTypeId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  // --- Locations (Location tab of the World View) ---
+  async getLocations(playerId: string): Promise<AdminLocation[]> {
+    return request<AdminLocation[]>(
+      `${API_URL}/api/admin/locations?${withPlayerId(playerId)}`,
+    );
+  },
+
+  async createLocation(
+    playerId: string,
+    payload: CreateLocationPayload,
+  ): Promise<AdminLocation> {
+    return request<AdminLocation>(
+      `${API_URL}/api/admin/locations?${withPlayerId(playerId)}`,
+      jsonBody(payload),
+    );
+  },
+
+  async updateLocation(
+    playerId: string,
+    locationId: string,
+    payload: UpdateLocationPayload,
+  ): Promise<AdminLocation> {
+    return request<AdminLocation>(
+      `${API_URL}/api/admin/locations/${encodeURIComponent(locationId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteLocation(playerId: string, locationId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/locations/${encodeURIComponent(locationId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  async createLocationBuilding(
+    playerId: string,
+    locationId: string,
+    payload: Omit<CreateLocationBuildingPayload, "locationId">,
+  ): Promise<AdminLocationBuilding> {
+    return request<AdminLocationBuilding>(
+      `${API_URL}/api/admin/locations/${encodeURIComponent(locationId)}/buildings?${withPlayerId(playerId)}`,
+      jsonBody(payload),
+    );
+  },
+
+  async updateLocationBuilding(
+    playerId: string,
+    buildingId: string,
+    payload: UpdateLocationBuildingPayload,
+  ): Promise<AdminLocationBuilding> {
+    return request<AdminLocationBuilding>(
+      `${API_URL}/api/admin/locations/buildings/${encodeURIComponent(buildingId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async deleteLocationBuilding(playerId: string, buildingId: string): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/locations/buildings/${encodeURIComponent(buildingId)}?${withPlayerId(playerId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  async placeLocationNpc(
+    playerId: string,
+    locationId: string,
+    npcId: string,
+    payload: PlaceLocationNpcPayload,
+  ): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/locations/${encodeURIComponent(locationId)}/npcs/${encodeURIComponent(npcId)}?${withPlayerId(playerId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async removeLocationNpc(
+    playerId: string,
+    locationId: string,
+    npcId: string,
+  ): Promise<void> {
+    await request<void>(
+      `${API_URL}/api/admin/locations/${encodeURIComponent(locationId)}/npcs/${encodeURIComponent(npcId)}?${withPlayerId(playerId)}`,
       { method: "DELETE" },
     );
   },

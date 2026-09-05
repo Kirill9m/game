@@ -114,7 +114,7 @@ public class MovementService {
                         .username(p.getUsername()) // Since id is now the unique string identifier (GitHub/Guest ID)
                         .build())
                 .toList();
-                List<NpcInfoResponse> npcInfos = npcRepository.findByPositionXAndPositionY(targetX, targetY)
+                List<NpcInfoResponse> npcInfos = npcRepository.findByPositionXAndPositionYAndLocationIdIsNull(targetX, targetY)
                     .stream()
                     .map(npc -> NpcInfoResponse.builder()
                         .id(npc.getId())
@@ -136,6 +136,87 @@ public class MovementService {
                 .combatStarted(combatStarted)
                 .combatId(combatId)
                 .enemyName(enemyName)
+                .fieldLoot(lootService.getFieldLoot(targetX, targetY))
+                .inventory(inventoryService.getInventory(playerId))
+                .lootDeposited(securedLoot > 0)
+                .lootDepositedCount(securedLoot)
+                .inSafeZone(targetInSafeZone)
+                .build();
+    }
+
+    /**
+     * Teleports a player to an arbitrary world cell (used when entering a
+     * building that targets coordinates). No adjacency or ambush checks apply,
+     * but cooldown, world bounds, safe-zone loot securing and radiation are
+     * handled exactly like a normal move.
+     */
+    @Transactional
+    public MoveResponse teleportPlayer(String playerId, int targetX, int targetY) {
+        PlayerEntity player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new IllegalArgumentException("Player not found"));
+
+        Instant now = Instant.now();
+
+        if (player.getCooldown() != null && player.getCooldown().isAfter(now)) {
+            long secondsLeft = Duration.between(now, player.getCooldown()).toSeconds();
+            throw new IllegalStateException("Cooldown is active. Wait " + secondsLeft + "s.");
+        }
+
+        if (targetX < WorldConstants.WORLD_MIN || targetX > WorldConstants.WORLD_MAX
+                || targetY < WorldConstants.WORLD_MIN || targetY > WorldConstants.WORLD_MAX) {
+            throw new IllegalStateException("You cannot teleport outside the world bounds ("
+                    + WorldConstants.WORLD_MIN + ".." + WorldConstants.WORLD_MAX + ")");
+        }
+
+        player.setPositionX(targetX);
+        player.setPositionY(targetY);
+        Instant newCooldown = now.plusSeconds(3);
+        player.setCooldown(newCooldown);
+
+        boolean targetInSafeZone = !worldZoneService.isOutsideSafeZone(targetX, targetY);
+        int securedLoot = 0;
+        if (targetInSafeZone) {
+            securedLoot = lootService.clearMarkedItems(playerId);
+        }
+
+        int radiationDamage = 0;
+        Optional<WorldCellEntity> cellSettings = worldCellService.getSettings(targetX, targetY);
+        if (cellSettings.isPresent() && cellSettings.get().getRadiation() > 0) {
+            radiationDamage = cellSettings.get().getRadiation();
+            player.setHealth(Math.max(0, player.getHealth() - radiationDamage));
+        }
+        playerRepository.save(player);
+
+        List<PlayerEntity> playersOnSameTile = playerRepository.findByPositionXAndPositionY(targetX, targetY);
+        List<PlayerInfo> playerInfos = playersOnSameTile.stream()
+                .map(p -> PlayerInfo.builder()
+                        .playerId(p.getId())
+                        .username(p.getUsername())
+                        .build())
+                .toList();
+        List<NpcInfoResponse> npcInfos = npcRepository
+                .findByPositionXAndPositionYAndLocationIdIsNull(targetX, targetY)
+                .stream()
+                .map(npc -> NpcInfoResponse.builder()
+                        .id(npc.getId())
+                        .code(npc.getCode())
+                        .name(npc.getName())
+                        .positionX(npc.getPositionX())
+                        .positionY(npc.getPositionY())
+                        .build())
+                .toList();
+
+        return MoveResponse.builder()
+                .positionX(targetX)
+                .positionY(targetY)
+                .cooldown(newCooldown)
+                .playersOnTile(playerInfos)
+                .npcs(npcInfos)
+                .health(player.getHealth())
+                .radiationDamage(radiationDamage)
+                .combatStarted(false)
+                .combatId(null)
+                .enemyName(null)
                 .fieldLoot(lootService.getFieldLoot(targetX, targetY))
                 .inventory(inventoryService.getInventory(playerId))
                 .lootDeposited(securedLoot > 0)

@@ -11,6 +11,7 @@ export type Section =
   | "zone"
   | "maps"
   | "obstacles"
+  | "locations"
   | "hunt";
 
 export interface ChoiceDraft {

@@ -32,7 +32,10 @@ public final class AdminDtos {
             String code,
             String name,
             int positionX,
-            int positionY) {
+            int positionY,
+            UUID locationId,
+            Integer locationX,
+            Integer locationY) {
     }
 
     public record AdminQuestDto(

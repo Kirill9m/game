@@ -83,7 +83,7 @@ public class PlayerController {
                         .build())
                 .toList();
                 List<NpcInfoResponse> npcs = npcRepository
-                    .findByPositionXAndPositionY(player.getPositionX(), player.getPositionY())
+                    .findByPositionXAndPositionYAndLocationIdIsNull(player.getPositionX(), player.getPositionY())
                     .stream()
                     .map(npc -> NpcInfoResponse.builder()
                         .id(npc.getId())

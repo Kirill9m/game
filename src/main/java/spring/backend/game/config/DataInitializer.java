@@ -17,10 +17,14 @@ import spring.backend.game.entity.QuestSystem.NpcEntity;
 import spring.backend.game.entity.QuestSystem.QuestEntity;
 import spring.backend.game.entity.GameMapEntity;
 import spring.backend.game.entity.ItemEntity;
+import spring.backend.game.entity.LocationBuildingEntity;
+import spring.backend.game.entity.LocationEntity;
 import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.repository.GameMapRepository;
 import spring.backend.game.repository.ItemRepository;
+import spring.backend.game.repository.LocationBuildingRepository;
+import spring.backend.game.repository.LocationRepository;
 import spring.backend.game.repository.ObstacleTypeRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
 import spring.backend.game.repository.QuestSystem.NpcRepository;
@@ -38,6 +42,8 @@ public class DataInitializer implements CommandLineRunner {
     private final DialogueNodeRepository dialogueNodeRepository;
     private final ItemRepository itemRepository;
     private final GameMapRepository mapRepository;
+    private final LocationRepository locationRepository;
+    private final LocationBuildingRepository locationBuildingRepository;
     private final WeaponTypeRepository weaponTypeRepository;
     private final ObstacleTypeRepository obstacleTypeRepository;
     private final JdbcTemplate jdbcTemplate;
@@ -63,23 +69,90 @@ public class DataInitializer implements CommandLineRunner {
             npcRepository.findByCodeIgnoreCase("SMITH").ifPresent(this::seedSmithDialogue);
             npcRepository.findByCodeIgnoreCase("MERCHANT").ifPresent(this::seedMerchantDialogue);
             seedMeetVillagersQuest();
+        } else {
+            // 1. Create 3 NPCs
+            NpcEntity elder = npcRepository
+                    .save(NpcEntity.builder().code("ELDER").name("Elder").positionX(0).positionY(0).build());
+            NpcEntity blacksmith = npcRepository
+                    .save(NpcEntity.builder().code("SMITH").name("Blacksmith").positionX(1).positionY(1).build());
+            NpcEntity merchant = npcRepository
+                    .save(NpcEntity.builder().code("MERCHANT").name("Merchant").positionX(2).positionY(2).build());
+
+            // 2. Create the "Meet the Villagers" quest
+            seedMeetVillagersQuest();
+
+            seedElderDialogue(elder);
+            seedSmithDialogue(blacksmith);
+            seedMerchantDialogue(merchant);
+        }
+
+        seedLocations();
+    }
+
+    /**
+     * Seeds an example Location tab (Town hub with an Inn and a Blacksmith)
+     * and places the Elder NPC in the town. Runs once; the admin panel can
+     * then manage everything.
+     */
+    private void seedLocations() {
+        if (locationRepository.count() > 0) {
             return;
         }
 
-        // 1. Create 3 NPCs
-        NpcEntity elder = npcRepository
-                .save(NpcEntity.builder().code("ELDER").name("Elder").positionX(0).positionY(0).build());
-        NpcEntity blacksmith = npcRepository
-                .save(NpcEntity.builder().code("SMITH").name("Blacksmith").positionX(1).positionY(1).build());
-        NpcEntity merchant = npcRepository
-                .save(NpcEntity.builder().code("MERCHANT").name("Merchant").positionX(2).positionY(2).build());
+        LocationEntity town = locationRepository.save(LocationEntity.builder()
+                .code("TOWN")
+                .name("Town")
+                .positionX(0)
+                .positionY(0)
+                .backgroundImageUrl(null)
+                .isStart(true)
+                .build());
+        LocationEntity inn = locationRepository.save(LocationEntity.builder()
+                .code("INN")
+                .name("Inn")
+                .positionX(1)
+                .positionY(0)
+                .backgroundImageUrl(null)
+                .isStart(false)
+                .build());
+        LocationEntity smithy = locationRepository.save(LocationEntity.builder()
+                .code("SMITHY")
+                .name("Blacksmith")
+                .positionX(2)
+                .positionY(0)
+                .backgroundImageUrl(null)
+                .isStart(false)
+                .build());
 
-        // 2. Create the "Meet the Villagers" quest
-        seedMeetVillagersQuest();
+        locationBuildingRepository.save(LocationBuildingEntity.builder()
+                .location(town)
+                .name("Inn")
+                .x(25)
+                .y(45)
+                .width(22)
+                .height(30)
+                .emoji("🏨")
+                .targetLocation(inn)
+                .build());
+        locationBuildingRepository.save(LocationBuildingEntity.builder()
+                .location(town)
+                .name("Blacksmith")
+                .x(68)
+                .y(40)
+                .width(22)
+                .height(30)
+                .emoji("⚒️")
+                .targetLocation(smithy)
+                .build());
 
-        seedElderDialogue(elder);
-        seedSmithDialogue(blacksmith);
-        seedMerchantDialogue(merchant);
+        npcRepository.findByCodeIgnoreCase("ELDER").ifPresent(elder -> {
+            elder.setLocationId(town.getId());
+            elder.setLocationX(50);
+            elder.setLocationY(75);
+            npcRepository.save(elder);
+        });
+
+        log.info("Seeded example locations: Town, Inn, Blacksmith");
     }
 
     private void fixDatabaseSchema() {

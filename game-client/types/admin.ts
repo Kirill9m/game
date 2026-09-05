@@ -15,6 +15,10 @@ export interface AdminNpc {
   name: string;
   positionX: number;
   positionY: number;
+  /** Set when the NPC lives inside a location (Location tab). */
+  locationId: string | null;
+  locationX: number | null;
+  locationY: number | null;
 }
 
 export interface AdminDialogueChoice {
@@ -255,4 +259,69 @@ export interface UpdateWorldZonePayload {
   centerX: number;
   centerY: number;
   radius: number;
+}
+
+/** A character placed inside a location (Location tab). */
+export interface AdminLocationNpc {
+  id: string;
+  code: string;
+  name: string;
+  locationX: number;
+  locationY: number;
+}
+
+/** A clickable building on a location image. */
+export interface AdminLocationBuilding {
+  id: string;
+  locationId: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  emoji: string | null;
+  targetLocationId: string | null;
+}
+
+export interface AdminLocation {
+  id: string;
+  code: string;
+  name: string;
+  positionX: number;
+  positionY: number;
+  backgroundImageUrl: string | null;
+  isStart: boolean;
+  buildings: AdminLocationBuilding[];
+  npcs: AdminLocationNpc[];
+}
+
+export interface CreateLocationPayload {
+  code: string;
+  name: string;
+  positionX?: number;
+  positionY?: number;
+  backgroundImageUrl: string | null;
+  isStart?: boolean;
+}
+
+export type UpdateLocationPayload = Partial<CreateLocationPayload>;
+
+export interface CreateLocationBuildingPayload {
+  locationId: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  emoji: string | null;
+  targetLocationId: string | null;
+}
+
+export type UpdateLocationBuildingPayload = Partial<
+  Omit<CreateLocationBuildingPayload, "locationId">
+>;
+
+export interface PlaceLocationNpcPayload {
+  locationX: number;
+  locationY: number;
 }

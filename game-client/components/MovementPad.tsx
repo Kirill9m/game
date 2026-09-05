@@ -7,12 +7,15 @@ interface MovementPadProps {
   ) => Promise<{ cooldown?: string | number } | void> | void;
   currentCell?: string;
   cooldown?: string | number | null;
+  /** When true, the pad is locked (e.g. while inside a location/building). */
+  disabled?: boolean;
 }
 
 export default function MovementPad({
   onMove,
   currentCell,
   cooldown,
+  disabled = false,
 }: MovementPadProps) {
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
 
@@ -58,6 +61,7 @@ export default function MovementPad({
   ];
 
   const handleCellClick = async (deltaX?: number, deltaY?: number) => {
+    if (disabled) return;
     if (secondsLeft > 0) return;
     if (deltaX === undefined || deltaY === undefined) return;
 
@@ -99,12 +103,21 @@ export default function MovementPad({
               <div
                 key={cell.id}
                 className={`h-10 md:h-14 rounded-lg border flex flex-col items-center justify-center transition-all ${
-                  secondsLeft > 0
-                    ? "bg-red-500/30 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]"
-                    : "bg-teal-200/40 border-teal-300/60 shadow-[0_0_15px_rgba(45,212,191,0.3)]"
+                  disabled
+                    ? "bg-gray-800/60 border-gray-600"
+                    : secondsLeft > 0
+                      ? "bg-red-500/30 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]"
+                      : "bg-teal-200/40 border-teal-300/60 shadow-[0_0_15px_rgba(45,212,191,0.3)]"
                 }`}
               >
-                {secondsLeft > 0 ? (
+                {disabled ? (
+                  <>
+                    <span className="text-sm md:text-lg leading-none">🔒</span>
+                    <span className="text-[8px] md:text-[9px] text-gray-400 uppercase font-bold tracking-wider">
+                      Inside
+                    </span>
+                  </>
+                ) : secondsLeft > 0 ? (
                   <>
                     <span className="text-[8px] md:text-[10px] text-red-200 uppercase font-bold tracking-wider">
                       Moving
@@ -123,10 +136,10 @@ export default function MovementPad({
           return (
             <button
               key={cell.id}
-              disabled={secondsLeft > 0}
+              disabled={disabled || secondsLeft > 0}
               onClick={() => handleCellClick(cell.deltaX, cell.deltaY)}
               className={`h-10 md:h-14 rounded-lg border backdrop-blur-md transition-all shadow-md flex items-center justify-center ${
-                secondsLeft > 0
+                disabled || secondsLeft > 0
                   ? "bg-white/5 border-white/5 cursor-not-allowed opacity-40"
                   : "bg-white/10 hover:bg-white/20 active:scale-95 border-white/20 cursor-pointer"
               }`}
