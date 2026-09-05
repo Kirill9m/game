@@ -53,7 +53,7 @@ public class PlayerController {
         }
 
         inventoryService.ensureStarterItems(player.getId());
-        depositLootIfInCity(player);
+        clearMarksIfInCity(player);
 
         return ResponseEntity.ok(toPlayerResponse(player));
     }
@@ -62,14 +62,14 @@ public class PlayerController {
     public ResponseEntity<PlayerLoginResponse> getState(@PathVariable String playerId) {
         PlayerEntity player = playerRepository.findById(playerId)
                 .orElseThrow(() -> new IllegalArgumentException("Player not found"));
-        depositLootIfInCity(player);
+        clearMarksIfInCity(player);
         return ResponseEntity.ok(toPlayerResponse(player));
     }
 
-    /** Deposits a lingering field loot bag when the player is already in the city. */
-    private void depositLootIfInCity(PlayerEntity player) {
+    /** Secures lingering marked field loot when the player is already in the city. */
+    private void clearMarksIfInCity(PlayerEntity player) {
         if (!worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY())) {
-            lootService.depositLootBag(player.getId());
+            lootService.clearMarkedItems(player.getId());
         }
     }
 
@@ -111,7 +111,6 @@ public class PlayerController {
                 .role(player.getRole())
                 .playersOnTile(playersOnTile)
                 .npcs(npcs)
-                .lootBag(lootService.getLootBag(player.getId()))
                 .fieldLoot(lootService.getFieldLoot(player.getPositionX(), player.getPositionY()))
                 .inSafeZone(!worldZoneService.isOutsideSafeZone(player.getPositionX(), player.getPositionY()))
                 .build();
@@ -142,12 +141,6 @@ public class PlayerController {
     public ResponseEntity<UseItemResponse> useItem(
             @PathVariable String playerId, @PathVariable String itemCode) {
         return ResponseEntity.ok(inventoryService.useItem(playerId, itemCode));
-    }
-
-    /** Items currently kept in the field loot bag (collected outside the city). */
-    @GetMapping("/{playerId}/loot-bag")
-    public ResponseEntity<List<InventoryItemResponse>> getLootBag(@PathVariable String playerId) {
-        return ResponseEntity.ok(lootService.getLootBag(playerId));
     }
 
     /** Picks up a loot pile lying on the player's current cell. */

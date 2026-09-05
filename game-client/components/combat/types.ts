@@ -25,6 +25,7 @@ export type ReplayAction = ShotAnimation & {
 };
 
 export type DamagePopup = { id: string; target: "p1" | "p2"; amount: number };
+export type HealPopup = { id: string; target: "p1" | "p2"; amount: number };
 export type Position = { x: number; y: number };
 export type DisplayPositions = { p1: Position; p2: Position };
 export type DisplayHealth = { p1: number; p2: number };

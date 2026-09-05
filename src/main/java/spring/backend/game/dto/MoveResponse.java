@@ -34,13 +34,13 @@ public class MoveResponse {
     /** Loot piles lying on the target cell. */
     private List<WorldLootResponse> fieldLoot;
 
-    /** Field loot bag after the move (auto-deposited when entering the city). */
-    private List<InventoryItemResponse> lootBag;
+    /** Main inventory after the move (marked field loot is secured on city entry). */
+    private List<InventoryItemResponse> inventory;
 
-    /** True when entering the city deposited the field loot bag into the inventory. */
+    /** True when entering the city secured the player's marked field loot. */
     private boolean lootDeposited;
 
-    /** How many items were deposited (0 when nothing was stored). */
+    /** How many marked items were secured (0 when nothing changed). */
     private int lootDepositedCount;
 
     /** True when the target cell is inside the city (safe zone). */

@@ -560,6 +560,31 @@
   text-shadow: 0 1px 2px #450a0a, 0 0 12px rgba(248, 113, 113, 0.8);
 }
 
+.heal-ring {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 9999px;
+  z-index: 41;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.9), 0 0 18px rgba(52, 211, 153, 0.8);
+}
+
+.heal-popup {
+  position: absolute;
+  width: 44px;
+  height: 32px;
+  margin: -16px 0 0 -22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 42;
+  font-weight: 900;
+  font-size: 1.15rem;
+  color: #6ee7b7;
+  text-shadow: 0 1px 2px #064e3b, 0 0 12px rgba(52, 211, 153, 0.8);
+}
+
 /* ============================================================
    COMBAT HUD
    ============================================================ */

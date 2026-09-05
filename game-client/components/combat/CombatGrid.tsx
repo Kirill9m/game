@@ -6,6 +6,7 @@ import { GRID_SIZE, cellKey } from "./board";
 import { CharacterToken } from "./CharacterToken";
 import {
   DamagePopup,
+  HealPopup,
   DisplayPositions,
   DisplayPostures,
   PlannedAction,
@@ -26,6 +27,7 @@ interface CombatGridProps {
   replayAction: ReplayAction | null;
   animationTarget: "p1" | "p2" | null;
   damagePopup: DamagePopup | null;
+  healPopup: HealPopup | null;
   /** Размер квадратного поля в px (адаптация под экран). */
   boardSize?: number;
   onTileClick: (x: number, y: number) => void;
@@ -46,6 +48,7 @@ export function CombatGrid({
   replayAction,
   animationTarget,
   damagePopup,
+  healPopup,
   boardSize,
   onTileClick,
 }: CombatGridProps) {
@@ -218,6 +221,35 @@ export function CombatGrid({
               transition={{ duration: 0.85, times: [0, 0.2, 0.45, 1], ease: "easeOut" }}
             >
               −{damagePopup.amount}
+            </motion.span>
+          </>
+        )}
+
+        {healPopup && (
+          <>
+            <motion.span
+              key={`heal-ring-${healPopup.id}`}
+              className="heal-ring"
+              style={{
+                left: CENTER(displayPositions[healPopup.target].x),
+                top: CENTER(displayPositions[healPopup.target].y),
+              }}
+              initial={{ scale: 0.2, opacity: 0.9 }}
+              animate={{ scale: 1.4, opacity: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+            />
+            <motion.span
+              key={`heal-${healPopup.id}`}
+              className="heal-popup"
+              style={{
+                left: CENTER(displayPositions[healPopup.target].x),
+                top: CENTER(displayPositions[healPopup.target].y),
+              }}
+              initial={{ y: 0, scale: 1.35, opacity: 0 }}
+              animate={{ y: -60, scale: [1.35, 1.05, 1], opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 0.85, times: [0, 0.2, 0.45, 1], ease: "easeOut" }}
+            >
+              +{healPopup.amount}
             </motion.span>
           </>
         )}

@@ -20,6 +20,7 @@ import {
 import {
   CombatArenaProps,
   DamagePopup,
+  HealPopup,
   DisplayHealth,
   DisplayPositions,
   DisplayPostures,
@@ -64,6 +65,7 @@ export default function CombatArena({
     p2: initialCombat.p2Health,
   });
   const [damagePopup, setDamagePopup] = useState<DamagePopup | null>(null);
+  const [healPopup, setHealPopup] = useState<HealPopup | null>(null);
   const [displayPostures, setDisplayPostures] = useState<DisplayPostures>({
     p1: initialCombat.p1Posture || "STANDING",
     p2: initialCombat.p2Posture || "STANDING",
@@ -212,6 +214,7 @@ export default function CombatArena({
       isReplayingRef.current = true;
       setReplayAction(null);
       setDamagePopup(null);
+      setHealPopup(null);
       roundActions.forEach((encodedAction, index) => {
         const timer = window.setTimeout(() => {
           const [actor, type, first, second] = encodedAction.split(":");
@@ -278,6 +281,11 @@ export default function CombatArena({
                 [actorKey]: Math.min(100, health[actorKey] + heal),
               }));
               setAnimationTarget(actorKey);
+              setHealPopup({
+                id: `${encodedAction}-${index}-heal`,
+                target: actorKey,
+                amount: heal,
+              });
             }
           }
         }, index * 700);
@@ -297,6 +305,7 @@ export default function CombatArena({
             });
             setReplayAction(null);
             setDamagePopup(null);
+            setHealPopup(null);
             setAnimationTarget(damagedP1 ? "p1" : damagedP2 ? "p2" : null);
             setIsReplaying(false);
             isReplayingRef.current = false;
@@ -608,6 +617,7 @@ export default function CombatArena({
           replayAction={replayAction}
           animationTarget={animationTarget}
           damagePopup={damagePopup}
+          healPopup={healPopup}
           boardSize={boardSize}
           onTileClick={(x, y) => void handleTileClick(x, y)}
         />

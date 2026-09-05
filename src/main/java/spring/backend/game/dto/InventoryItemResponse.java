@@ -22,4 +22,6 @@ public class InventoryItemResponse {
     private String equipmentSlot;
     /** How much health this consumable restores when used (0 for non-consumables). */
     private int heal;
+    /** True when collected outside the city and still at risk (field loot). */
+    private boolean marked;
 }

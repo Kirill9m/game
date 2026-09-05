@@ -23,7 +23,6 @@ import spring.backend.game.entity.ItemEntity;
 import spring.backend.game.entity.ObstacleTypeEntity;
 import spring.backend.game.entity.PlayerEntity;
 import spring.backend.game.entity.PlayerInventoryEntity;
-import spring.backend.game.entity.PlayerLootBagEntity;
 import spring.backend.game.entity.PlayerWeaponProficiencyEntity;
 import spring.backend.game.entity.WeaponTypeEntity;
 import spring.backend.game.dto.CombatPlanRequest;
@@ -292,8 +291,13 @@ public class CombatService {
         combat.setWinnerId(winnerId);
         combat.setStatus("FINISHED");
         persistCombatHealth(combat);
-        // Surrender counts as a defeat: the field loot bag is dropped outside the city.
-        lootService.dropBagOutsideCity(playerId);
+        // Surrender counts as a defeat: marked field loot is lost to a bot or
+        // dropped as world loot when the opponent is another player.
+        if (isBotCombat(combat)) {
+            lootService.discardMarkedItems(playerId);
+        } else {
+            lootService.dropMarkedItemsAsWorldLoot(playerId);
+        }
         return combatRepository.save(combat);
     }
 
@@ -503,8 +507,8 @@ public class CombatService {
             if (combat.getWinnerId().equals(combat.getPlayer1Id())) {
                 spawnEnemyLoot(combat);
             } else {
-                // The player lost — their field bag falls on the world cell.
-                lootService.dropBagOutsideCity(combat.getPlayer1Id());
+                // The player lost to a bot — their marked field loot is lost.
+                lootService.discardMarkedItems(combat.getPlayer1Id());
             }
             return;
         }
@@ -553,10 +557,10 @@ public class CombatService {
         combat.setLoot(loot);
     }
 
-    /** Drops the defeated player's field loot bag onto the board near their body. */
+    /** Drops the defeated player's marked field loot onto the board near their body. */
     private void spawnBagLoot(CombatSessionEntity combat, String loserId) {
-        List<PlayerLootBagEntity> bag = lootService.takeFieldBag(loserId);
-        if (bag.isEmpty()) {
+        List<PlayerInventoryEntity> marked = lootService.takeMarkedItems(loserId);
+        if (marked.isEmpty()) {
             return;
         }
         boolean loserIsPlayer1 = combat.getPlayer1Id().equals(loserId);
@@ -564,7 +568,7 @@ public class CombatService {
         int bodyY = loserIsPlayer1 ? combat.getP1Y() : combat.getP2Y();
         List<CombatLoot> loot = new ArrayList<>(combat.getLoot());
         boolean firstPile = true;
-        for (PlayerLootBagEntity entry : bag) {
+        for (PlayerInventoryEntity entry : marked) {
             ItemEntity item = entry.getItem();
             int[] cell = firstPile
                     ? new int[] { bodyX, bodyY }

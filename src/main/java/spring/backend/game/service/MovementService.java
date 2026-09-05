@@ -30,6 +30,7 @@ public class MovementService {
     private final WorldZoneService worldZoneService;
     private final CombatService combatService;
     private final LootService lootService;
+    private final InventoryService inventoryService;
 
     @Transactional
     public MoveResponse movePlayer(String playerId, MoveRequest request) {
@@ -73,11 +74,11 @@ public class MovementService {
         Instant newCooldown = now.plusSeconds(3);
         player.setCooldown(newCooldown);
 
-        // Entering the city (safe zone) deposits everything collected in the field.
+        // Entering the city (safe zone) secures every marked field loot item.
         boolean targetInSafeZone = !worldZoneService.isOutsideSafeZone(targetX, targetY);
-        int depositedLoot = 0;
+        int securedLoot = 0;
         if (targetInSafeZone) {
-            depositedLoot = lootService.depositLootBag(playerId);
+            securedLoot = lootService.clearMarkedItems(playerId);
         }
 
         // Radiation: configured per cell, damages the player on every step
@@ -136,9 +137,9 @@ public class MovementService {
                 .combatId(combatId)
                 .enemyName(enemyName)
                 .fieldLoot(lootService.getFieldLoot(targetX, targetY))
-                .lootBag(lootService.getLootBag(playerId))
-                .lootDeposited(depositedLoot > 0)
-                .lootDepositedCount(depositedLoot)
+                .inventory(inventoryService.getInventory(playerId))
+                .lootDeposited(securedLoot > 0)
+                .lootDepositedCount(securedLoot)
                 .inSafeZone(targetInSafeZone)
                 .build();
     }

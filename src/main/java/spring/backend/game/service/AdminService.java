@@ -37,7 +37,6 @@ import spring.backend.game.repository.EnemyTypeRepository;
 import spring.backend.game.repository.ItemRepository;
 import spring.backend.game.repository.ObstacleTypeRepository;
 import spring.backend.game.repository.PlayerInventoryRepository;
-import spring.backend.game.repository.PlayerLootBagRepository;
 import spring.backend.game.repository.PlayerRepository;
 import spring.backend.game.repository.QuestSystem.DialogueChoiceRepository;
 import spring.backend.game.repository.QuestSystem.DialogueNodeRepository;
@@ -130,7 +129,6 @@ public class AdminService {
     private final ObstacleTypeRepository obstacleTypeRepository;
     private final WorldCellRepository worldCellRepository;
     private final WorldCellService worldCellService;
-    private final PlayerLootBagRepository playerLootBagRepository;
     private final WorldLootRepository worldLootRepository;
     private final InventoryService inventoryService;
     private final Random random = new Random();
@@ -253,8 +251,7 @@ public class AdminService {
         // Inventory
         playerInventoryRepository.deleteAll(playerInventoryRepository.findByPlayerIdOrderByItemNameAsc(targetPlayerId));
 
-        // Field loot bag and dropped world loot
-        playerLootBagRepository.deleteAll(playerLootBagRepository.findByPlayerIdOrderByItemNameAsc(targetPlayerId));
+        // Dropped world loot
         worldLootRepository.deleteByOwnerId(targetPlayerId);
 
         // Quest progress (and log entries)

@@ -73,6 +73,7 @@ public class InventoryService {
                         .defense(entry.getItem().getDefense())
                         .equipmentSlot(entry.getItem().getEquipmentSlot())
                         .heal(entry.getItem().getHeal())
+                        .marked(entry.isMarked())
                         .build())
                 .toList();
     }
@@ -180,6 +181,16 @@ public class InventoryService {
      * the inventory grid has no room and nothing happens.
      */
     public boolean tryAddItem(PlayerEntity player, ItemEntity item, int quantity) {
+        return tryAddItem(player, item, quantity, false);
+    }
+
+    /**
+     * Adds {@code quantity} of the item to the main inventory, marking the
+     * resulting stack as field loot when {@code marked} is {@code true}. When an
+     * existing stack is merged, it becomes marked as well. Returns {@code false}
+     * when the inventory grid has no room and nothing happens.
+     */
+    public boolean tryAddItem(PlayerEntity player, ItemEntity item, int quantity, boolean marked) {
         var existingItems = inventoryRepository.findByPlayerIdOrderByItemNameAsc(player.getId());
         var existingItem = existingItems.stream()
                 .filter(e -> e.getItem().getCode().equalsIgnoreCase(item.getCode()))
@@ -188,6 +199,9 @@ public class InventoryService {
 
         if (existingItem != null) {
             existingItem.setQuantity(existingItem.getQuantity() + quantity);
+            if (marked) {
+                existingItem.setMarked(true);
+            }
             inventoryRepository.save(existingItem);
             return true;
         }
@@ -207,6 +221,7 @@ public class InventoryService {
                             .gridX(checkX)
                             .gridY(checkY)
                             .equipped(false)
+                            .marked(marked)
                             .build());
                     return true;
                 }

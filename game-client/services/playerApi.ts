@@ -173,15 +173,6 @@ export const playerApi = {
     return response.json();
   },
 
-  /** Items currently kept in the field loot bag (collected outside the city). */
-  async getLootBag(playerId: string): Promise<InventoryItem[]> {
-    const response = await fetch(
-      `${API_URL}/api/v1/players/${encodeURIComponent(playerId)}/loot-bag`,
-    );
-    if (!response.ok) throw new Error("Failed to load loot bag");
-    return response.json();
-  },
-
   /** Picks up a world loot pile lying on the player's current cell. */
   async pickupLoot(
     playerId: string,

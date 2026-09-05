@@ -198,6 +198,12 @@ export default function InventoryPanel({
                   </span>
                 </div>
 
+                {item.marked && (
+                  <span className="pointer-events-none text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-950/80 border border-amber-500/60 rounded px-1 py-0.5">
+                    ⚠ Field
+                  </span>
+                )}
+
                 <span className="text-[10px] uppercase text-white/70 pointer-events-none">
                   {item.width}x{item.height}
                 </span>

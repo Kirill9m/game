@@ -19,4 +19,6 @@ public interface PlayerInventoryRepository extends JpaRepository<PlayerInventory
     boolean existsByPlayerIdAndItemCodeIgnoreCase(@Param("playerId") String playerId, @Param("itemCode") String itemCode);
 
     List<PlayerInventoryEntity> findByItemId(UUID itemId);
+
+    List<PlayerInventoryEntity> findByPlayerIdAndMarkedTrueOrderByItemNameAsc(String playerId);
 }

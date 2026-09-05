@@ -49,4 +49,15 @@ public class PlayerInventoryEntity {
 
     @Column(nullable = false)
     private boolean equipped;
+
+    /**
+     * True when the item was collected outside the city (safe zone) and has not
+     * been secured yet. Marked items sit in the main inventory like everything
+     * else, but are lost on death outside the city (PvE) and drop as loot when
+     * the player is killed by another player (PvP). Re-entering the city clears
+     * the mark.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean marked = false;
 }

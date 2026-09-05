@@ -25,6 +25,8 @@ export interface InventoryItem {
   equipmentSlot?: string | null;
   /** How much health this consumable restores when used (0 for non-consumables). */
   heal?: number;
+  /** True when collected outside the city and still at risk (field loot). */
+  marked?: boolean;
 }
 
 export interface MoveResponse {
@@ -43,11 +45,11 @@ export interface MoveResponse {
   enemyName?: string | null;
   /** Loot piles lying on the tile the player moved to. */
   fieldLoot?: WorldLoot[];
-  /** Field loot bag after the move (auto-deposited when entering the city). */
-  lootBag?: InventoryItem[];
-  /** True when entering the city deposited the field loot bag. */
+  /** Main inventory after the move (marked field loot is secured on city entry). */
+  inventory?: InventoryItem[];
+  /** True when entering the city secured the player's marked field loot. */
   lootDeposited?: boolean;
-  /** How many items were deposited into the main inventory. */
+  /** How many marked items were secured into the main inventory. */
   lootDepositedCount?: number;
   /** True when the player is inside the city (safe zone). */
   inSafeZone?: boolean;
@@ -130,8 +132,6 @@ export interface PlayerStateResponse {
   stamina?: number;
   playersOnTile: PlayerInfo[];
   npcs: NpcInfo[];
-  /** Items collected outside the city that are not deposited yet. */
-  lootBag?: InventoryItem[];
   /** Loot piles lying on the player's current cell. */
   fieldLoot?: WorldLoot[];
   /** True when the player is inside the city (safe zone). */
@@ -152,7 +152,6 @@ export interface WorldLoot {
 
 /** Result of picking up a world loot pile. */
 export interface PickupLootResponse {
-  lootBag: InventoryItem[];
   fieldLoot: WorldLoot[];
   inventory: InventoryItem[];
   notice?: string;

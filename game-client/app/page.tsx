@@ -67,11 +67,13 @@ export default function GameMapPage() {
   const [quests, setQuests] = useState<QuestProgress[]>([]);
   const [playerRole, setPlayerRole] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  // Loot collected outside the city (separate field bag until deposited).
-  const [lootBag, setLootBag] = useState<InventoryItem[]>([]);
   // Loot piles lying on the player's current tile.
   const [fieldLoot, setFieldLoot] = useState<WorldLoot[]>([]);
   const [inSafeZone, setInSafeZone] = useState(true);
+  // Всплывающая анимация лечения (вне боя): вспышка "+N" над показателем HP.
+  const [healFlash, setHealFlash] = useState<{ amount: number; id: number } | null>(
+    null,
+  );
 
   const [activeTab, setActiveTab] = useState<
     "inventory" | "territory" | "quests" | "admin"
@@ -157,13 +159,12 @@ export default function GameMapPage() {
     if (!playerId) return;
     try {
       setError("");
-      // Login first: it may deposit the field loot bag when the player spawns
-      // inside the city, so the inventory reflects the deposit afterwards.
+      // Login first: it secures marked field loot when the player spawns inside
+      // the city, so the inventory reflects the secured items afterwards.
       const player = await playerApi.loginPlayer(playerId, playerName, playerAvatar);
-      const [playerInventory, playerQuests, playerLootBag] = await Promise.all([
+      const [playerInventory, playerQuests] = await Promise.all([
         playerApi.getInventory(playerId),
         questApi.getPlayerQuests(playerId),
-        playerApi.getLootBag(playerId),
       ]);
       setPositionX(player.positionX);
       setPositionY(player.positionY);
@@ -173,7 +174,6 @@ export default function GameMapPage() {
       setNpcs(player.npcs || []);
       setPlayerRole(player.role ?? null);
       setInventory(playerInventory);
-      setLootBag(playerLootBag);
       setFieldLoot(player.fieldLoot || []);
       setInSafeZone(player.inSafeZone ?? false);
       setQuests(playerQuests);
@@ -226,7 +226,6 @@ export default function GameMapPage() {
         setPlayersOnTile(player.playersOnTile || []);
         setNpcs(player.npcs || []);
         setPlayerRole(player.role ?? null);
-        setLootBag(player.lootBag || []);
         setFieldLoot(player.fieldLoot || []);
         setInSafeZone(player.inSafeZone ?? false);
         if (typeof player.gold === "number") {
@@ -266,7 +265,7 @@ export default function GameMapPage() {
       setCooldown(data.cooldown);
       setActiveNpc(null);
       setFieldLoot(data.fieldLoot || []);
-      setLootBag(data.lootBag || []);
+      if (data.inventory) setInventory(data.inventory);
       setInSafeZone(data.inSafeZone ?? true);
       if (typeof data.health === "number") {
         setStats((prev) => ({ ...prev, health: data.health as number }));
@@ -278,17 +277,8 @@ export default function GameMapPage() {
       }
       if (data.lootDeposited) {
         setNotice(
-          `🏙️ You entered the city — ${data.lootDepositedCount ?? 0} item${(data.lootDepositedCount ?? 0) === 1 ? "" : "s"} moved to your inventory.`,
+          `🏙️ You entered the city — ${data.lootDepositedCount ?? 0} item${(data.lootDepositedCount ?? 0) === 1 ? "" : "s"} secured.`,
         );
-        playerApi
-          .getInventory(playerId)
-          .then(setInventory)
-          .catch(() => {});
-        if ((data.lootBag ?? []).length > 0) {
-          setNotice(
-            `🏙️ Inventory is full — ${(data.lootBag ?? []).reduce((sum, i) => sum + i.quantity, 0)} item(s) stayed in the field bag.`,
-          );
-        }
       }
       if (data.combatStarted && data.combatId) {
         setNotice(
@@ -307,7 +297,6 @@ export default function GameMapPage() {
     try {
       setError("");
       const response = await playerApi.pickupLoot(playerId, lootId);
-      setLootBag(response.lootBag);
       setFieldLoot(response.fieldLoot);
       setInventory(response.inventory);
       if (response.notice) {
@@ -326,6 +315,9 @@ export default function GameMapPage() {
       setInventory(response.inventory);
       if (typeof response.health === "number") {
         setStats((prev) => ({ ...prev, health: response.health }));
+      }
+      if (response.healed > 0) {
+        setHealFlash({ amount: response.healed, id: Date.now() });
       }
       setNotice(
         response.healed > 0
@@ -449,8 +441,26 @@ export default function GameMapPage() {
                   <span className="text-amber-400 text-[11px] font-semibold">
                     💰 {gold}
                   </span>
-                  <span className="text-green-400 text-[11px] font-semibold">
-                    ❤️ {stats.health}
+                  <span className="relative inline-flex items-center text-green-400 text-[11px] font-semibold">
+                    <motion.span
+                      animate={healFlash ? { scale: [1, 1.45, 1] } : { scale: 1 }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                      className="inline-block"
+                    >
+                      ❤️ {stats.health}
+                    </motion.span>
+                    {healFlash && (
+                      <motion.span
+                        key={healFlash.id}
+                        initial={{ opacity: 1, y: 0, scale: 0.9 }}
+                        animate={{ opacity: 0, y: -18, scale: 1.25 }}
+                        transition={{ duration: 1.1, ease: "easeOut" }}
+                        onAnimationComplete={() => setHealFlash(null)}
+                        className="pointer-events-none absolute inset-x-0 top-1/2 text-center text-emerald-300 font-bold text-[13px] drop-shadow-[0_0_6px_rgba(52,211,153,0.9)]"
+                      >
+                        +{healFlash.amount}
+                      </motion.span>
+                    )}
                   </span>
                   <span className="text-blue-400 text-[11px] font-semibold">
                     Lv.{stats.level}
@@ -509,24 +519,16 @@ export default function GameMapPage() {
                     onCombatFinished={() => {
                       setCombatSession(null);
                       setIsMobileInventoryOpen(false);
-                      // Field loot (bag drop / hunt reward) changes as a result
-                      // of the finished combat — refresh everything.
+                      // Marked field loot may have been lost (PvE) or dropped
+                      // (PvP) as a result of the finished combat — refresh all.
+                      playerApi.getInventory(playerId).then(setInventory).catch(() => {});
                       void playerApi
-                        .getLootBag(playerId)
-                        .then((bag) => {
-                          setLootBag(bag);
-                          if (bag.length > 0) {
-                            setNotice(
-                              `🎁 The hunt is over — ${bag.reduce((sum, i) => sum + i.quantity, 0)} item(s) are in your field loot bag. Return to the city to deposit them.`,
-                            );
-                          }
-                          return playerApi.getPlayerState(playerId);
-                        })
+                        .getPlayerState(playerId)
                         .then((state) => {
                           setFieldLoot(state.fieldLoot || []);
                           if ((state.fieldLoot ?? []).length > 0) {
                             setNotice(
-                              "💀 You were defeated outside the city and your loot bag dropped! Pick it up before someone else does.",
+                              "💀 Your field loot dropped on the ground! Pick it up before someone else does.",
                             );
                           }
                           setInSafeZone(state.inSafeZone ?? false);
@@ -538,7 +540,6 @@ export default function GameMapPage() {
                           return state;
                         })
                         .catch(() => {});
-                      playerApi.getInventory(playerId).then(setInventory).catch(() => {});
                     }}
                     onOpenInventory={() => setIsMobileInventoryOpen(true)}
                     onInventoryChanged={() =>
@@ -552,7 +553,6 @@ export default function GameMapPage() {
                   {/* МОБИЛЬНЫЕ: компактная сводка лута и игроки на тайле (на десктопе это правая колонка) */}
                   <div className="md:hidden shrink-0 space-y-2 mb-2 max-h-[38%] overflow-y-auto">
                     <LootPanel
-                      lootBag={lootBag}
                       fieldLoot={fieldLoot}
                       inSafeZone={inSafeZone}
                       playerId={playerId}
@@ -736,7 +736,6 @@ export default function GameMapPage() {
                 <div className="h-full flex flex-col justify-between items-center">
                   <div className="w-full">
                     <LootPanel
-                      lootBag={lootBag}
                       fieldLoot={fieldLoot}
                       inSafeZone={inSafeZone}
                       playerId={playerId}

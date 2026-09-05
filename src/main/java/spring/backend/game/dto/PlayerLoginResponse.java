@@ -25,9 +25,6 @@ public class PlayerLoginResponse {
     private List<PlayerInfo> playersOnTile;
     private List<NpcInfoResponse> npcs;
 
-    /** Field loot bag (items collected outside the city, not yet deposited). */
-    private List<InventoryItemResponse> lootBag;
-
     /** Loot piles lying on the player's current cell. */
     private List<WorldLootResponse> fieldLoot;
 
