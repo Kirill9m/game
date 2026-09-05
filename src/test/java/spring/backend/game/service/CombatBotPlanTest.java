@@ -92,14 +92,14 @@ class CombatBotPlanTest {
     void attacksImmediatelyWhenAlreadyInRange() throws Exception {
         // Distance 1 = attackRange — attacks right away without spending turns on movement.
         CombatSessionEntity combat = combat(wolf(), 2, 5, 1, 5);
-        assertEquals("A:2:5", botPlan(combat));
+        assertEquals("A:player-1", botPlan(combat));
     }
 
     @Test
     void stopsAndAttacksOnceEnemyEntersAttackRange() throws Exception {
         // Player (1,5), bot (4,5): distance 3 → bot closes in over 2 steps and attacks.
         CombatSessionEntity combat = combat(wolf(), 1, 5, 4, 5);
-        assertEquals("M:-1:0;M:-1:0;A:1:5", botPlan(combat));
+        assertEquals("M:-1:0;M:-1:0;A:player-1", botPlan(combat));
     }
 
     @Test

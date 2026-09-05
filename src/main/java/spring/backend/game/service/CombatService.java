@@ -308,6 +308,9 @@ public class CombatService {
         CombatParticipant me = requireFighter(combat, playerId);
         String plan = encodePlan(request);
         validatePlan(combat, me, plan);
+        // Convert coordinate-based attacks to playerId-based so they follow the target
+        // even if the target moves within the same action index.
+        plan = convertAttacksToPlayerIds(combat, plan);
         me.setPlan(plan);
         me.setReady(true);
         planBots(combat);
@@ -355,7 +358,7 @@ public class CombatService {
 
         int initialDistance = distance(botX, botY, targetX, targetY);
         if (initialDistance <= enemy.getAttackRange() && enemy.getActionPoints() > 0) {
-            plan.add("A:" + targetX + ":" + targetY);
+            plan.add("A:" + target.getPlayerId());
             return String.join(";", plan);
         }
 
@@ -381,7 +384,7 @@ public class CombatService {
             botX = current.x();
             botY = current.y();
             if (distance(botX, botY, targetX, targetY) <= enemy.getAttackRange() && plan.size() < maxMoves) {
-                plan.add("A:" + targetX + ":" + targetY);
+                plan.add("A:" + target.getPlayerId());
             }
         }
         return String.join(";", plan);
@@ -448,6 +451,42 @@ public class CombatService {
             throw new IllegalArgumentException("Missing action field: " + name);
         }
         return value;
+    }
+
+    /**
+     * Converts coordinate-based attack actions ("A:tx:ty") in the plan to
+     * playerId-based actions ("A:targetPlayerId"). This ensures that when the
+     * round is resolved, an attack follows the target even if they move within
+     * the same action index (simultaneous execution).
+     */
+    private String convertAttacksToPlayerIds(CombatSessionEntity combat, String plan) {
+        if (plan == null || plan.isBlank()) {
+            return plan;
+        }
+        String[] actions = plan.split(";");
+        StringBuilder sb = new StringBuilder();
+        for (String action : actions) {
+            if (sb.length() > 0) {
+                sb.append(";");
+            }
+            if (action.startsWith("A:")) {
+                String[] parts = action.split(":");
+                if (parts.length == 3) {
+                    int tx = Integer.parseInt(parts[1]);
+                    int ty = Integer.parseInt(parts[2]);
+                    CombatParticipant target = combat.fighters().stream()
+                            .filter(f -> f.isAlive() && f.getX() == tx && f.getY() == ty)
+                            .findFirst()
+                            .orElse(null);
+                    if (target != null) {
+                        sb.append("A:").append(target.getPlayerId());
+                        continue;
+                    }
+                }
+            }
+            sb.append(action);
+        }
+        return sb.toString();
     }
 
     private String requiredText(String value, String name) {
@@ -863,27 +902,37 @@ public class CombatService {
             return 0;
         }
         String[] parts = action.split(":");
-        if (parts.length < 3) {
-            return 0;
-        }
-        int targetX = Integer.parseInt(parts[1]);
-        int targetY = Integer.parseInt(parts[2]);
         EnemyTypeEntity enemy = attacker.isBot() ? combat.getEnemyType() : null;
         ItemEntity weapon = enemy == null ? getWeapon(combat, attacker) : null;
         int maxShotDistance = enemy != null ? enemy.getAttackRange() : weapon.getAttackRange();
         int shotDamage = enemy != null ? enemy.getDamage() : weapon.getDamage();
-        CombatParticipant target = aliveFighterAt(combat, targetX, targetY, attacker.getPlayerId());
-        if (target == null || target.getTeam().equals(attacker.getTeam())) {
-            return 0;
+        CombatParticipant target;
+        if (parts.length == 2) {
+            // playerId format ("A:targetPlayerId") — attack follows the target
+            target = combat.findParticipant(parts[1]);
+            if (target == null || !target.isAlive() || target.getTeam().equals(attacker.getTeam())) {
+                return 0;
+            }
+        } else {
+            // coordinate format ("A:tx:ty") — backward compatibility
+            int targetX = Integer.parseInt(parts[1]);
+            int targetY = Integer.parseInt(parts[2]);
+            target = aliveFighterAt(combat, targetX, targetY, attacker.getPlayerId());
+            if (target == null || target.getTeam().equals(attacker.getTeam())) {
+                return 0;
+            }
+            if (distance(attacker.getX(), attacker.getY(), targetX, targetY) > maxShotDistance) {
+                return 0;
+            }
         }
-        if (distance(attacker.getX(), attacker.getY(), targetX, targetY) > maxShotDistance) {
+        if (distance(attacker.getX(), attacker.getY(), target.getX(), target.getY()) > maxShotDistance) {
             return 0;
         }
         if (ThreadLocalRandom.current().nextInt(100) >= hitChance(combat, attacker, weapon, target.getPosture())) {
             return 0;
         }
         // Bullets pass through obstacles but damage (and may destroy) them.
-        damageObstaclesAlongLine(combat, attacker.getX(), attacker.getY(), targetX, targetY, shotDamage);
+        damageObstaclesAlongLine(combat, attacker.getX(), attacker.getY(), target.getX(), target.getY(), shotDamage);
         int actualDamage = Math.max(0, shotDamage - armorDefense(target.getPlayerId()));
         target.setHealth(Math.max(0, target.getHealth() - actualDamage));
         return actualDamage;
@@ -1229,8 +1278,15 @@ public class CombatService {
             return actor + ":" + action + ":" + damage;
         }
         String[] parts = action.split(":");
-        CombatParticipant target = fighterAt(combat, Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
-        String targetId = target == null ? "" : target.getPlayerId();
+        String targetId;
+        if (parts.length == 2) {
+            // playerId format — use it directly
+            targetId = parts[1];
+        } else {
+            // coordinate format — look up who was at those coordinates
+            CombatParticipant target = fighterAt(combat, Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+            targetId = target == null ? "" : target.getPlayerId();
+        }
         return actor + ":A:" + targetId + ":" + damage + ":" + shotRange(combat, fighter);
     }
 
