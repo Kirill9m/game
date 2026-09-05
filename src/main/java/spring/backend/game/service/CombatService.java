@@ -47,6 +47,8 @@ public class CombatService {
     private static final String STANDING = "STANDING";
     private static final String CROUCHING = "CROUCHING";
     private static final String PRONE = "PRONE";
+    private static final List<Cell> DIRECTIONS = List.of(
+            new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1));
 
     private final CombatRepository combatRepository;
     private final EnemyTypeRepository enemyTypeRepository;
@@ -202,22 +204,17 @@ public class CombatService {
 
         // First try to reach the player. If we cannot reach him this turn,
         // walk towards the closest reachable cell — the bot must move every round.
-        List<int[]> path = findMovementPath(combat, botX, botY, playerX, playerY, maxMoves);
+        Cell playerCell = new Cell(playerX, playerY);
+        List<Cell> path = findMovementPath(combat, botX, botY, playerX, playerY, maxMoves);
         // Bot should not move onto the player's cell
-        if (path != null && path.size() > 1) {
-            int[] lastStep = path.get(path.size() - 1);
-            if (lastStep[0] == playerX && lastStep[1] == playerY) {
-                path = path.subList(0, path.size() - 1);
-            }
+        if (path != null && path.size() > 1 && path.get(path.size() - 1).equals(playerCell)) {
+            path = path.subList(0, path.size() - 1);
         }
         if (path == null || path.size() <= 1) {
             path = findClosestApproachPath(combat, botX, botY, playerX, playerY, maxMoves);
             // Also prevent closest approach from landing on the player's cell
-            if (path != null && path.size() > 1) {
-                int[] lastStep = path.get(path.size() - 1);
-                if (lastStep[0] == playerX && lastStep[1] == playerY) {
-                    path = path.subList(0, path.size() - 1);
-                }
+            if (path != null && path.size() > 1 && path.get(path.size() - 1).equals(playerCell)) {
+                path = path.subList(0, path.size() - 1);
             }
         }
         if (path == null || path.size() <= 1) {
@@ -226,11 +223,11 @@ public class CombatService {
         }
         int steps = Math.min(maxMoves, path.size() - 1);
         for (int index = 1; index <= steps && plan.size() < maxMoves; index++) {
-            int[] previous = path.get(index - 1);
-            int[] current = path.get(index);
-            plan.add("M:" + (current[0] - previous[0]) + ":" + (current[1] - previous[1]));
-            botX = current[0];
-            botY = current[1];
+            Cell previous = path.get(index - 1);
+            Cell current = path.get(index);
+            plan.add("M:" + (current.x() - previous.x()) + ":" + (current.y() - previous.y()));
+            botX = current.x();
+            botY = current.y();
             int distance = Math.max(Math.abs(playerX - botX), Math.abs(playerY - botY));
             // Attack only when in range and with enough action points left.
             if (distance <= enemy.getAttackRange() && plan.size() < enemy.getActionPoints()) {
@@ -247,46 +244,44 @@ public class CombatService {
      * to the target (Chebyshev distance). Used so the bot keeps approaching the
      * player even when it cannot reach him within the current turn.
      */
-    private List<int[]> findClosestApproachPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
-        ArrayDeque<int[]> queue = new ArrayDeque<>();
+    private List<Cell> findClosestApproachPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
+        ArrayDeque<Cell> queue = new ArrayDeque<>();
         ArrayDeque<Integer> distances = new ArrayDeque<>();
-        Set<String> visited = new HashSet<>();
-        Map<String, String> parents = new HashMap<>();
-        queue.add(new int[] { startX, startY });
+        Set<Cell> visited = new HashSet<>();
+        Map<Cell, Cell> parents = new HashMap<>();
+        Cell start = new Cell(startX, startY);
+        queue.add(start);
         distances.add(0);
-        visited.add(cell(startX, startY));
-        int[] best = new int[] { startX, startY };
+        visited.add(start);
+        Cell best = start;
         int bestDistance = Math.max(Math.abs(targetX - startX), Math.abs(targetY - startY));
         while (!queue.isEmpty()) {
-            int[] current = queue.remove();
+            Cell current = queue.remove();
             int distance = distances.remove();
-            int currentDistance = Math.max(Math.abs(targetX - current[0]), Math.abs(targetY - current[1]));
+            int currentDistance = Math.max(Math.abs(targetX - current.x()), Math.abs(targetY - current.y()));
             if (currentDistance < bestDistance) {
                 bestDistance = currentDistance;
                 best = current;
                 if (bestDistance == 0) break;
             }
             if (distance >= maxSteps) continue;
-            for (int[] direction : new int[][] { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) {
-                int nextX = current[0] + direction[0];
-                int nextY = current[1] + direction[1];
-                String nextCell = cell(nextX, nextY);
-                if (nextX < 0 || nextX >= BOARD_SIZE || nextY < 0 || nextY >= BOARD_SIZE
-                        || visited.contains(nextCell) || isObstacle(combat, nextX, nextY)) continue;
-                visited.add(nextCell);
-                parents.put(nextCell, cell(current[0], current[1]));
-                queue.add(new int[] { nextX, nextY });
+            for (Cell direction : DIRECTIONS) {
+                Cell next = new Cell(current.x() + direction.x(), current.y() + direction.y());
+                if (next.x() < 0 || next.x() >= BOARD_SIZE || next.y() < 0 || next.y() >= BOARD_SIZE
+                        || visited.contains(next) || isObstacle(combat, next.x(), next.y())) continue;
+                visited.add(next);
+                parents.put(next, current);
+                queue.add(next);
                 distances.add(distance + 1);
             }
         }
-        if (best[0] == startX && best[1] == startY) {
+        if (best.equals(start)) {
             return null;
         }
-        List<int[]> path = new ArrayList<>();
-        String currentCell = cell(best[0], best[1]);
+        List<Cell> path = new ArrayList<>();
+        Cell currentCell = best;
         while (currentCell != null) {
-            String[] coordinates = currentCell.split(":");
-            path.add(new int[] { Integer.parseInt(coordinates[0]), Integer.parseInt(coordinates[1]) });
+            path.add(currentCell);
             currentCell = parents.get(currentCell);
         }
         Collections.reverse(path);
@@ -564,14 +559,14 @@ public class CombatService {
             if (item == null) {
                 continue;
             }
-            int[] cell = firstPile
-                    ? new int[] { combat.getP2X(), combat.getP2Y() }
+            Cell cell = firstPile
+                    ? new Cell(combat.getP2X(), combat.getP2Y())
                     : findEmptyCellNear(combat, combat.getP2X(), combat.getP2Y());
             firstPile = false;
             if (cell == null) {
                 break;
             }
-            loot.add(new CombatLoot(cell[0], cell[1], item.getCode(), item.getName(), quantity));
+            loot.add(new CombatLoot(cell.x(), cell.y(), item.getCode(), item.getName(), quantity));
         }
         combat.setLoot(loot);
     }
@@ -589,14 +584,14 @@ public class CombatService {
         boolean firstPile = true;
         for (PlayerInventoryEntity entry : marked) {
             ItemEntity item = entry.getItem();
-            int[] cell = firstPile
-                    ? new int[] { bodyX, bodyY }
+            Cell cell = firstPile
+                    ? new Cell(bodyX, bodyY)
                     : findEmptyCellNear(combat, bodyX, bodyY);
             firstPile = false;
             if (cell == null) {
                 break;
             }
-            loot.add(new CombatLoot(cell[0], cell[1], item.getCode(), item.getName(), entry.getQuantity()));
+            loot.add(new CombatLoot(cell.x(), cell.y(), item.getCode(), item.getName(), entry.getQuantity()));
         }
         combat.setLoot(loot);
     }
@@ -663,18 +658,18 @@ public class CombatService {
     }
 
     /** Nearest free board cell around {@code (centerX, centerY)} (radius outward). */
-    private int[] findEmptyCellNear(CombatSessionEntity combat, int centerX, int centerY) {
-        Set<String> occupied = new HashSet<>();
-        occupied.add(centerX + ":" + centerY);
-        occupied.add(combat.getP1X() + ":" + combat.getP1Y());
-        occupied.add(combat.getP2X() + ":" + combat.getP2Y());
+    private Cell findEmptyCellNear(CombatSessionEntity combat, int centerX, int centerY) {
+        Set<Cell> occupied = new HashSet<>();
+        occupied.add(new Cell(centerX, centerY));
+        occupied.add(new Cell(combat.getP1X(), combat.getP1Y()));
+        occupied.add(new Cell(combat.getP2X(), combat.getP2Y()));
         for (CombatObstacle obstacle : combat.getObstacles()) {
             if (obstacle.isAlive()) {
-                occupied.add(obstacle.x() + ":" + obstacle.y());
+                occupied.add(new Cell(obstacle.x(), obstacle.y()));
             }
         }
         for (CombatLoot pile : combat.getLoot()) {
-            occupied.add(pile.x() + ":" + pile.y());
+            occupied.add(new Cell(pile.x(), pile.y()));
         }
         for (int radius = 1; radius < BOARD_SIZE; radius++) {
             for (int deltaX = -radius; deltaX <= radius; deltaX++) {
@@ -687,8 +682,9 @@ public class CombatService {
                     if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
                         continue;
                     }
-                    if (!occupied.contains(x + ":" + y)) {
-                        return new int[] { x, y };
+                    Cell candidate = new Cell(x, y);
+                    if (!occupied.contains(candidate)) {
+                        return candidate;
                     }
                 }
             }
@@ -730,12 +726,12 @@ public class CombatService {
         int dy = Integer.parseInt(parts[2]);
         int endX = player1 ? combat.getP1X() : combat.getP2X();
         int endY = player1 ? combat.getP1Y() : combat.getP2Y();
-        List<int[]> path = findMovementPath(combat, endX - dx, endY - dy, endX, endY, BOARD_SIZE * BOARD_SIZE);
+        List<Cell> path = findMovementPath(combat, endX - dx, endY - dy, endX, endY, BOARD_SIZE * BOARD_SIZE);
         if (path == null) return;
         for (int index = 1; index < path.size(); index++) {
-            int[] previous = path.get(index - 1);
-            int[] current = path.get(index);
-            replay.add((player1 ? "P1:M:" : "P2:M:") + (current[0] - previous[0]) + ":" + (current[1] - previous[1]) + ":0");
+            Cell previous = path.get(index - 1);
+            Cell current = path.get(index);
+            replay.add((player1 ? "P1:M:" : "P2:M:") + (current.x() - previous.x()) + ":" + (current.y() - previous.y()) + ":0");
         }
     }
 
@@ -836,38 +832,37 @@ public class CombatService {
         }
     }
 
-    private List<int[]> findMovementPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
-        ArrayDeque<int[]> queue = new ArrayDeque<>();
+    private List<Cell> findMovementPath(CombatSessionEntity combat, int startX, int startY, int targetX, int targetY, int maxSteps) {
+        ArrayDeque<Cell> queue = new ArrayDeque<>();
         ArrayDeque<Integer> distances = new ArrayDeque<>();
-        Set<String> visited = new HashSet<>();
-        Map<String, String> parents = new HashMap<>();
-        queue.add(new int[] { startX, startY });
+        Set<Cell> visited = new HashSet<>();
+        Map<Cell, Cell> parents = new HashMap<>();
+        Cell start = new Cell(startX, startY);
+        Cell target = new Cell(targetX, targetY);
+        queue.add(start);
         distances.add(0);
-        visited.add(cell(startX, startY));
+        visited.add(start);
         while (!queue.isEmpty()) {
-            int[] current = queue.remove();
+            Cell current = queue.remove();
             int distance = distances.remove();
-            if (current[0] == targetX && current[1] == targetY) {
-                List<int[]> path = new ArrayList<>();
-                String currentCell = cell(targetX, targetY);
-                while (currentCell != null) {
-                    String[] coordinates = currentCell.split(":");
-                    path.add(new int[] { Integer.parseInt(coordinates[0]), Integer.parseInt(coordinates[1]) });
-                    currentCell = parents.get(currentCell);
+            if (current.equals(target)) {
+                List<Cell> path = new ArrayList<>();
+                Cell step = target;
+                while (step != null) {
+                    path.add(step);
+                    step = parents.get(step);
                 }
                 Collections.reverse(path);
                 return path;
             }
             if (distance >= maxSteps) continue;
-            for (int[] direction : new int[][] { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) {
-                int nextX = current[0] + direction[0];
-                int nextY = current[1] + direction[1];
-                String nextCell = cell(nextX, nextY);
-                if (nextX < 0 || nextX >= BOARD_SIZE || nextY < 0 || nextY >= BOARD_SIZE
-                        || visited.contains(nextCell) || isObstacle(combat, nextX, nextY)) continue;
-                visited.add(nextCell);
-                parents.put(nextCell, cell(current[0], current[1]));
-                queue.add(new int[] { nextX, nextY });
+            for (Cell direction : DIRECTIONS) {
+                Cell next = new Cell(current.x() + direction.x(), current.y() + direction.y());
+                if (next.x() < 0 || next.x() >= BOARD_SIZE || next.y() < 0 || next.y() >= BOARD_SIZE
+                        || visited.contains(next) || isObstacle(combat, next.x(), next.y())) continue;
+                visited.add(next);
+                parents.put(next, current);
+                queue.add(next);
                 distances.add(distance + 1);
             }
         }
@@ -914,17 +909,17 @@ public class CombatService {
     /** Damages every alive obstacle crossed by the shot and removes destroyed ones. */
     private void damageObstaclesAlongLine(CombatSessionEntity combat, int fromX, int fromY, int toX, int toY, int damage) {
         int steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
-        Set<String> hitCells = new HashSet<>();
+        Set<Cell> hitCells = new HashSet<>();
         for (int step = 1; step < steps; step++) {
             int x = fromX + Math.round((toX - fromX) * step / (float) steps);
             int y = fromY + Math.round((toY - fromY) * step / (float) steps);
-            hitCells.add(cell(x, y));
+            hitCells.add(new Cell(x, y));
         }
         List<CombatObstacle> obstacles = new ArrayList<>(combat.getObstacles());
         boolean changed = false;
         for (int index = 0; index < obstacles.size(); index++) {
             CombatObstacle current = obstacles.get(index);
-            if (!current.isAlive() || !hitCells.contains(cell(current.x(), current.y()))) continue;
+            if (!current.isAlive() || !hitCells.contains(new Cell(current.x(), current.y()))) continue;
             int remaining = Math.max(0, current.currentHealth() - damage);
             obstacles.set(index, new CombatObstacle(
                     current.x(), current.y(), current.code(), current.name(),
@@ -949,15 +944,14 @@ public class CombatService {
             return List.of();
         }
         int count = 4 + ThreadLocalRandom.current().nextInt(5); // 4..8 obstacles
-        Set<String> occupied = new HashSet<>();
-        occupied.add(cell(1, 5));
-        occupied.add(cell(8, 5));
+        Set<Cell> occupied = new HashSet<>();
+        occupied.add(new Cell(1, 5));
+        occupied.add(new Cell(8, 5));
         List<CombatObstacle> result = new ArrayList<>();
         for (int attempt = 0; attempt < 200 && result.size() < count; attempt++) {
             int x = ThreadLocalRandom.current().nextInt(BOARD_SIZE);
             int y = ThreadLocalRandom.current().nextInt(BOARD_SIZE);
-            String key = cell(x, y);
-            if (!occupied.add(key)) continue;
+            if (!occupied.add(new Cell(x, y))) continue;
             ObstacleTypeEntity type = types.get(ThreadLocalRandom.current().nextInt(types.size()));
             result.add(new CombatObstacle(x, y, type.getCode(), type.getName(),
                     type.getMaxHealth(), type.getMaxHealth()));
@@ -965,8 +959,8 @@ public class CombatService {
         return result;
     }
 
-    private String cell(int x, int y) {
-        return x + ":" + y;
+    /** A single cell on the combat board. */
+    private record Cell(int x, int y) {
     }
 
     private void ensureInProgress(CombatSessionEntity combat) {
