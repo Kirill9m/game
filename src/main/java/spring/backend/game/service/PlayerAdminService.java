@@ -153,7 +153,7 @@ public class PlayerAdminService {
             playerQuestRepository.delete(playerQuest);
         }
 
-        combatRepository.deleteAll(combatRepository.findByPlayer1IdOrPlayer2Id(targetPlayerId, targetPlayerId));
+        combatRepository.deleteAll(combatRepository.findByParticipant(targetPlayerId));
 
         playerRepository.delete(player);
         log.info("Admin deleted player {}", targetPlayerId);

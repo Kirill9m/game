@@ -177,37 +177,44 @@ export interface PlayerEntity {
   positionY: number;
 }
 
+/**
+ * A single fighter or spectator inside a combat. A fighter has a {@code team}
+ * (the founders use "A"/"B"; a player who joins "for themselves" uses their own
+ * player id), a position, health, posture and equipped weapon. Spectators have
+ * role "SPECTATOR" and none of the combat stats.
+ */
+export interface CombatParticipant {
+  playerId: string;
+  team: string;
+  role: "FIGHTER" | "SPECTATOR";
+  x: number;
+  y: number;
+  health: number;
+  posture: "STANDING" | "CROUCHING" | "PRONE";
+  equippedItemCode?: string | null;
+  ready?: boolean;
+  plan?: string | null;
+}
+
 export interface CombatSession {
   id: string;
-  player1Id: string;
-  player2Id: string;
-  currentTurnPlayerId: string;
   actionPoints: number;
-  p1Plan?: string | null;
-  p2Plan?: string | null;
-  p1Ready?: boolean;
-  p2Ready?: boolean;
-  p1X: number;
-  p1Y: number;
-  p2X: number;
-  p2Y: number;
-  p1Health: number;
-  p2Health: number;
-  p1Posture?: "STANDING" | "CROUCHING" | "PRONE";
-  p2Posture?: "STANDING" | "CROUCHING" | "PRONE";
-  winnerId?: string | null;
+  /** The team that won (a team string). null while contested or on a draw. */
+  winnerTeam?: string | null;
   status: "IN_PROGRESS" | "FINISHED";
   lastRoundActions?: string[];
   enemyTypeCode?: string | null;
   enemyName?: string | null;
-  p1EquippedItemCode?: string | null;
-  p2EquippedItemCode?: string | null;
   /** Destructible obstacles on this combat board (re-generated every combat). */
   obstacles?: CombatObstacle[];
   /** Loot piles lying on the board — walk onto a cell, then press Take Loot. */
   loot?: CombatLoot[];
   /** Optimistic-lock counter; increases on each server save (stale-poll guard). */
   version?: number;
+  /** Epoch millis when the current turn expires (0 = no active timer). */
+  turnDeadlineMillis?: number | null;
+  /** Every fighter and spectator in the battle. */
+  participants: CombatParticipant[];
 }
 
 /** A loot pile lying on a combat board cell. */

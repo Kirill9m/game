@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { combatApi } from "@/services/combatApi";
+import { CombatParticipant, CombatSession } from "@/types/game";
 import { CombatActions } from "./combat/CombatActions";
 import { CombatGrid } from "./combat/CombatGrid";
 import { CombatLog } from "./combat/CombatLog";
@@ -21,13 +22,63 @@ import {
   CombatArenaProps,
   DamagePopup,
   HealPopup,
-  DisplayHealth,
   DisplayPositions,
   DisplayPostures,
   PlannedAction,
   Posture,
   ReplayAction,
 } from "./combat/types";
+
+type ReplayStep =
+  | { type: "MOVE"; actor: string; dx: number; dy: number }
+  | { type: "ATTACK"; actor: string; target: string; damage: number; range?: number }
+  | { type: "POSTURE"; actor: string; posture: Posture }
+  | { type: "HEAL"; actor: string; amount: number };
+
+function buildDisplay(combat: CombatSession) {
+  const positions: DisplayPositions = {};
+  const postures: DisplayPostures = {};
+  for (const p of combat.participants ?? []) {
+    if (p.role !== "FIGHTER") continue;
+    positions[p.playerId] = { x: p.x, y: p.y };
+    postures[p.playerId] = p.posture || "STANDING";
+  }
+  return { positions, postures };
+}
+
+function parseReplay(actions: string[]): ReplayStep[] {
+  const steps: ReplayStep[] = [];
+  for (const encoded of actions) {
+    const parts = encoded.split(":");
+    const actor = parts[0];
+    const type = parts[1];
+    if (type === "M") {
+      steps.push({
+        type: "MOVE",
+        actor,
+        dx: Number(parts[2] || 0),
+        dy: Number(parts[3] || 0),
+      });
+    } else if (type === "A") {
+      steps.push({
+        type: "ATTACK",
+        actor,
+        target: parts[2] || "",
+        damage: Number(parts[3] || 0),
+        range: parts.length > 4 ? Number(parts[4]) : undefined,
+      });
+    } else if (type === "P") {
+      steps.push({
+        type: "POSTURE",
+        actor,
+        posture: (parts[2] || "STANDING") as Posture,
+      });
+    } else if (type === "U") {
+      steps.push({ type: "HEAL", actor, amount: Number(parts[3] || 0) });
+    }
+  }
+  return steps;
+}
 
 export default function CombatArena({
   combatId,
@@ -38,6 +89,7 @@ export default function CombatArena({
   onCombatFinished,
   onOpenInventory,
   onInventoryChanged,
+  onLeaveCombat,
 }: CombatArenaProps) {
   const [combat, setCombat] = useState(initialCombat);
   const [error, setError] = useState("");
@@ -45,45 +97,132 @@ export default function CombatArena({
   const [plannedActions, setPlannedActions] = useState<PlannedAction[]>([]);
   const [isEndingTurn, setIsEndingTurn] = useState(false);
   const [isActing, setIsActing] = useState(false);
-  // Loot picker: which piles (indexes into combat.loot) the player selected.
   const [isLootPickerOpen, setIsLootPickerOpen] = useState(false);
   const [selectedPileIndexes, setSelectedPileIndexes] = useState<Set<number>>(
     new Set(),
   );
   const [isPickingLoot, setIsPickingLoot] = useState(false);
-  const [animationTarget, setAnimationTarget] = useState<"p1" | "p2" | null>(
-    null,
-  );
-  const [displayPositions, setDisplayPositions] = useState<DisplayPositions>({
-    p1: { x: initialCombat.p1X, y: initialCombat.p1Y },
-    p2: { x: initialCombat.p2X, y: initialCombat.p2Y },
-  });
+  const [animationTarget, setAnimationTarget] = useState<string | null>(null);
   const [replayAction, setReplayAction] = useState<ReplayAction | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
-  const [displayHealth, setDisplayHealth] = useState<DisplayHealth>({
-    p1: initialCombat.p1Health,
-    p2: initialCombat.p2Health,
-  });
   const [damagePopup, setDamagePopup] = useState<DamagePopup | null>(null);
   const [healPopup, setHealPopup] = useState<HealPopup | null>(null);
-  const [displayPostures, setDisplayPostures] = useState<DisplayPostures>({
-    p1: initialCombat.p1Posture || "STANDING",
-    p2: initialCombat.p2Posture || "STANDING",
-  });
+
+  const initial = useMemo(() => buildDisplay(initialCombat), [initialCombat]);
+  const [displayPositions, setDisplayPositions] = useState<DisplayPositions>(
+    initial.positions,
+  );
+  const [displayPostures, setDisplayPostures] = useState<DisplayPostures>(
+    initial.postures,
+  );
+
   const isReplayingRef = useRef(false);
   const replayedRoundRef = useRef<string | null>(null);
   const replayTimersRef = useRef<number[]>([]);
   const previousCombatRef = useRef(initialCombat);
-  // Latest combat state — used to drop stale polling responses (version guard).
   const lastCombatRef = useRef(initialCombat);
-  // Tracks the last resolved round so inventory refreshes exactly once per round.
   const inventoryRoundRef = useRef<string | null>(null);
 
-  // Board size: mobile fits the screen height (up to 440px),
-  // desktop grows with the column width up to 760px.
   const gridWrapRef = useRef<HTMLDivElement>(null);
   const [boardSize, setBoardSize] = useState(320);
   const [isDesktop, setIsDesktop] = useState(false);
+
+  // ---------------------------------------------------------------
+  // Derived state
+  // ---------------------------------------------------------------
+
+  const me = combat.participants?.find((p) => p.playerId === playerId);
+  const isSpectator = me?.role === "SPECTATOR";
+  const isFighter = me?.role === "FIGHTER";
+  const myTeam = me?.team ?? "";
+  const fighters = useMemo(
+    () =>
+      (combat.participants ?? []).filter(
+        (p): p is CombatParticipant => p.role === "FIGHTER",
+      ),
+    [combat.participants],
+  );
+  const enemies = useMemo(
+    () => fighters.filter((f) => f.team !== myTeam && f.health > 0),
+    [fighters, myTeam],
+  );
+
+  const myX = me?.x ?? 0;
+  const myY = me?.y ?? 0;
+  const isMyTurn =
+    isFighter &&
+    (me?.health ?? 0) > 0 &&
+    !(me?.ready ?? false) &&
+    combat.status === "IN_PROGRESS";
+
+  const equippedItemCode = me?.equippedItemCode || "PISTOL";
+  const plannedEquipment =
+    [...plannedActions]
+      .reverse()
+      .find(
+        (action): action is Extract<PlannedAction, { type: "EQUIP" }> =>
+          action.type === "EQUIP",
+      )?.itemCode || equippedItemCode;
+  const myPosture: Posture = (me?.posture as Posture) || "STANDING";
+  const plannedPosture = getLatestPosture(plannedActions, myPosture);
+  const movementRemaining =
+    plannedActions.length < combat.actionPoints
+      ? postureMovement(plannedPosture)
+      : 0;
+  const plannedEnd = getLatestMove(plannedActions);
+  const obstacles = useMemo(() => combat.obstacles ?? [], [combat.obstacles]);
+
+  const occupiedCells = useMemo(() => {
+    const cells = new Set<string>();
+    for (const f of fighters) {
+      if (f.health > 0) cells.add(`${f.x}:${f.y}`);
+    }
+    return cells;
+  }, [fighters]);
+
+  const reachableCells = getReachableCells(
+    plannedEnd?.x ?? myX,
+    plannedEnd?.y ?? myY,
+    movementRemaining,
+    obstacles,
+    occupiedCells,
+  );
+
+  const attackOrigin = plannedEnd ?? { x: myX, y: myY };
+  const myAttackRange =
+    inventory.find((item) => item.code === plannedEquipment)?.attackRange ?? 3;
+  const attackRangeCells = getAttackRangeCells(
+    attackOrigin.x,
+    attackOrigin.y,
+    myAttackRange,
+  );
+  const anyEnemyInRange = enemies.some(
+    (e) =>
+      Math.max(Math.abs(attackOrigin.x - e.x), Math.abs(attackOrigin.y - e.y)) <=
+      myAttackRange,
+  );
+  const canAttack =
+    isMyTurn &&
+    !isReplaying &&
+    anyEnemyInRange &&
+    plannedActions.length < combat.actionPoints;
+  const showAttackRange =
+    isMyTurn && !isReplaying && plannedActions.length < combat.actionPoints;
+
+  const lootAtMyFeet = useMemo<CombatLootPickerPile[]>(() => {
+    const piles: CombatLootPickerPile[] = [];
+    combat.loot?.forEach((pile, index) => {
+      const distance = Math.max(Math.abs(pile.x - myX), Math.abs(pile.y - myY));
+      if (distance <= 1 && pile.quantity > 0) {
+        piles.push({ lootIndex: index, pile });
+      }
+    });
+    return piles;
+  }, [combat.loot, myX, myY]);
+
+  // ---------------------------------------------------------------
+  // Effects
+  // ---------------------------------------------------------------
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -99,7 +238,6 @@ export default function CombatArena({
     const compute = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
-      // Square based on min(width, height) — the board always fits on screen.
       const cap = isDesktop ? 760 : 440;
       setBoardSize(Math.max(140, Math.min(w, h, cap)));
     };
@@ -109,246 +247,97 @@ export default function CombatArena({
     return () => observer.disconnect();
   }, [isDesktop]);
 
-  const isPlayer1 = playerId === combat.player1Id;
-  const myX = isPlayer1 ? combat.p1X : combat.p2X;
-  const myY = isPlayer1 ? combat.p1Y : combat.p2Y;
-  const isMyTurn = isPlayer1 ? !combat.p1Ready : !combat.p2Ready;
-  const enemyX = isPlayer1 ? combat.p2X : combat.p1X;
-  const enemyY = isPlayer1 ? combat.p2Y : combat.p1Y;
-  const myHealth = isPlayer1 ? displayHealth.p1 : displayHealth.p2;
-  const enemyHealth = isPlayer1 ? displayHealth.p2 : displayHealth.p1;
-  const equippedItemCode = isPlayer1
-    ? combat.p1EquippedItemCode || "PISTOL"
-    : combat.p2EquippedItemCode || "PISTOL";
-  const plannedEquipment =
-    [...plannedActions]
-      .reverse()
-      .find(
-        (action): action is Extract<PlannedAction, { type: "EQUIP" }> =>
-          action.type === "EQUIP",
-      )?.itemCode || equippedItemCode;
-  const isWolf = combat.player2Id === "bot_wolf";
-  const myPosture: Posture = isPlayer1
-    ? combat.p1Posture || "STANDING"
-    : combat.p2Posture || "STANDING";
-  const plannedPosture = getLatestPosture(plannedActions, myPosture);
-  const movementRemaining =
-    plannedActions.length < combat.actionPoints
-      ? postureMovement(plannedPosture)
-      : 0;
-  const plannedEnd = getLatestMove(plannedActions);
-  const obstacles = useMemo(() => combat.obstacles ?? [], [combat.obstacles]);
-  // Piles on or next to the player's cell (candidates for the Take button).
-  const lootAtMyFeet = useMemo<CombatLootPickerPile[]>(() => {
-    const piles: CombatLootPickerPile[] = [];
-    combat.loot?.forEach((pile, index) => {
-      const distance = Math.max(Math.abs(pile.x - myX), Math.abs(pile.y - myY));
-      if (distance <= 1 && pile.quantity > 0) {
-        piles.push({ lootIndex: index, pile });
-      }
-    });
-    return piles;
-  }, [combat.loot, myX, myY]);
-  const enemyCellBlocked = useMemo(() => {
-    const cells = new Set<string>();
-    if (enemyHealth > 0) {
-      cells.add(`${enemyX}:${enemyY}`);
-    }
-    return cells;
-  }, [enemyX, enemyY, enemyHealth]);
-  const reachableCells = getReachableCells(
-    plannedEnd?.x ?? myX,
-    plannedEnd?.y ?? myY,
-    movementRemaining,
-    obstacles,
-    enemyCellBlocked,
-  );
-
-  // Range of the currently equipped (or planned-to-equip) weapon.
-  const attackOrigin = plannedEnd ?? { x: myX, y: myY };
-  const myAttackRange =
-    inventory.find((item) => item.code === plannedEquipment)?.attackRange ?? 3;
-  // Firing zone around the point we will shoot from this turn.
-  // Obstacles do not limit it — bullets pass through and damage them.
-  const attackRangeCells = getAttackRangeCells(
-    attackOrigin.x,
-    attackOrigin.y,
-    myAttackRange,
-  );
-  // The server computes distance as max(|dx|, |dy|) (Chebyshev).
-  const distanceToEnemy = Math.max(
-    Math.abs(attackOrigin.x - enemyX),
-    Math.abs(attackOrigin.y - enemyY),
-  );
-  const canAttack =
-    isMyTurn &&
-    !isReplaying &&
-    enemyHealth > 0 && // a dead enemy cannot be shot anymore
-    distanceToEnemy <= myAttackRange &&
-    plannedActions.length < combat.actionPoints;
-  // Show the firing zone only when it can actually be used.
-  const showAttackRange =
-    isMyTurn &&
-    !isReplaying &&
-    plannedActions.length < combat.actionPoints;
-
+  // Replay the last resolved round, then sync the display to the server state.
   useEffect(() => {
     const previous = previousCombatRef.current;
-    const movedP1 = previous.p1X !== combat.p1X || previous.p1Y !== combat.p1Y;
-    const movedP2 = previous.p2X !== combat.p2X || previous.p2Y !== combat.p2Y;
-    const damagedP1 = previous.p1Health > combat.p1Health;
-    const damagedP2 = previous.p2Health > combat.p2Health;
     const roundActions = combat.lastRoundActions;
     const roundKey = roundActions?.length
-      ? `${roundActions.join("|")}:${combat.p1X}:${combat.p1Y}:${combat.p2X}:${combat.p2Y}:${combat.p1Health}:${combat.p2Health}`
+      ? `${roundActions.join("|")}`
       : null;
-    if (roundKey && roundActions && roundKey !== replayedRoundRef.current) {
+
+    if (roundKey && roundKey !== replayedRoundRef.current) {
       replayedRoundRef.current = roundKey;
-      replayTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-      let positions: DisplayPositions = {
-        p1: { x: previous.p1X, y: previous.p1Y },
-        p2: { x: previous.p2X, y: previous.p2Y },
-      };
-      setDisplayPositions(positions);
-      setIsReplaying(true);
-      isReplayingRef.current = true;
-      setReplayAction(null);
-      setDamagePopup(null);
-      setHealPopup(null);
-      roundActions.forEach((encodedAction, index) => {
-        const timer = window.setTimeout(() => {
-          const [actor, type, first, second] = encodedAction.split(":");
-          const actorKey = actor === "P1" ? "p1" : "p2";
-          const current = positions[actorKey];
-          if (type === "M") {
-            const next = {
-              x: current.x + Number(first),
-              y: current.y + Number(second),
-            };
-            setReplayAction({
-              id: `${encodedAction}-${index}`,
-              type: "MOVE",
-              actor: actorKey,
-              fromX: current.x,
-              fromY: current.y,
-              toX: next.x,
-              toY: next.y,
-            });
-            positions = { ...positions, [actorKey]: next };
-            setDisplayPositions(positions);
-            setAnimationTarget(actorKey);
-          } else if (type === "P") {
-            setDisplayPostures((postures) => ({
-              ...postures,
-              [actorKey]: first as Posture,
-            }));
-            setAnimationTarget(actorKey);
-          } else if (type === "A") {
-            const targetKey = actorKey === "p1" ? "p2" : "p1";
-            const parts = encodedAction.split(":");
-            const damage = Number(parts[4] || 0);
-            const range = parts.length > 5 ? Number(parts[5]) : undefined;
-            setReplayAction({
-              id: `${encodedAction}-${index}`,
-              type: "ATTACK",
-              actor: actorKey,
-              fromX: current.x,
-              fromY: current.y,
-              toX: Number(first),
-              toY: Number(second),
-              range: Number.isFinite(range) ? range : undefined,
-            });
-            setAnimationTarget(targetKey);
-            if (damage > 0)
-              replayTimersRef.current.push(
-                window.setTimeout(() => {
-                  setDisplayHealth((health) => ({
-                    ...health,
-                    [targetKey]: Math.max(0, health[targetKey] - damage),
-                  }));
-                  setDamagePopup({
-                    id: `${encodedAction}-${index}-damage`,
-                    target: targetKey,
-                    amount: damage,
-                  });
-                }, 420),
-              );
-          } else if (type === "U") {
-            const heal = Number(second || 0);
-            if (heal > 0) {
-              setDisplayHealth((health) => ({
-                ...health,
-                [actorKey]: Math.min(100, health[actorKey] + heal),
-              }));
-              setAnimationTarget(actorKey);
+      const steps = parseReplay(roundActions ?? []);
+      if (steps.length > 0) {
+        // Cancel any previous replay that is still running so animations never overlap.
+        replayTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+        replayTimersRef.current = [];
+        setIsReplaying(true);
+        isReplayingRef.current = true;
+        const timers: number[] = [];
+        let positions = buildDisplay(previous).positions;
+        let postures = buildDisplay(previous).postures;
+        steps.forEach((step, index) => {
+          const timer = window.setTimeout(() => {
+            if (step.type === "MOVE") {
+              positions = {
+                ...positions,
+                [step.actor]: {
+                  x: (positions[step.actor]?.x ?? 0) + step.dx,
+                  y: (positions[step.actor]?.y ?? 0) + step.dy,
+                },
+              };
+              setDisplayPositions(positions);
+            } else if (step.type === "ATTACK") {
+              const from = positions[step.actor] ?? { x: 0, y: 0 };
+              const to = positions[step.target] ?? { x: 0, y: 0 };
+              setReplayAction({
+                id: `${roundKey}-${index}`,
+                type: "ATTACK",
+                actor: step.actor,
+                fromX: from.x,
+                fromY: from.y,
+                toX: to.x,
+                toY: to.y,
+                range: step.range,
+              });
+              setAnimationTarget(step.target);
+              if (step.damage > 0) {
+                setDamagePopup({
+                  id: `${roundKey}-${index}-dmg`,
+                  target: step.target,
+                  amount: step.damage,
+                });
+              }
+            } else if (step.type === "POSTURE") {
+              postures = { ...postures, [step.actor]: step.posture };
+              setDisplayPostures(postures);
+            } else if (step.type === "HEAL") {
               setHealPopup({
-                id: `${encodedAction}-${index}-heal`,
-                target: actorKey,
-                amount: heal,
+                id: `${roundKey}-${index}-heal`,
+                target: step.actor,
+                amount: step.amount,
               });
             }
-          }
-        }, index * 700);
-        replayTimersRef.current.push(timer);
-      });
-      replayTimersRef.current.push(
-        window.setTimeout(
-          () => {
-            setDisplayPositions({
-              p1: { x: combat.p1X, y: combat.p1Y },
-              p2: { x: combat.p2X, y: combat.p2Y },
-            });
-            setDisplayHealth({ p1: combat.p1Health, p2: combat.p2Health });
-            setDisplayPostures({
-              p1: combat.p1Posture || "STANDING",
-              p2: combat.p2Posture || "STANDING",
-            });
+          }, index * 550);
+          timers.push(timer);
+        });
+        timers.push(
+          window.setTimeout(() => {
+            const d = buildDisplay(combat);
+            setDisplayPositions(d.positions);
+            setDisplayPostures(d.postures);
             setReplayAction(null);
             setDamagePopup(null);
             setHealPopup(null);
-            setAnimationTarget(damagedP1 ? "p1" : damagedP2 ? "p2" : null);
+            setAnimationTarget(null);
             setIsReplaying(false);
             isReplayingRef.current = false;
             replayTimersRef.current = [];
-          },
-          roundActions.length * 700 + 500,
-        ),
-      );
-      const roundEvents = [
-        ...(movedP1 ? ["Player 1 moved"] : []),
-        ...(movedP2 ? ["Player 2 moved"] : []),
-        ...(damagedP1
-          ? [`Player 1 took ${previous.p1Health - combat.p1Health} damage`]
-          : []),
-        ...(damagedP2
-          ? [`Player 2 took ${previous.p2Health - combat.p2Health} damage`]
-          : []),
-      ];
-      setCombatLog((logs) => [...roundEvents.reverse(), ...logs].slice(0, 20));
-      previousCombatRef.current = combat;
+          }, steps.length * 550 + 400),
+        );
+        replayTimersRef.current = timers;
+        setCombatLog((logs) => ["Round resolved — actions played.", ...logs].slice(0, 20));
+      } else {
+        const d = buildDisplay(combat);
+        setDisplayPositions(d.positions);
+        setDisplayPostures(d.postures);
+      }
+    } else if (!isReplayingRef.current) {
+      const d = buildDisplay(combat);
+      setDisplayPositions(d.positions);
+      setDisplayPostures(d.postures);
     }
-    if (isReplayingRef.current) return;
-    setDisplayPositions({
-      p1: { x: combat.p1X, y: combat.p1Y },
-      p2: { x: combat.p2X, y: combat.p2Y },
-    });
-    setDisplayHealth({ p1: combat.p1Health, p2: combat.p2Health });
-    setDisplayPostures({
-      p1: combat.p1Posture || "STANDING",
-      p2: combat.p2Posture || "STANDING",
-    });
-    if (
-      previous.p1Ready !== combat.p1Ready ||
-      previous.p2Ready !== combat.p2Ready
-    )
-      setCombatLog((logs) =>
-        [
-          combat.p1Ready && combat.p2Ready
-            ? "Round resolved"
-            : "Plan submitted. Waiting for the enemy.",
-          ...logs,
-        ].slice(0, 20),
-      );
     previousCombatRef.current = combat;
   }, [combat]);
 
@@ -357,6 +346,7 @@ export default function CombatArena({
       replayTimersRef.current.forEach((timer) => window.clearTimeout(timer)),
     [],
   );
+
   useEffect(() => {
     lastCombatRef.current = combat;
   }, [combat]);
@@ -365,8 +355,6 @@ export default function CombatArena({
     const interval = window.setInterval(async () => {
       try {
         const latestCombat = await combatApi.getCombat(combatId);
-        // Drop stale responses that arrive after a newer combat state (e.g. a
-        // pickup already removed a pile) — prevents the board from "glitching".
         if ((latestCombat.version ?? 0) < (lastCombatRef.current.version ?? 0)) {
           return;
         }
@@ -379,18 +367,21 @@ export default function CombatArena({
     return () => window.clearInterval(interval);
   }, [combatId, onCombatUpdate]);
 
-  // Refresh the inventory once whenever a combat round resolves (used consumables
-  // are consumed server-side, so the item count must be re-fetched).
+  // Refresh inventory once per resolved round (consumables are used server-side).
   useEffect(() => {
     const roundActions = combat.lastRoundActions;
     const roundKey = roundActions?.length
-      ? `${combat.version}:${roundActions.join("|")}`
+      ? `${roundActions.join("|")}`
       : null;
     if (roundKey && roundKey !== inventoryRoundRef.current) {
       inventoryRoundRef.current = roundKey;
       onInventoryChanged?.();
     }
   }, [combat, onInventoryChanged]);
+
+  // ---------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------
 
   const handleTileClick = useCallback(
     (targetX: number, targetY: number) => {
@@ -401,20 +392,20 @@ export default function CombatArena({
       setError("");
       const targetKey = `${targetX}:${targetY}`;
 
-      // Clicking an enemy = a shot by default (there is no "Shoot" mode anymore).
-      // A dead enemy cannot be shot — the click becomes movement so you can
-      // walk to its body and collect the dropped loot.
-      if (targetX === enemyX && targetY === enemyY && enemyHealth > 0) {
+      const enemyAtCell = enemies.find(
+        (e) => e.x === targetX && e.y === targetY,
+      );
+      if (enemyAtCell) {
         if (plannedActions.length >= combat.actionPoints) {
-          setError(
-            `You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`,
-          );
+          setError(`You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`);
           return;
         }
-        if (!canAttack) {
-          setError(
-            `Enemy is out of weapon range (${myAttackRange} cells or closer)`,
-          );
+        const dist = Math.max(
+          Math.abs(attackOrigin.x - targetX),
+          Math.abs(attackOrigin.y - targetY),
+        );
+        if (dist > myAttackRange) {
+          setError(`Enemy is out of weapon range (${myAttackRange} cells or closer)`);
           return;
         }
         setPlannedActions((actions) => [
@@ -435,9 +426,7 @@ export default function CombatArena({
         return;
       }
       if (plannedActions.length >= combat.actionPoints) {
-        setError(
-          `You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`,
-        );
+        setError(`You have ${combat.actionPoints} action point${combat.actionPoints === 1 ? "" : "s"} left`);
         return;
       }
       setPlannedActions((actions) => [
@@ -446,10 +435,10 @@ export default function CombatArena({
       ]);
     },
     [
-      canAttack,
+      attackOrigin.x,
+      attackOrigin.y,
       combat,
-      enemyX,
-      enemyY,
+      enemies,
       isActing,
       isMyTurn,
       myAttackRange,
@@ -459,6 +448,7 @@ export default function CombatArena({
       reachableCells,
     ],
   );
+
   const handleEndTurn = async () => {
     if (isEndingTurn) return;
     try {
@@ -490,7 +480,7 @@ export default function CombatArena({
       onCombatUpdate(updated);
       setPlannedActions([]);
       setCombatLog((prev) => [
-        "Plan submitted. Waiting for the enemy.",
+        "Plan submitted. Waiting for other fighters.",
         ...prev,
       ]);
     } catch (err: unknown) {
@@ -499,10 +489,9 @@ export default function CombatArena({
       setIsEndingTurn(false);
     }
   };
+
   const openLootPicker = () => {
-    setSelectedPileIndexes(
-      new Set(lootAtMyFeet.map((entry) => entry.lootIndex)),
-    );
+    setSelectedPileIndexes(new Set(lootAtMyFeet.map((entry) => entry.lootIndex)));
     setIsLootPickerOpen(true);
   };
 
@@ -530,10 +519,7 @@ export default function CombatArena({
       setIsLootPickerOpen(false);
       setSelectedPileIndexes(new Set());
       setCombatLog((prev) =>
-        ["🎒 Loot taken from the board — it went to your field bag.", ...prev].slice(
-          0,
-          20,
-        ),
+        ["🎒 Loot taken from the board — it went to your field bag.", ...prev].slice(0, 20),
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to pick up loot");
@@ -541,6 +527,7 @@ export default function CombatArena({
       setIsPickingLoot(false);
     }
   };
+
   const handleFinishCombat = async () => {
     if (!isMyTurn || combat.status !== "IN_PROGRESS") return;
     try {
@@ -555,6 +542,22 @@ export default function CombatArena({
     }
   };
 
+  const handleLeaveCombat = async () => {
+    try {
+      setIsActing(true);
+      await combatApi.leaveCombat(combatId, playerId);
+      onLeaveCombat?.();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to leave combat");
+    } finally {
+      setIsActing(false);
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -565,41 +568,44 @@ export default function CombatArena({
       <CombatStatus
         actionPoints={combat.actionPoints}
         movementRemaining={movementRemaining}
-        myHealth={myHealth}
-        enemyHealth={enemyHealth}
         isMyTurn={isMyTurn}
         isReplaying={isReplaying}
-        roundResolved={Boolean(combat.p1Ready && combat.p2Ready)}
+        roundResolved={isReplaying}
         replayAction={replayAction}
-        isPlayer1={isPlayer1}
-        enemyName={isWolf ? "Wolf" : undefined}
+        fighters={fighters}
+        playerId={playerId}
+        turnDeadlineMillis={
+          combat.status === "IN_PROGRESS" ? combat.turnDeadlineMillis : null
+        }
       />
       {error && (
         <div className="text-red-400 text-xs bg-red-950 p-2 rounded w-full text-center">
           {error}
         </div>
       )}
-      <CombatModeControls
-        plannedActions={plannedActions}
-        plannedPosture={plannedPosture}
-        actionPoints={combat.actionPoints}
-        isMyTurn={isMyTurn}
-        isReplaying={isReplaying}
-        onPostureChange={(posture) =>
-          setPlannedActions((actions) => [
-            ...actions,
-            { type: "POSTURE", posture },
-          ])
-        }
-        inventory={inventory}
-        equippedItemCode={plannedEquipment}
-        onEquip={(itemCode) =>
-          setPlannedActions((actions) => [...actions, { type: "EQUIP", itemCode }])
-        }
-        onUse={(itemCode) =>
-          setPlannedActions((actions) => [...actions, { type: "USE", itemCode }])
-        }
-      />
+      {!isSpectator && (
+        <CombatModeControls
+          plannedActions={plannedActions}
+          plannedPosture={plannedPosture}
+          actionPoints={combat.actionPoints}
+          isMyTurn={isMyTurn}
+          isReplaying={isReplaying}
+          onPostureChange={(posture) =>
+            setPlannedActions((actions) => [
+              ...actions,
+              { type: "POSTURE", posture },
+            ])
+          }
+          inventory={inventory}
+          equippedItemCode={plannedEquipment}
+          onEquip={(itemCode) =>
+            setPlannedActions((actions) => [...actions, { type: "EQUIP", itemCode }])
+          }
+          onUse={(itemCode) =>
+            setPlannedActions((actions) => [...actions, { type: "USE", itemCode }])
+          }
+        />
+      )}
       <div
         ref={gridWrapRef}
         className="flex-1 min-h-0 w-full flex items-center justify-center"
@@ -622,9 +628,10 @@ export default function CombatArena({
           onTileClick={(x, y) => void handleTileClick(x, y)}
         />
       </div>
+
       {/* Loot hint: piles lie somewhere on the board, but not under the player. */}
-      {combat.status === "IN_PROGRESS" &&
-        enemyHealth <= 0 &&
+      {!isSpectator &&
+        combat.status === "IN_PROGRESS" &&
         lootAtMyFeet.length === 0 &&
         (combat.loot?.length ?? 0) > 0 && (
           <motion.div
@@ -642,7 +649,7 @@ export default function CombatArena({
         )}
 
       {/* Player is on or next to a pile: offer the Take button and a selection. */}
-      {combat.status === "IN_PROGRESS" && lootAtMyFeet.length > 0 && (
+      {!isSpectator && combat.status === "IN_PROGRESS" && lootAtMyFeet.length > 0 && (
         <div className="w-full flex flex-col gap-2">
           {!isLootPickerOpen ? (
             <motion.button
@@ -668,6 +675,7 @@ export default function CombatArena({
           )}
         </div>
       )}
+
       <CombatActions
         combat={combat}
         plannedActions={plannedActions}
@@ -675,13 +683,16 @@ export default function CombatArena({
         isActing={isActing}
         isEndingTurn={isEndingTurn}
         playerId={playerId}
+        isSpectator={isSpectator}
         onClear={() => setPlannedActions([])}
         onEndTurn={handleEndTurn}
         onFinishCombat={handleFinishCombat}
         onCombatFinished={onCombatFinished}
+        onLeaveCombat={handleLeaveCombat}
       />
+
       {/* Mobile inventory button — the inventory opens only on tap */}
-      {onOpenInventory && (
+      {!isSpectator && onOpenInventory && (
         <button
           type="button"
           onClick={onOpenInventory}

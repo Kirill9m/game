@@ -76,18 +76,38 @@ public class CombatController {
                 request == null ? List.of() : request.pileIndexes()));
     }
 
-    @PostMapping("/{combatId}/attack")
-    public ResponseEntity<CombatSessionEntity> attack(
-            @PathVariable UUID combatId,
-            @RequestParam String playerId) {
-        return ResponseEntity.ok(combatService.attack(combatId, playerId));
-    }
-
     @PostMapping("/{combatId}/finish")
     public ResponseEntity<CombatSessionEntity> finishCombat(
             @PathVariable UUID combatId,
             @RequestParam String playerId) {
         return ResponseEntity.ok(combatService.finishCombat(combatId, playerId));
+    }
+
+    /**
+     * Joins a running battle. {@code team} may be "A", "B", "SELF" (or blank):
+     * the first two join the founder's side, the latter makes the player fight
+     * for themselves.
+     */
+    @PostMapping("/{combatId}/join")
+    public ResponseEntity<CombatSessionEntity> joinCombat(
+            @PathVariable UUID combatId,
+            @RequestParam String playerId,
+            @RequestParam(required = false) String team) {
+        return ResponseEntity.ok(combatService.joinCombat(combatId, playerId, team));
+    }
+
+    @PostMapping("/{combatId}/spectate")
+    public ResponseEntity<CombatSessionEntity> spectateCombat(
+            @PathVariable UUID combatId,
+            @RequestParam String playerId) {
+        return ResponseEntity.ok(combatService.spectateCombat(combatId, playerId));
+    }
+
+    @PostMapping("/{combatId}/leave")
+    public ResponseEntity<CombatSessionEntity> leaveCombat(
+            @PathVariable UUID combatId,
+            @RequestParam String playerId) {
+        return ResponseEntity.ok(combatService.leaveCombat(combatId, playerId));
     }
 
     @GetMapping("/active")
@@ -97,5 +117,10 @@ public class CombatController {
             return ResponseEntity.ok(activeCombat);
         }
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/list")
+    public ResponseEntity<List<CombatSessionEntity>> listActiveCombats() {
+        return ResponseEntity.ok(combatService.listActiveCombats());
     }
 }

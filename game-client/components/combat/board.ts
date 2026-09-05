@@ -5,6 +5,33 @@ export const GRID_SIZE = 10;
 
 export const cellKey = (x: number, y: number) => `${x}:${y}`;
 
+const TEAM_CLASSES = [
+  "combat-marker-team-a",
+  "combat-marker-team-b",
+  "combat-marker-team-c",
+  "combat-marker-team-d",
+  "combat-marker-team-e",
+  "combat-marker-team-f",
+  "combat-marker-team-g",
+  "combat-marker-team-h",
+];
+
+/** Distinct teams of the given fighters, in a stable order. */
+export const distinctTeams = (fighters: { team: string }[]): string[] =>
+  Array.from(new Set(fighters.map((f) => f.team))).sort();
+
+/** A stable palette class for a team, or the "you" palette for the local player. */
+export const teamClassFor = (
+  team: string,
+  teams: string[],
+  playerId?: string,
+): string => {
+  if (playerId && team === playerId) return "combat-marker-you";
+  const index = teams.indexOf(team);
+  return TEAM_CLASSES[Math.max(0, index) % TEAM_CLASSES.length];
+};
+
+
 /**
  * A cell is blocked for movement only when an alive destructible obstacle
  * stands on it. Destroyed obstacles free the cell.

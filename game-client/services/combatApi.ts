@@ -94,15 +94,51 @@ export const combatApi = {
     return res.json();
   },
 
-  async attack(combatId: string, playerId: string): Promise<CombatSession> {
+  /** Joins a running battle. `team` is "A", "B" or "SELF"/blank. */
+  async joinCombat(
+    combatId: string,
+    playerId: string,
+    team?: string,
+  ): Promise<CombatSession> {
+    const teamParam = team ? `&team=${encodeURIComponent(team)}` : "";
     const res = await fetch(
-      `${API_URL}/api/v1/combat/${combatId}/attack?playerId=${encodeURIComponent(playerId)}`,
+      `${API_URL}/api/v1/combat/${combatId}/join?playerId=${encodeURIComponent(playerId)}${teamParam}`,
       { method: "POST" },
     );
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(text || "Shot failed");
+      throw new Error(text || "Failed to join combat");
     }
+    return res.json();
+  },
+
+  async spectateCombat(combatId: string, playerId: string): Promise<CombatSession> {
+    const res = await fetch(
+      `${API_URL}/api/v1/combat/${combatId}/spectate?playerId=${encodeURIComponent(playerId)}`,
+      { method: "POST" },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Failed to spectate combat");
+    }
+    return res.json();
+  },
+
+  async leaveCombat(combatId: string, playerId: string): Promise<CombatSession> {
+    const res = await fetch(
+      `${API_URL}/api/v1/combat/${combatId}/leave?playerId=${encodeURIComponent(playerId)}`,
+      { method: "POST" },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Failed to leave combat");
+    }
+    return res.json();
+  },
+
+  async listActiveCombats(): Promise<CombatSession[]> {
+    const res = await fetch(`${API_URL}/api/v1/combat/list`);
+    if (!res.ok) throw new Error("Failed to load active battles");
     return res.json();
   },
 

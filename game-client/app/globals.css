@@ -513,6 +513,79 @@
   --tk-visor: #ffd9d9;
 }
 
+/* Team palettes — one hue per side (up to 8 distinct teams). */
+.combat-marker-team-a {
+  --tk: #f87171;
+  --tk-dark: #7f1d1d;
+  --tk-edge: #fca5a5;
+  --tk-glow: rgba(248, 113, 113, 0.55);
+  --tk-visor: #ffd9d9;
+}
+.combat-marker-team-b {
+  --tk: #4ade80;
+  --tk-dark: #14532d;
+  --tk-edge: #86efac;
+  --tk-glow: rgba(74, 222, 128, 0.55);
+  --tk-visor: #dcfce7;
+}
+.combat-marker-team-c {
+  --tk: #c084fc;
+  --tk-dark: #581c87;
+  --tk-edge: #d8b4fe;
+  --tk-glow: rgba(192, 132, 252, 0.55);
+  --tk-visor: #f3e8ff;
+}
+.combat-marker-team-d {
+  --tk: #fb923c;
+  --tk-dark: #7c2d12;
+  --tk-edge: #fdba74;
+  --tk-glow: rgba(251, 146, 60, 0.55);
+  --tk-visor: #ffedd5;
+}
+.combat-marker-team-e {
+  --tk: #2dd4bf;
+  --tk-dark: #134e4a;
+  --tk-edge: #5eead4;
+  --tk-glow: rgba(45, 212, 191, 0.55);
+  --tk-visor: #ccfbf1;
+}
+.combat-marker-team-f {
+  --tk: #f472b6;
+  --tk-dark: #831843;
+  --tk-edge: #f9a8d4;
+  --tk-glow: rgba(244, 114, 182, 0.55);
+  --tk-visor: #fce7f3;
+}
+.combat-marker-team-g {
+  --tk: #facc15;
+  --tk-dark: #713f12;
+  --tk-edge: #fde047;
+  --tk-glow: rgba(250, 204, 21, 0.55);
+  --tk-visor: #fef9c3;
+}
+.combat-marker-team-h {
+  --tk: #818cf8;
+  --tk-dark: #312e81;
+  --tk-edge: #a5b4fc;
+  --tk-glow: rgba(129, 140, 248, 0.55);
+  --tk-visor: #e0e7ff;
+}
+
+/* A downed fighter — faded out so the corpse is still visible. */
+.combat-marker-down {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+/* Small team colour dot used in the status health cards. */
+.marker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex: none;
+  box-shadow: 0 0 8px var(--tk-glow, rgba(0, 0, 0, 0.4));
+}
+
 /* ============================================================
    COMBAT EFFECTS - shots & damage numbers (framer-driven)
    ============================================================ */

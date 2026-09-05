@@ -1,19 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { CombatParticipant } from "@/types/game";
+import { distinctTeams, teamClassFor } from "./board";
 import { ReplayAction } from "./types";
 
 interface CombatStatusProps {
   actionPoints: number;
   movementRemaining: number;
-  myHealth: number;
-  enemyHealth: number;
   isMyTurn: boolean;
   isReplaying: boolean;
   roundResolved: boolean;
   replayAction: ReplayAction | null;
-  isPlayer1: boolean;
-  enemyName?: string;
+  fighters: CombatParticipant[];
+  playerId: string;
+  turnDeadlineMillis?: number | null;
 }
 
 const hpTone = (hp: number) =>
@@ -22,23 +24,30 @@ const hpTone = (hp: number) =>
 export function CombatStatus({
   actionPoints,
   movementRemaining,
-  myHealth,
-  enemyHealth,
   isMyTurn,
   isReplaying,
   roundResolved,
   replayAction,
-  isPlayer1,
-  enemyName = "Enemy",
+  fighters,
+  playerId,
+  turnDeadlineMillis,
 }: CombatStatusProps) {
-  const myPct = Math.max(0, Math.min(100, myHealth));
-  const enemyPct = Math.max(0, Math.min(100, enemyHealth));
+  const teams = distinctTeams(fighters);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+  const remainingSeconds =
+    turnDeadlineMillis && turnDeadlineMillis > 0
+      ? Math.max(0, Math.ceil((turnDeadlineMillis - now) / 1000))
+      : null;
 
   const phase = isReplaying || roundResolved
     ? "Resolving round…"
     : isMyTurn
       ? "YOUR PHASE"
-      : "ENEMY PHASE";
+      : "Waiting for fighters";
   const phaseTone = isReplaying || roundResolved
     ? "bg-amber-400/20 text-amber-300"
     : isMyTurn
@@ -57,24 +66,52 @@ export function CombatStatus({
     </motion.div>
   );
 
+  const timerBadge =
+    remainingSeconds != null && !isReplaying ? (
+      <motion.div
+        key={remainingSeconds}
+        initial={{ scale: 0.9, opacity: 0.7 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className={`rounded-xl border border-white/10 px-2.5 py-1.5 text-center text-[10px] md:text-[11px] font-bold uppercase tracking-[0.16em] backdrop-blur-sm whitespace-nowrap ${
+          remainingSeconds <= 10
+            ? "bg-red-500/20 text-red-300"
+            : "bg-gray-800/60 text-gray-300"
+        }`}
+      >
+        ⏱ {remainingSeconds}s
+      </motion.div>
+    ) : null;
+
+  const labelFor = (f: CombatParticipant) =>
+    f.playerId === playerId
+      ? "YOU"
+      : f.playerId.startsWith("bot_")
+        ? "ENEMY"
+        : f.team === "A" || f.team === "B"
+          ? `TEAM ${f.team}`
+          : "FOE";
+
   const healthRow = (
-    <div className="grid grid-cols-2 gap-1.5 md:gap-2">
-      <HealthCard
-        name="YOU"
-        value={myHealth}
-        pct={myPct}
-        accent={"border-sky-400/40 text-sky-300"}
-        delay={0}
-        active={isMyTurn}
-      />
-      <HealthCard
-        name={enemyName.toUpperCase()}
-        value={enemyHealth}
-        pct={enemyPct}
-        accent={"border-red-400/40 text-red-300"}
-        delay={0.08}
-        active={!isMyTurn}
-      />
+    <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+      {fighters.map((f, index) => {
+        const pct = Math.max(0, Math.min(100, f.health));
+        const isYou = f.playerId === playerId;
+        const colorClass = isYou
+          ? "combat-marker-you"
+          : teamClassFor(f.team, teams, playerId);
+        return (
+          <HealthCard
+            key={f.playerId}
+            name={labelFor(f)}
+            value={f.health}
+            pct={pct}
+            colorClass={colorClass}
+            down={f.health <= 0}
+            delay={index * 0.05}
+            active={isMyTurn && isYou}
+          />
+        );
+      })}
     </div>
   );
 
@@ -103,7 +140,7 @@ export function CombatStatus({
           transition={{ duration: 0.25 }}
           className="font-semibold text-yellow-300 shrink-0"
         >
-          {replayAction.actor === (isPlayer1 ? "p1" : "p2") ? "YOU" : "FOE"} fires
+          {replayAction.actor === playerId ? "YOU" : "FIGHTER"} fires
         </motion.span>
       ) : (
         <span className="text-gray-500 shrink-0 hidden xl:inline">Round actions play automatically</span>
@@ -113,16 +150,18 @@ export function CombatStatus({
 
   return (
     <div className="w-full shrink-0 flex flex-col gap-1.5 md:gap-2">
-      {/* Desktop (lg+): compact horizontal status bar */}
       <div className="hidden lg:flex w-full items-center gap-3">
         <div className="shrink-0">{phaseBadge}</div>
+        <div className="shrink-0">{timerBadge}</div>
         <div className="flex-1 min-w-0">{healthRow}</div>
         <div className="shrink-0">{apBlock}</div>
       </div>
 
-      {/* Mobile / tablets: vertical stack */}
       <div className="lg:hidden flex flex-col gap-1.5">
-        {phaseBadge}
+        <div className="flex items-center gap-1.5">
+          {phaseBadge}
+          {timerBadge}
+        </div>
         {healthRow}
         {apBlock}
       </div>
@@ -134,14 +173,16 @@ function HealthCard({
   name,
   value,
   pct,
-  accent,
+  colorClass,
+  down,
   delay,
   active,
 }: {
   name: string;
   value: number;
   pct: number;
-  accent: string;
+  colorClass: string;
+  down: boolean;
   delay: number;
   active: boolean;
 }) {
@@ -150,11 +191,16 @@ function HealthCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 240, damping: 22, delay }}
-      className={`rounded-xl border bg-gray-900/85 px-2.5 py-1.5 md:py-2 backdrop-blur-sm ${accent} ${active ? "shadow-[0_0_18px_rgba(255,255,255,0.06)]" : ""}`}
+      className={`${colorClass} shrink-0 w-28 rounded-xl border bg-gray-900/85 px-2.5 py-1.5 md:py-2 backdrop-blur-sm ${
+        active ? "border-amber-400/60" : "border-white/10"
+      } ${down ? "opacity-45" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wider truncate">{name}</span>
-        <span className="font-mono text-sm font-extrabold text-white shrink-0">{value}</span>
+        <span className="marker-dot" style={{ background: "var(--tk)" }} />
+        <span className="flex-1 truncate text-[11px] font-bold uppercase tracking-wider">{name}</span>
+        <span className="font-mono text-sm font-extrabold text-white shrink-0">
+          {down ? "☠" : value}
+        </span>
       </div>
       <div className="hp-bar mt-1.5">
         <motion.div

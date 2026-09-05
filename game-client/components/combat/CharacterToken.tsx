@@ -4,16 +4,16 @@ import { motion } from "framer-motion";
 import { Position, Posture } from "./types";
 
 interface CharacterTokenProps {
-  /** Which fighter this token represents — p1 or p2. */
-  playerKey: "p1" | "p2";
   position: Position;
   posture: Posture;
   /** Label shown above the token. */
   label: string;
   /** Whether this token currently is the animation target (hit flash). */
   isActive: boolean;
-  /** Whether this token belongs to the current player (blue palette). */
-  isYou?: boolean;
+  /** CSS palette class, e.g. "combat-marker-you" or "combat-marker-team-a". */
+  colorClass: string;
+  /** Downed fighters render faded out. */
+  down?: boolean;
 }
 
 /** The fraction of the board where the center of cell (x, y) lives. */
@@ -24,13 +24,14 @@ export function CharacterToken({
   posture,
   label,
   isActive,
-  isYou = false,
+  colorClass,
+  down = false,
 }: CharacterTokenProps) {
   const postureClass = `combat-posture-${posture.toLowerCase()}`;
 
   return (
     <motion.div
-      className="combat-marker-wrap"
+      className={`combat-marker-wrap ${down ? "combat-marker-down" : ""}`}
       style={{ left: cellCenter(position.x), top: cellCenter(position.y) }}
       initial={{ left: cellCenter(position.x), top: cellCenter(position.y) }}
       animate={{ left: cellCenter(position.x), top: cellCenter(position.y) }}
@@ -38,7 +39,7 @@ export function CharacterToken({
       aria-hidden="true"
     >
       <div
-        className={`combat-marker-figure ${postureClass} ${isActive ? "combat-marker-active" : ""} ${isYou ? "combat-marker-you" : "combat-marker-foe"}`}
+        className={`combat-marker-figure ${postureClass} ${isActive ? "combat-marker-active" : ""} ${colorClass}`}
       >
         <span className="combat-marker-shadow" />
         <div className="combat-marker-stance">

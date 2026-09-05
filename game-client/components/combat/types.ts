@@ -21,15 +21,17 @@ export type ShotAnimation = {
 
 export type ReplayAction = ShotAnimation & {
   type: "MOVE" | "ATTACK";
-  actor: "p1" | "p2";
+  /** The player id of the acting fighter. */
+  actor: string;
 };
 
-export type DamagePopup = { id: string; target: "p1" | "p2"; amount: number };
-export type HealPopup = { id: string; target: "p1" | "p2"; amount: number };
+export type DamagePopup = { id: string; target: string; amount: number };
+export type HealPopup = { id: string; target: string; amount: number };
 export type Position = { x: number; y: number };
-export type DisplayPositions = { p1: Position; p2: Position };
-export type DisplayHealth = { p1: number; p2: number };
-export type DisplayPostures = { p1: Posture; p2: Posture };
+/** Display positions/health/postures keyed by player id. */
+export type DisplayPositions = Record<string, Position>;
+export type DisplayHealth = Record<string, number>;
+export type DisplayPostures = Record<string, Posture>;
 
 export interface CombatArenaProps {
   combatId: string;
@@ -42,4 +44,7 @@ export interface CombatArenaProps {
   onOpenInventory?: () => void;
   /** Called after a combat round resolves (inventory may have changed: used consumables). */
   onInventoryChanged?: () => void;
+  /** Called when the player wants to leave/spectate (a spectator or dead fighter). */
+  onLeaveCombat?: () => void;
 }
+

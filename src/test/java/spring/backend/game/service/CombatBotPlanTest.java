@@ -10,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import spring.backend.game.entity.CombatObstacle;
+import spring.backend.game.entity.CombatParticipant;
 import spring.backend.game.entity.CombatSessionEntity;
 import spring.backend.game.entity.EnemyTypeEntity;
 
@@ -24,9 +25,11 @@ class CombatBotPlanTest {
             new CombatService(null, null, null, null, null, null, null, null, null, null);
 
     private String botPlan(CombatSessionEntity combat) throws Exception {
-        Method method = CombatService.class.getDeclaredMethod("createBotPlan", CombatSessionEntity.class);
+        CombatParticipant bot = combat.findParticipant("bot_wolf");
+        Method method = CombatService.class.getDeclaredMethod(
+                "createBotPlan", CombatSessionEntity.class, CombatParticipant.class);
         method.setAccessible(true);
-        return (String) method.invoke(service, combat);
+        return (String) method.invoke(service, combat, bot);
     }
 
     private EnemyTypeEntity wolf() {
@@ -42,15 +45,29 @@ class CombatBotPlanTest {
     }
 
     private CombatSessionEntity combat(EnemyTypeEntity enemy, int p1X, int p1Y, int p2X, int p2Y) {
-        return CombatSessionEntity.builder()
-                .player1Id("player-1")
-                .player2Id("bot_wolf")
+        CombatSessionEntity combat = CombatSessionEntity.builder()
                 .enemyType(enemy)
-                .p1X(p1X)
-                .p1Y(p1Y)
-                .p2X(p2X)
-                .p2Y(p2Y)
                 .build();
+        combat.setParticipants(List.of(
+                CombatParticipant.builder()
+                        .playerId("player-1")
+                        .team("A")
+                        .role(CombatParticipant.ROLE_FIGHTER)
+                        .x(p1X)
+                        .y(p1Y)
+                        .health(100)
+                        .posture("STANDING")
+                        .build(),
+                CombatParticipant.builder()
+                        .playerId("bot_wolf")
+                        .team("B")
+                        .role(CombatParticipant.ROLE_FIGHTER)
+                        .x(p2X)
+                        .y(p2Y)
+                        .health(enemy.getMaxHealth())
+                        .posture("STANDING")
+                        .build()));
+        return combat;
     }
 
     @Test

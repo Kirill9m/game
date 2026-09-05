@@ -11,10 +11,12 @@ interface CombatActionsProps {
   isActing: boolean;
   isEndingTurn: boolean;
   playerId: string;
+  isSpectator?: boolean;
   onClear: () => void;
   onEndTurn: () => void;
   onFinishCombat: () => void;
   onCombatFinished: () => void;
+  onLeaveCombat?: () => void;
 }
 
 export function CombatActions({
@@ -24,14 +26,40 @@ export function CombatActions({
   isActing,
   isEndingTurn,
   playerId,
+  isSpectator = false,
   onClear,
   onEndTurn,
   onFinishCombat,
   onCombatFinished,
+  onLeaveCombat,
 }: CombatActionsProps) {
   const attacks = plannedActions.filter((action) => action.type === "ATTACK");
   const usedAp = plannedActions.length;
   const maxAp = combat.actionPoints;
+  const me = combat.participants.find((p) => p.playerId === playerId);
+  const myTeam = me?.team ?? "";
+  const iWon = combat.winnerTeam != null && combat.winnerTeam === myTeam;
+
+  if (isSpectator) {
+    return (
+      <motion.div
+        className="w-full shrink-0 flex flex-col gap-2"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      >
+        <div className="rounded-xl border border-sky-500/40 bg-sky-950/30 px-3 py-2 text-center text-xs text-sky-200">
+          👁 You are watching this battle as a spectator.
+        </div>
+        <button
+          onClick={onLeaveCombat}
+          className="w-full py-2 rounded-xl border border-gray-600 bg-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-300 hover:bg-gray-700 transition"
+        >
+          Leave battle
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -128,8 +156,8 @@ export function CombatActions({
             : "Enemy Turn…"}
       </motion.button>
 
-      {/* Surrender */}
-      {combat.status === "IN_PROGRESS" && !combat.winnerId && (
+      {/* Surrender (living fighters) or leave (dead fighters) */}
+      {combat.status === "IN_PROGRESS" && !combat.winnerTeam && me && me.health > 0 && (
         <button
           onClick={onFinishCombat}
           disabled={!isMyTurn || isActing}
@@ -138,11 +166,19 @@ export function CombatActions({
           Surrender and finish combat
         </button>
       )}
+      {combat.status === "IN_PROGRESS" && me && me.health <= 0 && (
+        <button
+          onClick={onLeaveCombat}
+          className="w-full py-1.5 text-center text-xs text-gray-400 hover:text-gray-200 underline decoration-dotted transition"
+        >
+          Leave battle
+        </button>
+      )}
 
       {/* Victory / defeat overlay */}
       {combat.status === "FINISHED" && (
         <motion.div
-          key={combat.winnerId}
+          key={combat.winnerTeam ?? "draw"}
           initial={{ opacity: 0, scale: 0.6, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 240, damping: 18 }}
@@ -151,15 +187,25 @@ export function CombatActions({
           <span className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-amber-400/40 to-transparent" />
           <h4
             className={`text-2xl font-black uppercase tracking-[0.2em] ${
-              combat.winnerId === playerId ? "text-emerald-300" : "text-red-400"
+              combat.winnerTeam == null
+                ? "text-amber-300"
+                : iWon
+                  ? "text-emerald-300"
+                  : "text-red-400"
             }`}
           >
-            {combat.winnerId === playerId ? "🏆 Victory!" : "💀 Defeat"}
+            {combat.winnerTeam == null
+              ? "🤝 Draw"
+              : iWon
+                ? "🏆 Victory!"
+                : "💀 Defeat"}
           </h4>
           <p className="text-xs text-amber-100/70 mt-1">
-            {combat.winnerId === playerId
-              ? "You successfully defeated your opponent."
-              : "You were defeated in this combat session."}
+            {combat.winnerTeam == null
+              ? "Nobody survived this battle."
+              : iWon
+                ? "Your team defeated every other side."
+                : "Your side was defeated in this combat."}
           </p>
           <motion.button
             whileTap={{ scale: 0.97 }}

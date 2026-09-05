@@ -43,6 +43,7 @@ export default function GameMapPage() {
   const [combatSession, setCombatSession] = useState<CombatSession | null>(
     null,
   );
+  const [activeBattles, setActiveBattles] = useState<CombatSession[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [gold, setGold] = useState<number>(0);
   const [stats, setStats] = useState<PlayerStats>({
@@ -109,6 +110,26 @@ export default function GameMapPage() {
       setCombatSession(session);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start combat");
+    }
+  };
+
+  const handleSpectateCombat = async (combatId: string) => {
+    try {
+      setError("");
+      const session = await combatApi.spectateCombat(combatId, playerId);
+      setCombatSession(session);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to spectate");
+    }
+  };
+
+  const handleJoinCombat = async (combatId: string, team?: string) => {
+    try {
+      setError("");
+      const session = await combatApi.joinCombat(combatId, playerId, team);
+      setCombatSession(session);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to join battle");
     }
   };
 
@@ -222,6 +243,25 @@ export default function GameMapPage() {
       } catch {}
     }, 3000);
 
+    return () => clearInterval(interval);
+  }, [playerId, combatSession]);
+
+  // Poll the list of open battles so other players can watch or join them.
+  useEffect(() => {
+    if (!playerId || combatSession) return;
+    const load = () =>
+      combatApi
+        .listActiveCombats()
+        .then((battles) =>
+          setActiveBattles(
+            battles.filter(
+              (b) => !b.participants.some((p) => p.playerId === playerId),
+            ),
+          ),
+        )
+        .catch(() => {});
+    load();
+    const interval = setInterval(load, 4000);
     return () => clearInterval(interval);
   }, [playerId, combatSession]);
 
@@ -581,6 +621,7 @@ export default function GameMapPage() {
                     onInventoryChanged={() =>
                       playerApi.getInventory(playerId).then(setInventory).catch(() => {})
                     }
+                    onLeaveCombat={() => setCombatSession(null)}
                   />
                 </div>
               ) : (
@@ -631,6 +672,70 @@ export default function GameMapPage() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Open battles — other players can watch or join */}
+                  {activeBattles.length > 0 && (
+                    <div className="mb-3 shrink-0 rounded-xl border border-amber-500/30 bg-amber-950/20 p-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1.5">
+                        ⚔️ Open battles
+                      </p>
+                      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                        {activeBattles.map((battle) => {
+                          const fighters = battle.participants.filter(
+                            (p) => p.role === "FIGHTER",
+                          );
+                          const teams = Array.from(
+                            new Set(fighters.map((f) => f.team)),
+                          );
+                          return (
+                            <div
+                              key={battle.id}
+                              className="shrink-0 flex flex-col gap-1 rounded-lg border border-gray-700 bg-gray-900/80 p-2 min-w-48"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-bold text-gray-200">
+                                  {fighters.length}/10 fighters
+                                </span>
+                                <span className="text-[10px] text-gray-500">
+                                  {teams.length} side{teams.length === 1 ? "" : "s"}
+                                </span>
+                              </div>
+                              <div className="flex gap-1 flex-wrap">
+                                <button
+                                  onClick={() => handleSpectateCombat(battle.id)}
+                                  className="rounded bg-sky-800 hover:bg-sky-700 px-2 py-1 text-[10px] font-bold text-white transition"
+                                >
+                                  👁 Watch
+                                </button>
+                                {teams.includes("A") && (
+                                  <button
+                                    onClick={() => handleJoinCombat(battle.id, "A")}
+                                    className="rounded bg-red-800 hover:bg-red-700 px-2 py-1 text-[10px] font-bold text-white transition"
+                                  >
+                                    Join A
+                                  </button>
+                                )}
+                                {teams.includes("B") && (
+                                  <button
+                                    onClick={() => handleJoinCombat(battle.id, "B")}
+                                    className="rounded bg-green-800 hover:bg-green-700 px-2 py-1 text-[10px] font-bold text-white transition"
+                                  >
+                                    Join B
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleJoinCombat(battle.id, "SELF")}
+                                  className="rounded bg-amber-800 hover:bg-amber-700 px-2 py-1 text-[10px] font-bold text-white transition"
+                                >
+                                  Solo
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Active window content */}
                   <div className="flex-1 min-h-0 overflow-y-auto pr-1">

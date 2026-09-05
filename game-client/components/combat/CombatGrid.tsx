@@ -1,8 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CombatLoot, CombatObstacle, CombatSession } from "@/types/game";
-import { GRID_SIZE, cellKey } from "./board";
+import {
+  CombatLoot,
+  CombatObstacle,
+  CombatParticipant,
+  CombatSession,
+} from "@/types/game";
+import { GRID_SIZE, cellKey, distinctTeams, teamClassFor } from "./board";
 import { CharacterToken } from "./CharacterToken";
 import {
   DamagePopup,
@@ -17,7 +22,6 @@ interface CombatGridProps {
   combat: CombatSession;
   playerId: string;
   canAttack: boolean;
-  /** Firing-zone cells (visual highlight); null — hide. */
   attackRangeCells?: Set<string> | null;
   isMyTurn: boolean;
   plannedActions: PlannedAction[];
@@ -25,10 +29,9 @@ interface CombatGridProps {
   displayPositions: DisplayPositions;
   displayPostures: DisplayPostures;
   replayAction: ReplayAction | null;
-  animationTarget: "p1" | "p2" | null;
+  animationTarget: string | null;
   damagePopup: DamagePopup | null;
   healPopup: HealPopup | null;
-  /** Square board size in px (adapts to the screen). */
   boardSize?: number;
   onTileClick: (x: number, y: number) => void;
 }
@@ -57,36 +60,35 @@ export function CombatGrid({
       action.type === "MOVE",
   );
 
-  const isPlayer1 = playerId === combat.player1Id;
-  const enemyCell =
-    isPlayer1 ? `${combat.p2X}:${combat.p2Y}` : `${combat.p1X}:${combat.p1Y}`;
-  // Clicking an enemy = a shot by default, so highlight its cell.
-  const attackableCell = canAttack ? enemyCell : null;
+  const fighters = combat.participants.filter(
+    (p): p is CombatParticipant => p.role === "FIGHTER",
+  );
+  const me = combat.participants.find((p) => p.playerId === playerId);
+  const myTeam = me?.team ?? "";
+  const teams = distinctTeams(fighters);
 
-  // The player's current footprint on the board — used to highlight when loot
-  // piles are on or next to the player (available for the Take button).
-  const myDisplay = isPlayer1 ? displayPositions.p1 : displayPositions.p2;
+  const attackableCells = new Set<string>();
+  if (canAttack) {
+    for (const f of fighters) {
+      if (f.health > 0 && f.team !== myTeam) {
+        attackableCells.add(cellKey(f.x, f.y));
+      }
+    }
+  }
+
+  const myDisplay = displayPositions[playerId];
   const lootNearMe = (combat.loot ?? []).some(
     (pile) =>
       pile.quantity > 0 &&
+      myDisplay &&
       Math.max(Math.abs(pile.x - myDisplay.x), Math.abs(pile.y - myDisplay.y)) <=
         1,
   );
 
-  const tokenFor = (playerKey: "p1" | "p2") => {
-    const isYou =
-      (playerKey === "p1" ? combat.player1Id : combat.player2Id) === playerId;
-    const isWolf = combat.player2Id === "bot_wolf" && playerKey === "p2";
-    return (
-      <CharacterToken
-        playerKey={playerKey}
-        position={displayPositions[playerKey]}
-        posture={displayPostures[playerKey]}
-        label={isYou ? "YOU" : isWolf ? "WOLF" : "FOE"}
-        isYou={isYou}
-        isActive={animationTarget === playerKey}
-      />
-    );
+  const labelFor = (f: CombatParticipant): string => {
+    if (f.playerId === playerId) return "YOU";
+    if (f.team === myTeam) return "ALLY";
+    return f.team === "A" || f.team === "B" ? f.team : "FOE";
   };
 
   return (
@@ -113,13 +115,11 @@ export function CombatGrid({
             (cell) => cell.x === x && cell.y === y,
           );
           const reachable = isMyTurn && reachableCells.has(key);
-          const attackable = attackableCell === key;
+          const attackable = attackableCells.has(key);
           const planned = stepIndex >= 0;
           const lootPile = combat.loot?.find(
             (pile) => pile.x === x && pile.y === y && pile.quantity > 0,
           );
-          // Firing zone — a subtle highlight on neutral cells,
-          // so it does not override more important states (route/attack).
           const inRange =
             !reachable && !attackable && !planned && attackRangeCells?.has(key);
           return (
@@ -148,7 +148,25 @@ export function CombatGrid({
       </div>
 
       <div className="pointer-events-none absolute inset-0 z-20">
-        {(["p1", "p2"] as const).map(tokenFor)}
+        {fighters.map((f) => {
+          const pos = displayPositions[f.playerId] ?? { x: f.x, y: f.y };
+          const posture = displayPostures[f.playerId] ?? f.posture ?? "STANDING";
+          const isYou = f.playerId === playerId;
+          const colorClass = isYou
+            ? "combat-marker-you"
+            : teamClassFor(f.team, teams, playerId);
+          return (
+            <CharacterToken
+              key={f.playerId}
+              position={pos}
+              posture={posture}
+              label={labelFor(f)}
+              isActive={animationTarget === f.playerId}
+              colorClass={colorClass}
+              down={f.health <= 0}
+            />
+          );
+        })}
         {lootNearMe && (
           <motion.span
             className="combat-loot-ring"
@@ -157,7 +175,7 @@ export function CombatGrid({
             transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
           />
         )}
-{replayAction?.type === "ATTACK" && (
+        {replayAction?.type === "ATTACK" && (
           <>
             <motion.span
               key={`muzzle-${replayAction.id}`}
@@ -196,65 +214,69 @@ export function CombatGrid({
           </>
         )}
 
-        {damagePopup && (
-          <>
-            <motion.span
-              key={`ring-${damagePopup.id}`}
-              className="impact-ring"
-              style={{
-                left: CENTER(displayPositions[damagePopup.target].x),
-                top: CENTER(displayPositions[damagePopup.target].y),
-              }}
-              initial={{ scale: 0.2, opacity: 0.9 }}
-              animate={{ scale: 1.7, opacity: 0 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-            <motion.span
-              key={`dmg-${damagePopup.id}`}
-              className="damage-popup"
-              style={{
-                left: CENTER(displayPositions[damagePopup.target].x),
-                top: CENTER(displayPositions[damagePopup.target].y),
-              }}
-              initial={{ y: 0, scale: 1.35, opacity: 0 }}
-              animate={{ y: -120, scale: [1.35, 1.05, 1], opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 0.85, times: [0, 0.2, 0.45, 1], ease: "easeOut" }}
-            >
-              −{damagePopup.amount}
-            </motion.span>
-          </>
+        {damagePopup && displayPositions[damagePopup.target] && (
+          <PopupShell
+            id={damagePopup.id}
+            x={displayPositions[damagePopup.target].x}
+            y={displayPositions[damagePopup.target].y}
+            kind="damage"
+            amount={damagePopup.amount}
+          />
         )}
 
-        {healPopup && (
-          <>
-            <motion.span
-              key={`heal-ring-${healPopup.id}`}
-              className="heal-ring"
-              style={{
-                left: CENTER(displayPositions[healPopup.target].x),
-                top: CENTER(displayPositions[healPopup.target].y),
-              }}
-              initial={{ scale: 0.2, opacity: 0.9 }}
-              animate={{ scale: 1.4, opacity: 0 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-            <motion.span
-              key={`heal-${healPopup.id}`}
-              className="heal-popup"
-              style={{
-                left: CENTER(displayPositions[healPopup.target].x),
-                top: CENTER(displayPositions[healPopup.target].y),
-              }}
-              initial={{ y: 0, scale: 1.35, opacity: 0 }}
-              animate={{ y: -60, scale: [1.35, 1.05, 1], opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 0.85, times: [0, 0.2, 0.45, 1], ease: "easeOut" }}
-            >
-              +{healPopup.amount}
-            </motion.span>
-          </>
+        {healPopup && displayPositions[healPopup.target] && (
+          <PopupShell
+            id={healPopup.id}
+            x={displayPositions[healPopup.target].x}
+            y={displayPositions[healPopup.target].y}
+            kind="heal"
+            amount={healPopup.amount}
+          />
         )}
       </div>
     </div>
+  );
+}
+
+function PopupShell({
+  id,
+  x,
+  y,
+  kind,
+  amount,
+}: {
+  id: string;
+  x: number;
+  y: number;
+  kind: "damage" | "heal";
+  amount: number;
+}) {
+  const ringClass = kind === "damage" ? "impact-ring" : "heal-ring";
+  const textClass = kind === "damage" ? "damage-popup" : "heal-popup";
+  const sign = kind === "damage" ? "−" : "+";
+  const rise = kind === "damage" ? -120 : -60;
+  return (
+    <>
+      <motion.span
+        key={`ring-${id}`}
+        className={ringClass}
+        style={{ left: CENTER(x), top: CENTER(y) }}
+        initial={{ scale: 0.2, opacity: 0.9 }}
+        animate={{ scale: kind === "damage" ? 1.7 : 1.4, opacity: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+      />
+      <motion.span
+        key={`${kind}-${id}`}
+        className={textClass}
+        style={{ left: CENTER(x), top: CENTER(y) }}
+        initial={{ y: 0, scale: 1.35, opacity: 0 }}
+        animate={{ y: rise, scale: [1.35, 1.05, 1], opacity: [0, 1, 1, 0] }}
+        transition={{ duration: 0.85, times: [0, 0.2, 0.45, 1], ease: "easeOut" }}
+      >
+        {sign}
+        {amount}
+      </motion.span>
+    </>
   );
 }
 
